@@ -1,6 +1,9 @@
 <meta charset="utf-8" />
 <title>RAMS Field Audit — Mobile &amp; Tablet Prototype</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   /* ============ TOKENS — lifted 1:1 from rams-irds-main/src/styles/theme.css ============ */
   :root{
@@ -28,10 +31,31 @@
     --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 24px -8px rgba(37,99,235,.16);
     --shadow-press: 0 1px 2px rgba(15,23,42,.06);
     --scrim: rgba(255,255,255,.82);
+    --tabbar-bg: rgba(255,255,255,.4);
+    --tabbar-highlight: rgba(255,255,255,.7);
     --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#2563eb; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
 
     --font-body: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+    /* Type scale — adapted from theme.css's --text-xs/sm/base/lg/xl/2xl/4xl (12/14/16/20/24/30/48px),
+       compacted for a dense mobile-web density (still above the very first ad-hoc pass). Change
+       these 6 values to rescale every screen at once — every rule below references a token, not
+       a literal px. --text-2xs is a mobile-only addition (the web scale never goes below 12px)
+       reserved for true chrome, not content: fake status-bar clock, tablet nav-rail labels,
+       avatar initials, tiny tag badges. */
+    --text-2xs: 10px;
+    --text-xs: 11px;
+    --text-sm: 12.5px;
+    --text-base: 13.5px;
+    --text-lg: 15px;
+    --text-xl: 17px;
+
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
   }
   @media (prefers-color-scheme: dark){
     :root{
@@ -56,6 +80,8 @@
       --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -8px rgba(0,0,0,.4);
       --shadow-press: 0 1px 2px rgba(0,0,0,.3);
       --scrim: rgba(23,23,23,.82);
+      --tabbar-bg: rgba(23,23,23,.4);
+      --tabbar-highlight: rgba(255,255,255,.1);
       --sidebar:#171717; --sidebar-foreground:#ffffff; --sidebar-primary:#3b82f6; --sidebar-accent:#262626; --sidebar-border:rgba(250,250,250,.10);
     }
   }
@@ -74,6 +100,8 @@
       --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -8px rgba(0,0,0,.4);
       --shadow-press: 0 1px 2px rgba(0,0,0,.3);
     --scrim: rgba(23,23,23,.82);
+    --tabbar-bg: rgba(23,23,23,.4);
+    --tabbar-highlight: rgba(255,255,255,.1);
     --sidebar:#171717; --sidebar-foreground:#ffffff; --sidebar-primary:#3b82f6; --sidebar-accent:#262626; --sidebar-border:rgba(250,250,250,.10);
   }
   :root[data-theme="light"]{
@@ -91,6 +119,8 @@
     --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 24px -8px rgba(37,99,235,.16);
     --shadow-press: 0 1px 2px rgba(15,23,42,.06);
     --scrim: rgba(255,255,255,.82);
+    --tabbar-bg: rgba(255,255,255,.4);
+    --tabbar-highlight: rgba(255,255,255,.7);
     --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#2563eb; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
   }
 
@@ -139,55 +169,67 @@
   .rail-logo{width:34px; height:34px; border-radius:var(--radius); background:var(--sidebar-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; margin-bottom:14px;}
   .rail-item{width:60px; display:flex; flex-direction:column; align-items:center; gap:4px; padding:9px 2px; border-radius:var(--radius); color:var(--muted-foreground); border:none; background:none;}
   .rail-item.active{background:var(--sidebar-accent); color:var(--sidebar-primary);}
-  .rail-item span{font-size:9.5px; font-weight:700; letter-spacing:.01em;}
+  .rail-item span{font-size:var(--text-2xs); font-weight:700; letter-spacing:.01em;}
   .rail-spacer{flex:1;}
   .rail-item.logout{color:var(--rag-red);}
 
   /* ============ STATUS BAR + HEADER (navy, matches the RAMS reference) ============ */
-  .statusbar{display:flex; align-items:center; justify-content:space-between; padding:8px 18px 0; font-family:var(--font-mono); font-weight:600; font-size:10.5px; color:rgba(255,255,255,.7); flex-shrink:0;}
+  .statusbar{display:flex; align-items:center; justify-content:space-between; padding:8px 18px 0; font-family:var(--font-mono); font-weight:600; font-size:var(--text-2xs); color:rgba(255,255,255,.7); flex-shrink:0;}
   .statusbar .icons{display:flex; align-items:center; gap:5px;}
   .sb-dot{width:6px; height:6px; border-radius:999px; background:#4ade80; display:inline-block;}
 
   .navtop{background:var(--brand-navy); border-bottom:none; flex-shrink:0;}
-  .back-link{display:flex; align-items:center; gap:5px; background:none; border:none; color:rgba(255,255,255,.7); font-size:12px; font-weight:600; padding:10px 18px 0;}
-  .back-link:hover{color:#fff;}
-  .app-header{padding:10px 18px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
-  .app-header h1{font-size:19px; font-weight:800; letter-spacing:-.01em; margin:0 0 2px; color:var(--brand-navy-ink); line-height:1.25;}
-  .app-header .sub{font-size:12px; color:rgba(255,255,255,.66); line-height:1.3;}
+  .back-btn{display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:999px; border:none; background:rgba(255,255,255,.14); color:#fff; flex-shrink:0; transition:transform .1s ease, background .15s ease;}
+  .back-btn:active{transform:scale(.88); background:rgba(255,255,255,.22);}
+  .app-header{padding:12px 18px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .app-header h1{font-size:var(--text-xl); font-weight:800; letter-spacing:-.01em; margin:0 0 2px; color:var(--brand-navy-ink); line-height:1.25;}
+  .app-header .sub{font-size:var(--text-xs); color:rgba(255,255,255,.66); line-height:1.3;}
   .header-actions{display:flex; align-items:center; gap:8px; flex-shrink:0; position:relative;}
   .icon-btn{width:34px; height:34px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.1); color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
+  .icon-btn:active{transform:scale(.9);}
+  .icon-btn[aria-label="Sync now"]{background:none; border:none;}
+  .icon-btn[aria-label="Sync now"] svg{width:18px; height:18px;}
+  @keyframes icon-spin{ to{ transform:rotate(360deg); } }
+  .icon-btn.spinning svg{ animation:icon-spin .6s linear; }
   .icon-btn:active, .avatar:active{transform:scale(.9);}
   .menu-pop{position:absolute; top:38px; right:0; background:var(--popover); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow); min-width:150px; z-index:40; overflow:hidden; display:none;}
   .menu-pop.open{display:block;}
-  .menu-pop button{display:block; width:100%; text-align:left; padding:10px 14px; border:none; background:none; font-size:13px; font-weight:500; color:var(--foreground); border-bottom:1px solid var(--border);}
+  .menu-pop button{display:block; width:100%; text-align:left; padding:10px 14px; border:none; background:none; font-size:var(--text-base); font-weight:500; color:var(--foreground); border-bottom:1px solid var(--border);}
   .menu-pop button:last-child{border-bottom:none;}
   .menu-pop button:hover{background:var(--accent);}
 
   /* ============ SHARED BLOCKS ============ */
   .body-pad{padding:14px 18px 18px; flex:1; display:flex; flex-direction:column; gap:14px;}
-  .banner{display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:var(--radius); font-size:12.5px; font-weight:600; border:1px solid transparent;}
+  .banner{display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:var(--radius); font-size:var(--text-base); font-weight:600; border:1px solid transparent;}
   .banner.good{background:var(--rag-green-soft); color:var(--rag-green-strong);}
   .banner.info{background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
   .banner.warn{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
   .banner .dot{width:7px; height:7px; border-radius:999px; background:currentColor; flex-shrink:0;}
-  .banner .time{margin-left:auto; font-weight:500; opacity:.75; font-size:11.5px; white-space:nowrap;}
+  .banner .time{margin-left:auto; font-weight:500; opacity:.75; font-size:var(--text-xs); white-space:nowrap;}
+
+  /* Passive sync indicator — deliberately lighter than .banner (no fill/border) so it
+     doesn't compete for attention with real warnings/alerts, which keep the boxed treatment. */
+  .sync-line{display:flex; align-items:center; gap:6px; padding:2px 2px 0; font-size:var(--text-xs); font-weight:600; color:var(--rag-green-strong);}
+  .sync-line .dot{width:6px; height:6px; border-radius:999px; background:currentColor; flex-shrink:0;}
+  .sync-line .time{margin-left:auto; font-weight:500; color:var(--muted-foreground); white-space:nowrap;}
 
   .card{background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:18px; box-shadow:var(--shadow-card);}
   .card-title-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
-  .card-title-row h2{font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted-foreground); margin:0;}
-  .link-btn{background:none; border:none; color:var(--primary); font-weight:600; font-size:12.5px; padding:0;}
+  .card-title-row h2{font-size:var(--text-xs); font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted-foreground); margin:0;}
+  .link-btn{background:none; border:none; color:var(--primary); font-weight:600; font-size:var(--text-sm); padding:0;}
 
   /* ---- avatar ---- */
-  .avatar{width:36px; height:36px; border-radius:999px; background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12.5px; flex-shrink:0;}
-  .avatar.sm{width:26px; height:26px; font-size:10px;}
-
-  /* ---- progress ring ---- */
-  .ring-wrap{position:relative; width:64px; height:64px; flex-shrink:0;}
-  .ring-wrap svg{transform:rotate(-90deg);}
-  .ring-pct{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:800 14px var(--font-mono); color:var(--foreground);}
+  /* Avatar badge is a dropdown-chevron indicator (tap opens the account menu),
+     deliberately NOT a dot — a plain colored dot here would read as a presence/status
+     signal and get confused with the sync-status dots used elsewhere (.banner .dot,
+     .sync-line .dot), which already own that visual language in this app. */
+  .avatar{position:relative; width:38px; height:38px; border-radius:999px; background:linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-strong) 100%); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:var(--text-xs); flex-shrink:0; border:2px solid rgba(255,255,255,.45); box-shadow:0 2px 6px rgba(0,0,0,.18);}
+  .avatar-badge{position:absolute; right:-3px; bottom:-3px; width:16px; height:16px; border-radius:999px; background:var(--card); color:var(--foreground); display:flex; align-items:center; justify-content:center; border:1.5px solid var(--brand-navy); box-shadow:0 1px 3px rgba(0,0,0,.25);}
+  .avatar-badge svg{width:9px; height:9px;}
+  .avatar.sm{width:26px; height:26px; font-size:var(--text-2xs);}
 
   /* Badge/pill — matches ui/badge.tsx proportions exactly (rounded-md, text-xs, px2 py0.5) via StatusPill's inline spec */
-  .pill{display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:5px; font-size:12px; font-weight:600; white-space:nowrap;}
+  .pill{display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:5px; font-size:var(--text-xs); font-weight:600; white-space:nowrap;}
   .pill::before{content:""; width:6px; height:6px; border-radius:999px; background:currentColor;}
   .pill.p-high{background:var(--rag-red-soft); color:var(--rag-red-strong);}
   .pill.p-medium{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
@@ -200,13 +242,14 @@
   .kpi-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
   .kpi{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); text-align:center; padding:14px 6px;}
   .kpi .v{font:800 20px/1.1 var(--font-mono); display:block; color:var(--foreground); letter-spacing:-.02em;}
-  .kpi .l{font-size:10px; color:var(--muted-foreground); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-top:4px; display:block;}
+  .kpi .l{font-size:var(--text-xs); color:var(--muted-foreground); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-top:4px; display:block;}
 
   .progress-track{height:6px; border-radius:999px; background:var(--muted); overflow:hidden;}
   .progress-fill{height:100%; background:var(--primary); border-radius:999px; transition:width .3s ease;}
 
   /* Button — rectangular, navy primary (matches the RAMS reference "Start audit" button) */
-  .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:46px; padding:0 18px; border-radius:var(--radius-lg); border:none; font-size:14px; font-weight:600; font-family:var(--font-body); transition:transform .1s ease, background .15s ease; -webkit-tap-highlight-color:transparent;}
+  .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:46px; padding:0 18px; border-radius:var(--radius-lg); border:none; font-size:var(--text-base); font-weight:600; font-family:var(--font-body); transition:transform .1s ease, background .15s ease; -webkit-tap-highlight-color:transparent;}
+  .btn.btn-pill{border-radius:999px;}
   .btn.primary{background:var(--brand-navy); color:var(--brand-navy-ink);}
   .btn.primary:hover{background:var(--brand-navy-dark);}
   .btn.primary:active{transform:scale(.98);}
@@ -215,58 +258,61 @@
   .btn.outline:hover{background:var(--accent);}
   .btn.outline:active{transform:scale(.98);}
   .btn.ghost-disabled{background:var(--secondary); color:var(--slate-400); border:1px dashed var(--border); cursor:not-allowed;}
-  .btn.small{height:38px; padding:0 14px; font-size:12.5px; width:auto;}
+  .btn.small{height:38px; padding:0 14px; font-size:var(--text-sm); width:auto;}
 
   .sticky-actions{position:sticky; bottom:0; background:linear-gradient(to top, var(--muted) 70%, transparent); padding:16px 0 4px; margin-top:auto; display:flex; flex-direction:column; gap:8px;}
 
   .search-wrap{display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--border); border-radius:999px; padding:11px 16px; box-shadow:var(--shadow-press);}
-  .search-wrap input{flex:1; border:none; background:none; font-size:13.5px; outline:none; color:var(--foreground);}
+  .search-wrap input{flex:1; border:none; background:none; font-size:var(--text-base); outline:none; color:var(--foreground);}
   .search-wrap input::placeholder{color:var(--slate-400);}
 
   .tabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;}
   .tabs::-webkit-scrollbar{display:none;}
-  .tab{flex-shrink:0; padding:9px 14px; border-radius:999px; border:1px solid var(--border); background:var(--card); font-size:12px; font-weight:700; color:var(--muted-foreground); white-space:nowrap; transition:transform .1s ease;}
+  .tab{flex-shrink:0; padding:9px 14px; border-radius:999px; border:1px solid var(--border); background:var(--card); font-size:var(--text-sm); font-weight:700; color:var(--muted-foreground); white-space:nowrap; transition:transform .1s ease;}
   .tab.active{background:var(--brand-navy); color:#fff; border-color:var(--brand-navy);}
   .tab:active{transform:scale(.96);}
 
   .task-list{display:flex; flex-direction:column; gap:10px;}
-  .task-card{background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:9px; text-align:left; width:100%; box-shadow:var(--shadow-card); transition:transform .12s ease, box-shadow .12s ease;}
+  .task-card{background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:14px 16px; display:flex; flex-direction:column; gap:12px; text-align:left; width:100%; box-shadow:var(--shadow-card); transition:transform .12s ease, box-shadow .12s ease;}
   .task-card:active{transform:scale(.98); box-shadow:var(--shadow-press);}
   .task-card.overdue{border-color:var(--rag-red-border);}
-  .task-top{display:flex; align-items:center; justify-content:space-between; gap:8px;}
-  .task-id{font-size:13px; font-weight:700; color:var(--accent-blue-strong); font-family:var(--font-mono);}
-  .task-icon{width:30px; height:30px; border-radius:999px; background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
-  .task-icon svg{width:15px; height:15px;}
-  .task-mid{display:flex; align-items:center; justify-content:space-between; gap:8px;}
-  .task-scope{font-size:12.5px; color:var(--muted-foreground);}
-  .task-bottom{display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:var(--slate-400); padding-top:9px; border-top:1px solid var(--border);}
+  .task-row{display:flex; align-items:center; gap:11px;}
+  .task-icon{width:38px; height:38px; border-radius:var(--radius-lg); background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .task-icon svg{width:17px; height:17px;}
+  .task-info{flex:1; min-width:0;}
+  .task-name{font-size:var(--text-base); font-weight:700; color:var(--foreground); line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .task-meta{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .task-footer{display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:12px; border-top:1px solid var(--border);}
+  .task-due{display:flex; align-items:center; gap:5px; font-size:var(--text-xs); color:var(--muted-foreground); font-weight:600;}
   .chev{color:var(--slate-400); flex-shrink:0;}
 
   .detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px;}
-  .detail-item .l{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--slate-400); font-weight:700; margin-bottom:3px;}
-  .detail-item .v{font-size:13px; font-weight:600; color:var(--foreground);}
+  .detail-item .l{font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--slate-400); font-weight:700; margin-bottom:3px;}
+  .detail-item .v{font-size:var(--text-base); font-weight:600; color:var(--foreground);}
 
   /* Flat key/value list — matches the RAMS reference's Audit Details rows */
   .kv-list{display:flex; flex-direction:column;}
-  .kv-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); font-size:13px;}
+  .kv-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); font-size:var(--text-base);}
   .kv-row .l{color:var(--muted-foreground); text-transform:none; letter-spacing:0; font-weight:500;}
   .kv-row .v{font-weight:700; color:var(--foreground);}
 
   .chip-row{display:flex; flex-wrap:wrap; gap:6px;}
-  .chip{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:5px;}
+  .chip{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-xs); font-weight:700; padding:4px 10px; border-radius:5px;}
 
   .field{display:flex; flex-direction:column; gap:5px;}
-  .field label{font-size:11.5px; font-weight:700; color:var(--muted-foreground);}
+  .field label{font-size:var(--text-sm); font-weight:700; color:var(--muted-foreground);}
   .select-wrap{position:relative;}
-  select{width:100%; appearance:none; background:var(--input-background); border:1px solid var(--border); border-radius:var(--radius); padding:11px 34px 11px 12px; font-size:13.5px; font-weight:600; color:var(--foreground);}
+  select{width:100%; appearance:none; background:var(--input-background); border:1px solid var(--border); border-radius:var(--radius); padding:11px 34px 11px 12px; font-size:var(--text-base); font-weight:600; color:var(--foreground);}
   .select-wrap .chev{position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--slate-400);}
-  .field-fixed{display:flex; align-items:center; justify-content:space-between; background:var(--accent-blue-soft); border:1px solid var(--accent-blue-border); border-radius:var(--radius); padding:11px 12px; font-size:13.5px; font-weight:700; color:var(--accent-blue-strong);}
-  .field-fixed .tag{font-size:10px; font-weight:800; letter-spacing:.02em; background:var(--accent-blue-strong); color:var(--background); padding:3px 9px; border-radius:999px; white-space:nowrap;}
-
   /* ---- picker button (mobile-native alternative to <select>) ---- */
-  .picker-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--input-background); border:1px solid var(--border); border-radius:var(--radius); padding:11px 12px; font-size:13.5px; font-weight:600; color:var(--foreground); text-align:left; transition:transform .1s ease, border-color .15s ease;}
+  .picker-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--input-background); border:1px solid var(--border); border-radius:var(--radius); padding:11px 12px; font-size:var(--text-base); font-weight:600; color:var(--foreground); text-align:left; transition:transform .1s ease, border-color .15s ease;}
   .picker-btn:active{transform:scale(.99); border-color:var(--accent-blue-border);}
   .picker-btn .chevronDown{color:var(--slate-400); flex-shrink:0; display:flex;}
+  /* Fixed ("only option") level — same shape/size as a real picker so the whole
+     stack reads as one consistent field list, just visually muted to signal
+     there's nothing to tap: no border contrast, no chevron, dimmed text. */
+  .picker-btn.fixed{background:var(--muted); color:var(--muted-foreground); cursor:default;}
+  .picker-btn.fixed:active{transform:none;}
 
   /* ---- bottom sheet picker ---- */
   .sheet-overlay{position:absolute; inset:0; background:rgba(15,23,42,.45); z-index:80; display:flex; align-items:flex-end; opacity:0; pointer-events:none; transition:opacity .2s ease;}
@@ -275,17 +321,26 @@
   .sheet-overlay.open .sheet-panel{transform:translateY(0);}
   .sheet-handle{width:36px; height:4px; background:var(--border); border-radius:999px; margin:10px auto 2px; flex-shrink:0;}
   .sheet-header{display:flex; align-items:center; justify-content:space-between; padding:6px 18px 12px; flex-shrink:0;}
-  .sheet-title{font-weight:800; font-size:15px; color:var(--foreground);}
+  .sheet-title{font-weight:800; font-size:var(--text-lg); color:var(--foreground);}
   .sheet-search{margin:0 18px 10px; flex-shrink:0;}
   .sheet-list{overflow-y:auto; padding:4px 10px 18px;}
-  .sheet-item{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:13px 10px; border:none; background:none; border-radius:10px; font-size:13.5px; font-weight:600; color:var(--foreground); text-align:left; font-family:var(--font-mono);}
+  .sheet-item{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:13px 10px; border:none; background:none; border-radius:10px; font-size:var(--text-base); font-weight:600; color:var(--foreground); text-align:left; font-family:var(--font-mono);}
   .sheet-item:active{background:var(--accent);}
   .sheet-item.selected{background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
   .sheet-item-right{display:flex; align-items:center; gap:8px; flex-shrink:0;}
 
+  /* In-app confirm dialog — replaces the browser's native confirm(), which shows
+     OS chrome and the page URL and breaks the illusion of a real mobile app.
+     Scoped to the device frame (absolute, not fixed) so it never escapes the phone. */
+  .confirm-overlay{position:absolute; inset:0; background:rgba(15,23,42,.55); z-index:90; display:flex; align-items:center; justify-content:center; padding:24px;}
+  .confirm-card{background:var(--card); border-radius:var(--radius-2xl); width:100%; max-width:300px; padding:20px; box-shadow:0 16px 40px rgba(0,0,0,.3);}
+  .confirm-card p{margin:0 0 18px; font-size:var(--text-base); color:var(--foreground); line-height:1.5;}
+  .confirm-actions{display:flex; gap:8px;}
+  .confirm-actions .btn{width:auto; flex:1; height:42px;}
+
   .scan-block{border:1.5px dashed var(--border); border-radius:var(--radius-2xl); padding:24px 18px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:12px; background:var(--card);}
-  .scan-block .glyph-circle{width:52px; height:52px; border-radius:999px; background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center;}
-  .scanrow{display:flex; align-items:center; gap:11px; border:1px solid var(--rag-green-border); background:var(--rag-green-soft); border-radius:var(--radius-2xl); padding:16px; font-size:13.5px; color:var(--foreground);}
+  .scan-block .glyph-circle{width:52px; height:52px; border-radius:999px; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center;}
+  .scanrow{display:flex; align-items:center; gap:11px; border:1px solid var(--rag-green-border); background:var(--rag-green-soft); border-radius:var(--radius-2xl); padding:16px; font-size:var(--text-base); color:var(--foreground);}
   .scanrow .glyph-circle{width:34px; height:34px; border-radius:999px; background:rgba(255,255,255,.5); color:var(--rag-green-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .scanrow .lbl{color:var(--muted-foreground); font-weight:600;}
   .scanrow b{margin-left:auto; color:var(--rag-green-strong); font:700 14px var(--font-mono);}
@@ -293,7 +348,7 @@
   .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; box-shadow:var(--shadow-card);}
   .sku-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;}
   .sku-code{font:700 13px var(--font-mono); color:var(--foreground);}
-  .sku-lot{font-size:11px; color:var(--slate-400);}
+  .sku-lot{font-size:var(--text-xs); color:var(--slate-400);}
   .remove-x{width:26px; height:26px; border-radius:999px; border:none; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
   .remove-x:active{transform:scale(.9);}
   .stepper{display:flex; align-items:center; gap:14px; background:var(--muted); border-radius:999px; padding:6px; width:fit-content;}
@@ -301,21 +356,19 @@
   .stepper button:active{transform:scale(.9);}
   .stepper .qty{font:800 18px var(--font-mono); min-width:28px; text-align:center; color:var(--foreground);}
   .cond-row{display:flex; flex-wrap:wrap; gap:7px;}
-  .cond-chip{display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); background:var(--card); color:var(--muted-foreground); padding:8px 14px; border-radius:999px; font-size:12px; font-weight:700; transition:transform .1s ease;}
+  .cond-chip{display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); background:var(--card); color:var(--muted-foreground); padding:8px 14px; border-radius:999px; font-size:var(--text-sm); font-weight:700; transition:transform .1s ease;}
   .cond-chip:active{transform:scale(.95);}
   .cond-chip.selected{background:var(--brand-navy); color:#fff; border-color:var(--brand-navy);}
   .sku-field{display:flex; flex-direction:column; gap:7px;}
-  .sku-field-label{font-size:10px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em;}
+  .sku-field-label{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em;}
 
   .bay-card{display:flex; align-items:center; gap:12px; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; width:100%; text-align:left; box-shadow:var(--shadow-card); transition:transform .12s ease;}
   .bay-card:active{transform:scale(.98);}
   .bay-card.active-target{border-color:var(--primary); border-width:1.5px;}
   .bay-icon{width:38px; height:38px; border-radius:999px; background:var(--muted); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--muted-foreground);}
-  .bay-icon.completed{background:var(--rag-green-soft); color:var(--rag-green-strong);}
-  .bay-icon.inprogress{background:var(--accent-purple-soft); color:var(--accent-purple-strong);}
   .bay-body{flex:1; min-width:0;}
-  .bay-name{font-weight:700; font-size:13.5px; color:var(--foreground);}
-  .bay-desc{font-size:11.5px; color:var(--muted-foreground); margin-bottom:5px;}
+  .bay-name{font-weight:700; font-size:var(--text-base); color:var(--foreground);}
+  .bay-desc{font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:5px;}
 
   .empty-state{display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px; padding:40px 20px; color:var(--muted-foreground);}
   .empty-state .glyph{font-size:30px; opacity:.5; margin-bottom:4px; color:var(--slate-400);}
@@ -323,27 +376,33 @@
   /* ---- login (full navy, matches the RAMS reference login) ---- */
   .login-screen{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 26px 30px; background:var(--brand-navy); color:#fff;}
   .login-mark{width:56px; height:56px; border-radius:var(--radius-lg); background:rgba(255,255,255,.12); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; margin-bottom:16px;}
-  .login-screen h2{margin:0 0 4px; font-size:19px; font-weight:800; color:#fff;}
-  .login-screen p{margin:0 0 22px; font-size:12.5px; color:rgba(255,255,255,.62);}
-  .login-wh{display:inline-flex; align-items:center; gap:6px; color:rgba(255,255,255,.8); font-size:11.5px; background:rgba(255,255,255,.09); border-radius:20px; padding:6px 14px; margin-bottom:22px;}
+  .login-screen h2{margin:0 0 4px; font-size:var(--text-xl); font-weight:800; color:#fff;}
+  .login-screen p{margin:0 0 22px; font-size:var(--text-xs); color:rgba(255,255,255,.62);}
+  .login-wh{display:inline-flex; align-items:center; gap:6px; color:rgba(255,255,255,.8); font-size:var(--text-xs); background:rgba(255,255,255,.09); border-radius:20px; padding:6px 14px; margin-bottom:22px;}
   .login-field{width:100%; text-align:left; margin-bottom:13px;}
-  .login-field label{display:block; font-size:11.5px; font-weight:600; color:rgba(255,255,255,.6); margin-bottom:6px;}
-  .login-input{display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:var(--radius-lg); padding:12px 13px; color:#fff; font-size:13px;}
+  .login-field label{display:block; font-size:var(--text-sm); font-weight:600; color:rgba(255,255,255,.6); margin-bottom:6px;}
+  .login-input{display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:var(--radius-lg); padding:12px 13px; color:#fff; font-size:var(--text-base);}
   .login-input .ph{color:rgba(255,255,255,.42);}
-  .login-btn{width:100%; background:#fff; color:var(--brand-navy); text-align:center; font-weight:700; font-size:14px; border-radius:var(--radius-lg); padding:14px; margin-top:10px; border:none; transition:transform .1s ease;}
+  .login-btn{width:100%; background:#fff; color:var(--brand-navy); text-align:center; font-weight:700; font-size:var(--text-base); border-radius:var(--radius-lg); padding:14px; margin-top:10px; border:none; transition:transform .1s ease;}
   .login-btn:active{transform:scale(.98);}
-  .login-foot{color:rgba(255,255,255,.5); font-size:11.5px; margin-top:20px;}
+  .login-foot{color:rgba(255,255,255,.5); font-size:var(--text-xs); margin-top:20px;}
 
-  .foot-note{text-align:center; color:var(--slate-400); font-size:11.5px; margin-top:22px;}
+  .foot-note{text-align:center; color:var(--slate-400); font-size:var(--text-xs); margin-top:22px;}
 
-  /* ============ BOTTOM TAB BAR (mobile only) ============ */
-  .tabbar{position:sticky; bottom:0; z-index:35; display:flex; background:var(--scrim); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-top:1px solid var(--border); padding:8px 6px 12px; flex-shrink:0;}
-  .tabbar-item{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; color:var(--slate-400); padding:4px 0 2px; transition:transform .1s ease;}
-  .tabbar-item:active{transform:scale(.92);}
+  /* ============ BOTTOM TAB BAR (mobile only) — floating capsule at 40% opacity
+     (blurred so content stays readable underneath), inset from the screen edges.
+     Icon states: label always visible, tinted pill behind the active icon,
+     brand-color icon/label, bold label when active. */
+  .tabbar{position:sticky; bottom:14px; z-index:35; display:flex; align-items:center; justify-content:space-around; background:var(--tabbar-bg); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); border:1px solid var(--border); margin:0 16px; padding:8px 6px; border-radius:999px; box-shadow:0 12px 28px rgba(15,23,42,.16), inset 0 1px 0 var(--tabbar-highlight); flex-shrink:0;}
+  .tabbar-item{flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 8px; border-radius:999px; background:none; border:none; color:var(--slate-400); transition:transform .1s ease, background .15s ease, color .15s ease;}
+  .tabbar-item:active{transform:scale(.9);}
   .tabbar-item.active{color:var(--primary);}
-  .tabbar-item .icon-slot{width:34px; height:26px; border-radius:999px; display:flex; align-items:center; justify-content:center; transition:background .15s ease;}
+  .tabbar-item .icon-slot{width:34px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; transition:background .15s ease;}
   .tabbar-item.active .icon-slot{background:var(--accent-blue-soft);}
-  .tabbar-item .lbl{font-size:10px; font-weight:700;}
+  .tabbar-item svg{width:19px; height:19px; flex-shrink:0;}
+  .tabbar-item .lbl{font-size:var(--text-2xs); font-weight:600;}
+  .tabbar-item.active .lbl{font-weight:800;}
+  .tabbar-item.active .lbl{font-weight:800;}
 
   /* ---- screen transition ---- */
   .screen-content{animation:screenFade .22s ease;}
@@ -362,19 +421,19 @@
   .device.tablet .sticky-actions{flex-direction:row;}
   .device.tablet .sticky-actions .btn{width:auto; flex:1;}
 
-  .toast{position:absolute; left:18px; right:18px; bottom:18px; background:var(--foreground); color:var(--background); padding:12px 16px; border-radius:var(--radius); font-size:13px; font-weight:600; box-shadow:var(--shadow); display:flex; align-items:center; gap:8px; z-index:60; opacity:0; transform:translateY(8px); transition:opacity .18s ease, transform .18s ease; pointer-events:none;}
+  .toast{position:absolute; left:18px; right:18px; bottom:18px; background:var(--foreground); color:var(--background); padding:12px 16px; border-radius:var(--radius); font-size:var(--text-base); font-weight:600; box-shadow:var(--shadow); display:flex; align-items:center; gap:8px; z-index:60; opacity:0; transform:translateY(8px); transition:opacity .18s ease, transform .18s ease; pointer-events:none;}
   .toast.show{opacity:1; transform:translateY(0);}
 
   .modal-overlay{position:fixed; inset:0; background:rgba(10,14,15,.55); display:none; align-items:center; justify-content:center; z-index:100; padding:24px;}
   .modal-overlay.open{display:flex;}
   .modal{background:var(--card); border-radius:var(--radius-xl); max-width:720px; width:100%; max-height:84vh; overflow-y:auto; box-shadow:var(--shadow); border:1px solid var(--border);}
   .modal-head{display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--card);}
-  .modal-head h3{margin:0; font-size:15px; font-weight:800; color:var(--foreground);}
+  .modal-head h3{margin:0; font-size:var(--text-lg); font-weight:800; color:var(--foreground);}
   .modal-head button{background:var(--secondary); border:1px solid var(--border); color:var(--foreground); width:32px; height:32px; border-radius:999px;}
   .modal-body{padding:20px 22px;}
-  .modal-body p{color:var(--muted-foreground); font-size:13px; line-height:1.6;}
-  .modal-body pre{background:var(--muted); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px 16px; overflow-x:auto; font-family:var(--font-mono); font-size:11.5px; line-height:1.6; color:var(--foreground); margin:10px 0 18px;}
-  .badge-new{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px;}
+  .modal-body p{color:var(--muted-foreground); font-size:var(--text-base); line-height:1.6;}
+  .modal-body pre{background:var(--muted); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px 16px; overflow-x:auto; font-family:var(--font-mono); font-size:var(--text-xs); line-height:1.6; color:var(--foreground); margin:10px 0 18px;}
+  .badge-new{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-2xs); font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px;}
 
   @media (max-width:960px){ .device.tablet{width:100%; max-width:900px;} }
 </style>
@@ -407,6 +466,7 @@
         <div id="screen" class="screen"></div>
       </div>
       <div id="sheet-slot"></div>
+      <div id="confirm-slot"></div>
     </div>
   </div>
   <p class="foot-note">Log in → Resume/Start an audit → Scan a pallet, count SKUs, Save Record → check Progress. Every KPI updates from real state. On Tablet, the left rail gives direct navigation.</p>
@@ -465,8 +525,8 @@ const AUDITS = [
   { audit_id:'AUD-0231', audit_name:'Zone A Full Count', audit_type:'Full', count_method:'Blind (Enforced)',
     scope_type:'Rack', scope_values:['Rack A-05','Rack A-06'], team_members:['Arjun Sharma','Meera Kulkarni','Priya Singh'],
     start_date:'2026-06-20', end_date:'2026-07-10', status:'In Progress' },
-  { audit_id:'AUD-0233', audit_name:'Bay Spot Check — B-07', audit_type:'Spot Check', count_method:'Blind (Enforced)',
-    scope_type:'Bay', scope_values:['Bay B-07-01'], team_members:['Arjun Sharma'],
+  { audit_id:'AUD-0233', audit_name:'Spot Check — Layout C & E', audit_type:'Spot Check', count_method:'Blind (Enforced)',
+    scope_type:'Layout', scope_values:['Layout C','Layout E'], team_members:['Arjun Sharma'],
     start_date:'2026-07-09', end_date:'2026-07-09', status:'Scheduled' },
   { audit_id:'AUD-0234', audit_name:'Cycle — Fast Movers, Layout B', audit_type:'Cycle Count', count_method:'Blind (Enforced)',
     scope_type:'Layout', scope_values:['Layout B'], team_members:['Arjun Sharma','Rohan Kumar'],
@@ -521,7 +581,19 @@ const LOCATIONS = {
       makeBay('B-04', [makeLoc('A-06-B04-01','Not Started'), makeLoc('A-06-B04-02','Not Started'), makeLoc('A-06-B04-03','Not Started')]),
     ]),
   ]) ]},
-  'AUD-0233': { layouts: [ makeLayout('Layout C', [ makeRack('B-07', [ makeBay('B-07-01', [makeLoc('B-07-01-01','Not Started')]) ]) ]) ]},
+  // Two layouts, two racks (one per layout), 8 storage locations total — a real
+  // multi-option scope, so Layout/Rack/Bay/Location in the manual picker are
+  // genuine open dropdowns end to end, not single-option locked pills.
+  'AUD-0233': { layouts: [
+    makeLayout('Layout C', [ makeRack('B-07', [
+      makeBay('B-07-01', [makeLoc('B-07-01-01','Not Started'), makeLoc('B-07-01-02','Not Started')]),
+      makeBay('B-07-02', [makeLoc('B-07-02-01','Not Started'), makeLoc('B-07-02-02','Not Started')]),
+    ]) ]),
+    makeLayout('Layout E', [ makeRack('E-01', [
+      makeBay('E-01-01', [makeLoc('E-01-01-01','Not Started'), makeLoc('E-01-01-02','Not Started')]),
+      makeBay('E-01-02', [makeLoc('E-01-02-01','Not Started'), makeLoc('E-01-02-02','Not Started')]),
+    ]) ]),
+  ]},
   'AUD-0234': { layouts: [ makeLayout('Layout B', genRacks(['B-01','B-02','B-03','B-04'], 3, 3, 1, 1)) ]},
   'AUD-0225': { layouts: [ makeLayout('Layout A', [ makeRack('C-04', [ makeBay('C-04-01', [makeLoc('C-04-01-01','Completed'), makeLoc('C-04-01-02','Completed')]) ]) ]) ]},
   'AUD-0219': { layouts: [ makeLayout('Layout A', [ makeRack('B-02', [ makeBay('B-02-03', [makeLoc('B-02-03-01','In Progress'), makeLoc('B-02-03-02','Not Started')]) ]) ]) ]},
@@ -536,6 +608,21 @@ const LOCATIONS = {
 LOCATIONS['AUD-0231'].layouts[0].racks[0].bays[1].locations[2].pallets.push(
   { pallet:'P-10481', lines:[{ sku:'SKU-1042', name:'Steel Bracket 90', lot:'L-2291', qty:46, condition:'Good' }], saved:true }
 );
+// AUD-0225 ("Zone C Damaged Recheck") is the one audit that's already Submitted in
+// seed data — give it real counted history so its read-only summary isn't empty,
+// including the damaged/broken lines the recheck was actually looking for.
+LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[0].pallets.push(
+  { pallet:'P-20011', lines:[
+    { sku:'SKU-3301', name:'Plastic Crate Blue', lot:'L-2304', qty:18, condition:'Good' },
+    { sku:'SKU-5088', name:'Corner Protector', lot:'L-2319', qty:6, condition:'Damaged' },
+  ], saved:true }
+);
+LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[1].pallets.push(
+  { pallet:'P-20012', lines:[
+    { sku:'SKU-9011', name:'Rack Label Kit', lot:'L-2311', qty:12, condition:'Good' },
+    { sku:'SKU-1180', name:'Fastener Pack M10', lot:'L-2322', qty:3, condition:'Broken' },
+  ], saved:true }
+);
 
 function findLayoutIn(auditId, layoutName){ return ((LOCATIONS[auditId]||{}).layouts||[]).find(l => l.name === layoutName); }
 function layoutsOf(auditId){ return (LOCATIONS[auditId]||{}).layouts || []; }
@@ -549,6 +636,19 @@ const QR_POOL = [
   { layout:'Layout B', rack:'B-20', bay:'B-02', loc:'B-20-B-02-01' },
   { layout:'Layout D', rack:'D-01', bay:'B-01', loc:'D-01-B01-01' }, // wrong layout entirely
   { layout:'Layout A', rack:'A-09', bay:'B-01', loc:'A-09-B01-01' }, // right layout, rack not in this audit
+];
+
+// Quick Scan (tab bar) mixes location codes in with pallet/SKU codes — a real
+// camera scan can't know in advance what label the inspector is pointing at, so
+// this pool exercises the "wrong code type" path: a pallet or SKU tag scanned
+// from the global Scan tab rather than from inside an already-open count sheet.
+const QUICK_SCAN_POOL = [
+  { kind:'location', code: QR_POOL[0] },
+  { kind:'location', code: QR_POOL[1] },
+  { kind:'pallet', code:'P-10483' },
+  { kind:'location', code: QR_POOL[3] },
+  { kind:'sku', code:{ sku:'SKU-2218', name:'Pallet Support Pin', lot:'L-2292' } },
+  { kind:'location', code: QR_POOL[2] },
 ];
 function findRackIn(auditId, layoutName, rackCode){
   const layout = findLayoutIn(auditId, layoutName);
@@ -605,6 +705,28 @@ function lastSaved(auditId){
   return withPallets.length ? withPallets[0] : null;
 }
 function nextPending(auditId){ return allLocations(auditId).find(x => x.loc.status !== 'Completed') || null; }
+
+// Aggregates everything actually counted for an audit — pallets, SKU lines, quantity,
+// and a condition breakdown — plus a flat list of non-"Good" lines worth a second look.
+function summaryStats(auditId){
+  let palletCount = 0, lineCount = 0, qtyTotal = 0;
+  const byCondition = {};
+  const flagged = [];
+  allLocations(auditId).forEach(({ layout, rack, bay, loc }) => {
+    (loc.pallets || []).forEach(p => {
+      palletCount++;
+      (p.lines || []).forEach(line => {
+        lineCount++;
+        qtyTotal += line.qty;
+        byCondition[line.condition] = (byCondition[line.condition] || 0) + line.qty;
+        if (line.condition !== 'Good') {
+          flagged.push({ layout, rack, bay, locCode:loc.code, pallet:p.pallet, sku:line.sku, name:line.name, qty:line.qty, condition:line.condition });
+        }
+      });
+    });
+  });
+  return { palletCount, lineCount, qtyTotal, byCondition, flagged };
+}
 function mine(){ return AUDITS.filter(a => a.team_members.includes(INSPECTOR.name)); }
 function currentOngoing(){ return mine().find(a => a.status === 'In Progress' && !isOverdue(a)); }
 
@@ -612,6 +734,8 @@ function currentOngoing(){ return mine().find(a => a.status === 'In Progress' &&
 let STATE = {
   device: 'phone', stack: ['login'], params: {},
   tasksTab: 'To Do', tasksSearch: '', scan: null, menuOpen: false,
+  quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
+  _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
 };
 
 function push(screen, params){ STATE.stack.push(screen); STATE.params = params || {}; STATE.menuOpen = false; render(); scrollTop(); }
@@ -620,6 +744,10 @@ function goHome(){ STATE.stack = ['login']; STATE.scan = null; render(); scrollT
 function railTo(screen, params){ STATE.stack = ['dashboard']; if (screen !== 'dashboard') STATE.stack.push(screen); STATE.params = params || {}; render(); scrollTop(); }
 function scrollTop(){ const s = document.getElementById('screen'); if (s) s.scrollTop = 0; }
 function toggleMenu(){ STATE.menuOpen = !STATE.menuOpen; render(); }
+function syncNow(btn){
+  if (btn) { btn.classList.add('spinning'); setTimeout(() => btn.classList.remove('spinning'), 600); }
+  toast('Synced');
+}
 function doLogin(){ STATE.stack = ['dashboard']; render(); scrollTop(); }
 
 function toast(msg){
@@ -652,6 +780,7 @@ const ICON = {
   search: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M13 13l-2.4-2.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   pin: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 15s5-4.5 5-8.5A5 5 0 0 0 3 6.5C3 10.5 8 15 8 15z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="6.5" r="1.6" stroke="currentColor" stroke-width="1.5"/></svg>',
   camera: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M6 5l1-1.5h2L10 5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="8" cy="9.2" r="2.1" stroke="currentColor" stroke-width="1.5"/></svg>',
+  scan: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10.2" width="3.6" height="3.6" rx=".6" fill="currentColor"/></svg>',
   check: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   checkSm: '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevronDown: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -666,29 +795,17 @@ const ICON = {
   progress: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   power: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 4v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 6.5a7.5 7.5 0 1 0 10 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   playTri: '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l10-5.5z"/></svg>',
+  calendar: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v2.5M10.5 2v2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
 };
 
-/* ================= PROGRESS RING + BOTTOM TAB BAR ================= */
-function ringSvg(pct, size){
-  size = size || 64;
-  const r = (size - 8) / 2;
-  const c = 2 * Math.PI * r;
-  const off = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
-  return `
-    <div class="ring-wrap" style="width:${size}px; height:${size}px;">
-      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--muted)" stroke-width="6"/>
-        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--primary)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/>
-      </svg>
-      <div class="ring-pct">${pct}%</div>
-    </div>`;
-}
+/* ================= BOTTOM TAB BAR ================= */
 function renderTabBar(active){
   if (STATE.device !== 'phone') return '';
   const ongoing = currentOngoing();
   const items = [
     { key:'dashboard', label:'Home', icon:ICON.home, onclick:"railTo('dashboard')" },
     { key:'tasks', label:'Tasks', icon:ICON.tasks, onclick:"railTo('tasks')" },
+    { key:'scan', label:'Scan', icon:ICON.scan, onclick:"openQuickScan()" },
   ];
   if (ongoing) items.push({ key:'progress', label:'Progress', icon:ICON.progress, onclick:`railTo('progress', {auditId:'${ongoing.audit_id}'})` });
   return `<div class="tabbar">${items.map(it => `<button class="tabbar-item ${active===it.key?'active':''}" onclick="${it.onclick}"><span class="icon-slot">${it.icon}</span><span class="lbl">${it.label}</span></button>`).join('')}</div>`;
@@ -702,9 +819,10 @@ function renderRail(){
   const items = [
     { key:'dashboard', label:'Home', icon:ICON.home, on:() => railTo('dashboard') },
     { key:'tasks', label:'Tasks', icon:ICON.tasks, on:() => railTo('tasks') },
+    { key:'scan', label:'Scan', icon:ICON.scan, on:() => openQuickScan() },
   ];
   if (ongoing) items.push({ key:'progress', label:'Progress', icon:ICON.progress, on:() => railTo('progress', { auditId: ongoing.audit_id }) });
-  const isActive = (key) => (key==='dashboard' && screen==='dashboard') || (key==='tasks' && (screen==='tasks'||screen==='auditDetails'||screen==='countSheet')) || (key==='progress' && screen==='progress');
+  const isActive = (key) => (key==='dashboard' && screen==='dashboard') || (key==='tasks' && (screen==='tasks'||screen==='auditDetails'||screen==='countSheet')) || (key==='scan' && screen==='scan') || (key==='progress' && (screen==='progress'||screen==='auditSummary'));
   document.getElementById('rail-slot').innerHTML = `
     <div class="rail">
       <div class="rail-logo">R</div>
@@ -725,20 +843,27 @@ function statusBarHtml(){
     </div>`;
 }
 function headerBlock({ title, sub, showBack, menuItems, avatar }){
+  // Most screens only ever offered one overflow item — "Sync Now" — which meant
+  // tapping the three-dot button just to open a one-item dropdown for it. Those
+  // screens get a direct sync icon button instead; screens with a real multi-item
+  // menu (Dashboard, Tasks) keep the overflow button.
+  const singleSync = !avatar && menuItems && menuItems.length === 1 && menuItems[0].label === 'Sync Now';
   const menu = STATE.menuOpen ? `<div class="menu-pop open">${menuItems.map(m => `<button onclick="${m.action}">${m.label}</button>`).join('')}</div>` : '';
+  const actions = avatar
+    ? `<div class="avatar" onclick="toggleMenu()" style="cursor:pointer;">${INSPECTOR.initials}<span class="avatar-badge">${ICON.chevronDown}</span></div>${menu}`
+    : singleSync
+      ? `<button class="icon-btn" onclick="syncNow(this)" aria-label="Sync now">${ICON.sync}</button>`
+      : `<button class="icon-btn" onclick="toggleMenu()">${ICON.more}</button>${menu}`;
   return `
     <div class="navtop">
       ${statusBarHtml()}
-      ${showBack ? `<button class="back-link" onclick="back()">${ICON.back} Back</button>` : ''}
       <div class="app-header">
-        <div style="min-width:0;">
+        ${showBack ? `<button class="back-btn" onclick="back()" aria-label="Back">${ICON.back}</button>` : ''}
+        <div style="min-width:0; flex:1;">
           <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${title}</h1>
           <div class="sub">${sub}</div>
         </div>
-        <div class="header-actions">
-          ${avatar ? `<div class="avatar" onclick="toggleMenu()" style="cursor:pointer;">${INSPECTOR.initials}</div>` : `<button class="icon-btn" onclick="toggleMenu()">${ICON.more}</button>`}
-          ${menu}
-        </div>
+        <div class="header-actions">${actions}</div>
       </div>
     </div>
   `;
@@ -773,30 +898,38 @@ function renderDashboard(){
   if (ongoing) {
     const r = rollup(ongoing.audit_id); const ls = lastSaved(ongoing.audit_id);
     const pct = r.locTotal ? Math.round((r.locDone / r.locTotal) * 100) : 0;
+    // Every location counted but not yet submitted — "Resume Audit" would route
+    // into resumeAudit(), which jumps to the last-touched location. If that
+    // location's already completed, that's now read-only and a dead end; the
+    // real next step is reviewing and submitting the summary.
+    const isFullyCounted = r.locTotal > 0 && r.locDone === r.locTotal;
     ongoingCard = `
       <div class="card">
-        <div class="card-title-row"><h2>Ongoing Audit</h2><span class="pill s-inprogress">In Progress</span></div>
-        <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
-          ${ringSvg(pct)}
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
-              <span class="task-id mono">${ongoing.audit_id}</span>
-              <span class="pill p-${priorityFor(ongoing).toLowerCase()}">${priorityFor(ongoing)}</span>
-            </div>
-            <div style="font-size:13.5px; font-weight:700; color:var(--foreground); line-height:1.3;">${ongoing.audit_name}</div>
-            <div style="font-size:11.5px; color:var(--muted-foreground); margin-top:2px;">${ongoing.scope_values.join(', ')} · Due ${fmtDate(ongoing.end_date)}</div>
+        <div class="card-title-row" style="padding-bottom:12px; margin-bottom:16px; border-bottom:1px solid var(--border);"><h2>Ongoing Audit</h2></div>
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px;">
+          <div style="min-width:0;">
+            <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground); line-height:1.3;">${ongoing.audit_name}</div>
           </div>
+          <span class="pill p-${priorityFor(ongoing).toLowerCase()}" style="flex-shrink:0;">${priorityFor(ongoing)}</span>
         </div>
-        <div class="kpi-grid" style="margin-bottom:12px;">
-          <div class="kpi"><span class="v">${r.rackDone}/${r.rackTotal}</span><span class="l">Racks</span></div>
-          <div class="kpi"><span class="v">${r.bayDone}/${r.bayTotal}</span><span class="l">Bays</span></div>
-          <div class="kpi"><span class="v">${r.locDone}/${r.locTotal}</span><span class="l">Locations</span></div>
+        <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:16px;">${ongoing.audit_id} · ${ongoing.scope_values.join(', ')}</div>
+        <div style="margin:0 0 12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:6px;">
+            <span>${r.locDone}/${r.locTotal} locations counted</span>
+            <span style="font-weight:700; color:var(--foreground);">${pct}%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
         </div>
-        ${ls ? `<div style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted-foreground); margin-bottom:12px;">${ICON.pin}<span>Last saved <strong class="mono" style="color:var(--foreground);">${ls.loc.code}</strong> · in progress</span></div>` : ''}
-        <button class="btn primary" onclick="resumeAudit('${ongoing.audit_id}')">Resume Audit ${ICON.chevron}</button>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:14px;">
+          <span>Due ${fmtDate(ongoing.end_date)}</span>
+          ${ls ? `<span style="display:flex; align-items:center; gap:4px; min-width:0;">${ICON.pin}<span style="white-space:nowrap;">Last <strong class="mono" style="color:var(--foreground);">${ls.loc.code}</strong></span></span>` : ''}
+        </div>
+        ${isFullyCounted
+          ? `<button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${ongoing.audit_id}'})">View Audit Summary ${ICON.chevron}</button>`
+          : `<button class="btn primary btn-pill" onclick="resumeAudit('${ongoing.audit_id}')">Resume Audit ${ICON.chevron}</button>`}
       </div>`;
   } else {
-    ongoingCard = `<div class="card"><div class="empty-state" style="padding:22px 10px;"><div class="glyph">${ICON.box}</div><div style="font-weight:700; font-size:13px; color:var(--foreground);">No audit in progress</div><div style="font-size:12px;">Open a task below to start one.</div></div></div>`;
+    ongoingCard = `<div class="card"><div class="empty-state" style="padding:22px 10px;"><div class="glyph">${ICON.box}</div><div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">No audit in progress</div><div style="font-size:var(--text-sm);">Open a task below to start one.</div></div></div>`;
   }
 
   const taskPreview = others.map(a => taskCard(a)).join('');
@@ -812,11 +945,11 @@ function renderDashboard(){
       ]
     })}
     <div class="body-pad">
-      <div class="banner good"><span class="dot"></span> Sync status — All caught up <span class="time">2 min ago</span></div>
-      <div class="${STATE.device==='tablet' ? 'dash-grid' : ''}">
+      <div class="sync-line"><span class="dot"></span> All caught up <span class="time">Synced 2 min ago</span></div>
+      <div class="${STATE.device==='tablet' ? 'dash-grid' : ''}" style="${STATE.device==='tablet' ? '' : 'display:flex; flex-direction:column; gap:14px;'}">
         <div style="display:flex; flex-direction:column; gap:14px;">${ongoingCard}</div>
         <div style="display:flex; flex-direction:column; gap:14px;">
-          <div class="card-title-row" style="margin-top:${STATE.device==='tablet'?'0':'4px'};">
+          <div class="card-title-row">
             <h2>My Audit Tasks</h2>
             <button class="link-btn" onclick="push('tasks')">View All</button>
           </div>
@@ -833,16 +966,18 @@ function taskCard(a){
   const uis = uiStatus(a);
   return `
     <button class="task-card ${uis==='Overdue'?'overdue':''}" onclick="push('auditDetails', {auditId:'${a.audit_id}'})">
-      <div class="task-top">
-        <div style="display:flex; align-items:center; gap:9px; min-width:0;">
-          <span class="task-icon">${auditTypeIcon(a.audit_type)}</span>
-          <span class="task-id mono">${a.audit_id}</span>
+      <div class="task-row">
+        <span class="task-icon">${auditTypeIcon(a.audit_type)}</span>
+        <div class="task-info">
+          <div class="task-name">${a.audit_name}</div>
+          <div class="task-meta mono">${a.audit_id} · ${a.scope_values.join(', ')}</div>
         </div>
-        <span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span>
+        <span class="chev">${ICON.chevron}</span>
       </div>
-      <div style="font-weight:700; font-size:13px; color:var(--foreground);">${a.audit_name}</div>
-      <div class="task-mid"><span class="task-scope">${a.scope_values.join(', ')}</span>${ICON.chevron}</div>
-      <div class="task-bottom"><span>Due ${fmtDate(a.end_date)}</span><span class="pill ${pillClass(uis)}">${uis}</span></div>
+      <div class="task-footer">
+        <span class="task-due">${ICON.calendar} Due ${fmtDate(a.end_date)}</span>
+        <span class="pill ${pillClass(uis)}">${uis}</span>
+      </div>
     </button>
   `;
 }
@@ -865,7 +1000,7 @@ function renderTasks(){
     <div class="body-pad">
       <div class="search-wrap">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
       <div class="tabs">${['To Do','In Progress','Completed','Overdue'].map(t => `<button class="tab ${STATE.tasksTab===t?'active':''}" onclick="STATE.tasksTab='${t}'; render()">${t} (${counts[t]})</button>`).join('')}</div>
-      <div class="task-list">
+      <div class="task-list" style="${filtered.length ? '' : 'flex:1; justify-content:center;'}">
         ${filtered.length ? filtered.map(taskCard).join('') : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No audits here</div><div>Nothing in "${STATE.tasksTab}" right now.</div></div>`}
       </div>
     </div>
@@ -887,40 +1022,55 @@ function getLocContext(auditId){
   return { layouts, layoutObj, racks, rackObj, bayObj };
 }
 
-function pickerRow(label, displayValue, tag, onOpen){
-  return `<div class="field"><label>${label} *</label>
+// Auto-fills a level ONLY when it's fixed (exactly one option — nothing to
+// genuinely choose). The moment a level has more than one option, it and every
+// level below it are left unselected — no silently pre-picking a
+// layout/rack/bay/location on the inspector's behalf.
+function initLocSelect(auditId){
+  const layouts = layoutsOf(auditId);
+  let layout = null, rack = null, bay = null, loc = null;
+  if (layouts.length === 1) {
+    layout = layouts[0].name;
+    const racks = layouts[0].racks;
+    if (racks.length === 1) {
+      rack = racks[0].code;
+      const bays = racks[0].bays;
+      if (bays.length === 1) {
+        bay = bays[0].code;
+        const locs = bays[0].locations;
+        if (locs.length === 1) loc = locs[0].code;
+      }
+    }
+  }
+  return { auditId, layout, rack, bay, loc };
+}
+
+function pickerRow(label, displayValue, tag, onOpen, required){
+  const isEmpty = !displayValue;
+  return `<div class="field"><label>${label}${required ? ' *' : ''}</label>
     <button class="picker-btn" onclick="${onOpen}">
-      <span class="mono">${displayValue}</span>
+      <span class="mono" style="${isEmpty ? 'color:var(--muted-foreground); font-weight:500;' : ''}">${isEmpty ? `Select ${label}` : displayValue}</span>
       <span style="display:flex; align-items:center; gap:8px;">${tag ? `<span class="pill ${locStatusPillClass(tag)}">${tag}</span>` : ''}<span class="chevronDown">${ICON.chevronDown}</span></span>
     </button>
   </div>`;
 }
+// Same shape as pickerRow but for a level with only one option — reads as the
+// same field list, just muted/non-interactive instead of a different-looking box.
+function fixedFieldRow(label, displayValue, required){
+  return `<div class="field"><label>${label}${required ? ' *' : ''}</label>
+    <div class="picker-btn fixed">
+      <span class="mono">${displayValue}</span>
+    </div>
+  </div>`;
+}
 
-function renderAuditDetails(){
-  const a = AUDITS.find(x => x.audit_id === STATE.params.auditId);
-  if (!a) return renderTasks();
-  const r = rollup(a.audit_id);
-  const uis = uiStatus(a);
-
-  if (!STATE.locScan || STATE.locScan.auditId !== a.audit_id) {
-    STATE.locScan = { auditId: a.audit_id, code:null, error:null, scanCount:0 };
-    STATE.locMode = 'manual';
-  }
-  if (!STATE.locSelect || STATE.locSelect.auditId !== a.audit_id) {
-    const pending = nextPending(a.audit_id);
-    const layouts = layoutsOf(a.audit_id);
-    const layout = pending ? pending.layout : (layouts[0] ? layouts[0].name : null);
-    const layoutObj0 = layouts.find(l => l.name === layout);
-    const racks0 = layoutObj0 ? layoutObj0.racks : [];
-    const rack = pending && pending.layout===layout ? pending.rack : (racks0[0] ? racks0[0].code : null);
-    const rackObj0 = racks0.find(r2 => r2.code === rack);
-    const bay = pending && pending.rack===rack ? pending.bay : (rackObj0 && rackObj0.bays[0] ? rackObj0.bays[0].code : null);
-    const bayObj0 = rackObj0 ? rackObj0.bays.find(b => b.code === bay) : null;
-    const loc = pending && pending.bay===bay ? pending.loc.code : (bayObj0 && bayObj0.locations[0] ? bayObj0.locations[0].code : null);
-    STATE.locSelect = { auditId: a.audit_id, layout, rack, bay, loc };
-  }
-
-  const { layouts, layoutObj, racks, rackObj, bayObj } = getLocContext(a.audit_id);
+// The "select manual / scan QR" location picker — lives permanently at the top
+// of Count Sheet (before and during counting, not a separate step). Reads and
+// writes STATE.locSelect / STATE.locScan / STATE.locMode — the caller is
+// responsible for having those already initialized for the right auditId.
+function buildLocationPicker(auditId, opts){
+  const required = Boolean(opts && opts.requiredLabels);
+  const { layouts, layoutObj, racks, rackObj, bayObj } = getLocContext(auditId);
   const sel = STATE.locSelect;
 
   const layoutFixed = layouts.length === 1;
@@ -932,53 +1082,29 @@ function renderAuditDetails(){
   // most audits are assigned exactly one layout (fixed), but a Layout-scoped
   // audit can be assigned several, and then this genuinely opens as a picker.
   const layoutField = layouts.length === 0 ? '' : layoutFixed
-    ? `<div class="field"><label>Layout *</label><div class="field-fixed"><span class="mono">${layouts[0].name}</span><span class="tag">Only option</span></div></div>`
-    : pickerRow('Layout', sel.layout, null, `openLocationSheet('${a.audit_id}', 'layout')`);
+    ? fixedFieldRow('Layout', layouts[0].name, required)
+    : pickerRow('Layout', sel.layout, null, `openLocationSheet('${auditId}', 'layout')`, required);
 
   const rackField = !layoutObj ? '' : rackFixed
-    ? `<div class="field"><label>Rack *</label><div class="field-fixed"><span class="mono">Rack ${racks[0].code}</span><span class="tag">Only option</span></div></div>`
-    : pickerRow('Rack', `Rack ${sel.rack}`, null, `openLocationSheet('${a.audit_id}', 'rack')`);
+    ? fixedFieldRow('Rack', `Rack ${racks[0].code}`, required)
+    : pickerRow('Rack', sel.rack ? `Rack ${sel.rack}` : null, null, `openLocationSheet('${auditId}', 'rack')`, required);
 
   const bayField = !rackObj ? '' : bayFixed
-    ? `<div class="field"><label>Bay *</label><div class="field-fixed"><span class="mono">Bay ${rackObj.bays[0].code}</span><span class="tag">Only option</span></div></div>`
-    : pickerRow('Bay', `Bay ${sel.bay}`, null, `openLocationSheet('${a.audit_id}', 'bay')`);
+    ? fixedFieldRow('Bay', `Bay ${rackObj.bays[0].code}`, required)
+    : pickerRow('Bay', sel.bay ? `Bay ${sel.bay}` : null, null, `openLocationSheet('${auditId}', 'bay')`, required);
 
   const locField = !bayObj ? '' : locFixed
-    ? `<div class="field"><label>Storage Location *</label><div class="field-fixed"><span class="mono">${bayObj.locations[0].code}</span><span class="tag">${bayObj.locations[0].status}</span></div></div>`
-    : pickerRow('Storage Location', sel.loc, (bayObj.locations.find(l=>l.code===sel.loc)||{}).status, `openLocationSheet('${a.audit_id}', 'loc')`);
+    ? fixedFieldRow('Storage Location', bayObj.locations[0].code, required)
+    : pickerRow('Storage Location', sel.loc, (bayObj.locations.find(l=>l.code===sel.loc)||{}).status, `openLocationSheet('${auditId}', 'loc')`, required);
 
   const scan = STATE.locScan;
-  const canStart = STATE.locMode === 'scan'
+  const canGo = STATE.locMode === 'scan'
     ? Boolean(scan.code)
     : Boolean(sel.layout && sel.rack && sel.bay && sel.loc);
-  const startLabel = a.status === 'In Progress' ? 'Resume Audit' : 'Start Audit';
   const anyLocked = layoutFixed || rackFixed || bayFixed;
   const lockNote = anyLocked
-    ? `<div class="banner info"><span class="dot"></span> ${a.scope_type} scope — levels with a single assigned value are fixed. Tap an open level above to pick a different one.</div>`
+    ? `<div class="banner info"><span class="dot"></span> Levels with a single assigned value are fixed. Tap an open level above to pick a different one.</div>`
     : '';
-
-  const infoRows = [
-    ['Audit ID', `<span class="mono">${a.audit_id}</span>`],
-    ['Warehouse', INSPECTOR.warehouse],
-    ['Audit type', `${a.audit_type} · Blind`],
-    ['Priority', `<span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span>`],
-    ['Due date', isOverdue(a) ? 'Overdue' : fmtDate(a.end_date)],
-    ['Status', `<span class="pill ${pillClass(uis)}">${uis}</span>`],
-  ];
-  const infoList = `<div class="kv-list">${infoRows.map(([l,v]) => `<div class="kv-row"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}</div>`;
-
-  const scopeBlock = `
-    <div class="kv-row" style="border-bottom:none; padding-bottom:8px;"><span class="l" style="font-weight:700; color:var(--foreground); text-transform:none; font-size:13px; letter-spacing:0;">Assigned scope</span><span class="pill s-scheduled">${a.scope_type}</span></div>
-    <div class="chip-row" style="margin-bottom:16px;">${a.scope_values.map(s => `<span class="chip mono">${s}</span>`).join('')}</div>
-  `;
-
-  const remaining = r.locTotal - r.locDone;
-  const kpiBlock = `<div class="kpi-grid" style="margin-bottom:12px;">
-    <div class="kpi"><span class="v">${r.rackTotal}</span><span class="l">Racks</span></div>
-    <div class="kpi"><span class="v">${r.bayTotal}</span><span class="l">Bays</span></div>
-    <div class="kpi"><span class="v">${r.locTotal}</span><span class="l">Locations</span></div>
-  </div>
-  <div class="banner info" style="margin-bottom:20px;"><span class="dot"></span> ${remaining} of ${r.locTotal} location${r.locTotal===1?'':'s'} still remaining in your assigned scope</div>`;
 
   const modeToggle = `<div class="segmented" style="width:100%; margin-bottom:14px;">
     <button class="${STATE.locMode==='manual'?'active':''}" style="flex:1;" onclick="setLocMode('manual')">Select Manually</button>
@@ -1011,19 +1137,84 @@ function renderAuditDetails(){
     }
   }
 
-  const locationBlock = `
-    <div style="font-weight:700; font-size:13.5px; color:var(--foreground); margin-bottom:12px;">Select location</div>
+  const html = `
+    <div style="font-weight:700; font-size:var(--text-base); color:var(--foreground); margin-bottom:12px;">Select location</div>
     ${modeToggle}
     ${STATE.locMode === 'manual' ? (
-      layouts.length === 0 ? `<div style="font-size:12.5px; color:var(--muted-foreground); margin-bottom:16px;">No location hierarchy is attached to this audit yet.</div>` : `
+      layouts.length === 0 ? `<div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-bottom:16px;">No location hierarchy is attached to this audit yet.</div>` : `
       <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:14px;">${layoutField}${rackField}${bayField}${locField}</div>
       ${lockNote}
       `
     ) : scanBlock}
   `;
 
+  return { html, canGo };
+}
+
+function renderAuditDetails(){
+  const a = AUDITS.find(x => x.audit_id === STATE.params.auditId);
+  if (!a) return renderTasks();
+  const r = rollup(a.audit_id);
+  const uis = uiStatus(a);
+  const remaining = r.locTotal - r.locDone;
+  // Two distinct "nothing left to start" states: already submitted/closed (fully
+  // locked, read-only), or every location counted but not yet submitted (still
+  // editable in principle, but there's nothing left to "start" — the next step
+  // is reviewing the summary, not the location picker).
+  const isSubmitted = ['Submitted','Reconciled','Closed'].includes(a.status);
+  const isFullyCounted = r.locTotal > 0 && remaining === 0;
+  const showCompletedState = isSubmitted || isFullyCounted;
+
+  const infoRows = [
+    ['Audit ID', `<span class="mono">${a.audit_id}</span>`],
+    ['Warehouse', INSPECTOR.warehouse],
+    ['Audit type', `${a.audit_type} · Blind`],
+    ['Priority', `<span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span>`],
+    ['Due date', isOverdue(a) ? 'Overdue' : fmtDate(a.end_date)],
+    ['Status', `<span class="pill ${pillClass(uis)}">${uis}</span>`],
+  ];
+  const infoList = `<div class="kv-list">${infoRows.map(([l,v]) => `<div class="kv-row"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}</div>`;
+
+  const scopeBlock = `
+    <div class="kv-row" style="border-bottom:none; padding-bottom:8px;"><span class="l" style="font-weight:700; color:var(--foreground); text-transform:none; font-size:var(--text-base); letter-spacing:0;">Assigned scope</span><span class="pill s-scheduled">${a.scope_type}</span></div>
+    <div class="chip-row" style="margin-bottom:16px;">${a.scope_values.map(s => `<span class="chip mono">${s}</span>`).join('')}</div>
+  `;
+
+  const kpiBlock = `<div class="kpi-grid" style="margin-bottom:12px;">
+    <div class="kpi"><span class="v">${r.rackTotal}</span><span class="l">Racks</span></div>
+    <div class="kpi"><span class="v">${r.bayTotal}</span><span class="l">Bays</span></div>
+    <div class="kpi"><span class="v">${r.locTotal}</span><span class="l">Locations</span></div>
+  </div>
+  <div class="banner ${remaining===0 && r.locTotal>0 ? 'good' : 'info'}" style="margin-bottom:20px;"><span class="dot"></span> ${remaining===0 && r.locTotal>0 ? `All ${r.locTotal} location${r.locTotal===1?'':'s'} completed` : `${remaining} of ${r.locTotal} location${r.locTotal===1?'':'s'} still remaining in your assigned scope`}</div>`;
+
+  let rightColumn;
+  if (showCompletedState) {
+    rightColumn = `
+      <div class="card" style="border-color:var(--rag-green-border); background:var(--rag-green-soft);">
+        <div class="card-title-row" style="margin-bottom:14px;"><h2 style="color:var(--rag-green-strong);">${isSubmitted ? 'Audit Completed' : 'Fully Counted'}</h2>${ICON.check}</div>
+        <div style="font-size:var(--text-sm); color:var(--foreground);">${isSubmitted
+          ? 'This audit has been submitted — location selection and scanning are closed.'
+          : 'Every assigned location has been counted. Review the results and submit from the summary.'}</div>
+      </div>
+      <button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${a.audit_id}'})">View Audit Summary ${ICON.chevron}</button>
+      <div style="height:10px;"></div>
+      <button class="link-btn" style="width:100%; text-align:center; padding:8px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Full Rack/Bay Breakdown</button>
+    `;
+  } else {
+    // No location picker here anymore — Count Sheet owns that now, permanently
+    // visible at the top of its own screen, so it's reachable both before the
+    // first location is picked AND at any point afterward without navigating
+    // away. Audit Details' job is just the direct hand-off.
+    const startLabel = a.status === 'In Progress' ? 'Resume Audit' : 'Start Audit';
+    rightColumn = `
+      <button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${a.audit_id}'})">${startLabel} ${ICON.playTri}</button>
+      <div style="height:10px;"></div>
+      <button class="link-btn" style="width:100%; text-align:center; padding:8px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Audit Progress</button>
+    `;
+  }
+
   return `
-    ${headerBlock({ title:'Audit Details', sub:`${a.audit_id} · ${INSPECTOR.warehouse}`, showBack:true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title:'Audit Details', sub:`${a.audit_id} · ${INSPECTOR.warehouse}`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad" style="gap:0;">
       <div class="${STATE.device==='tablet' ? 'two-col' : ''}">
         <div>
@@ -1033,78 +1224,163 @@ function renderAuditDetails(){
           ${kpiBlock}
         </div>
         <div>
-          ${locationBlock}
-          <button class="btn primary" ${!canStart?'disabled':''} onclick="startFromDetails('${a.audit_id}')">${startLabel} ${ICON.playTri}</button>
-          <div style="height:10px;"></div>
-          <button class="link-btn" style="width:100%; text-align:center; padding:8px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Audit Progress</button>
+          ${rightColumn}
         </div>
       </div>
     </div>
+    ${renderTabBar('tasks')}
   `;
 }
 
-function setLocMode(mode){ STATE.locMode = mode; render(); }
+function setLocMode(mode){
+  if (mode === STATE.locMode) return;
+  withLocationChangeConfirm(() => {
+    STATE.locMode = mode;
+    render();
+  });
+}
 
 function scanLocationQR(){
-  const scan = STATE.locScan;
-  const code = QR_POOL[scan.scanCount % QR_POOL.length];
-  scan.scanCount++;
-  const result = validateScanCode(scan.auditId, code);
-  if (result.ok) {
-    const hadPrevious = Boolean(scan.code);
-    scan.code = code;
-    scan.error = null;
-    toast(hadPrevious ? 'Location updated — previous scan replaced' : 'Location scanned successfully');
+  withLocationChangeConfirm(() => {
+    const scan = STATE.locScan;
+    const code = QR_POOL[scan.scanCount % QR_POOL.length];
+    scan.scanCount++;
+    const result = validateScanCode(scan.auditId, code);
+    if (result.ok) {
+      const hadPrevious = Boolean(scan.code);
+      scan.code = code;
+      scan.error = null;
+      toast(hadPrevious ? 'Location updated — previous scan replaced' : 'Location scanned successfully');
+    } else {
+      scan.error = result.reason;
+      toast('Scan rejected — outside assigned scope');
+    }
+    render();
+  });
+}
+
+// Quick Scan (tab bar) — not tied to a specific audit. Finds whichever of the
+// inspector's own assigned, non-completed audits actually has this location in
+// its scope, preferring an audit already In Progress (resume) over one still To Do.
+function findAuditForScan(code){
+  const candidates = mine().filter(a => !['Submitted','Reconciled','Closed'].includes(a.status));
+  const inProgress = candidates.filter(a => a.status === 'In Progress');
+  const rest = candidates.filter(a => a.status !== 'In Progress');
+  for (const list of [inProgress, rest]) {
+    const hit = list.find(a => validateScanCode(a.audit_id, code).ok);
+    if (hit) return hit;
+  }
+  return null;
+}
+function openQuickScan(){
+  STATE.quickScan = { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null };
+  railTo('scan');
+}
+function quickScan(){
+  const qs = STATE.quickScan;
+  const item = QUICK_SCAN_POOL[qs.scanCount % QUICK_SCAN_POOL.length];
+  qs.scanCount++;
+
+  // A pallet or SKU tag has no location context of its own — it only means
+  // something once you're already inside a specific location's count sheet.
+  // Scanned from the global Scan tab, the best we can do is reject clearly and,
+  // if there's a location already in progress, offer to jump straight back into it.
+  if (item.kind !== 'location') {
+    qs.code = null; qs.matchedAuditId = null; qs.error = null;
+    qs.wrongKind = item.kind;
+    qs.wrongLabel = item.kind === 'pallet' ? item.code : `${item.code.sku} · ${item.code.name}`;
+    toast(`That's a ${item.kind === 'pallet' ? 'pallet' : 'SKU'} code, not a location`);
+    render();
+    return;
+  }
+
+  qs.wrongKind = null; qs.wrongLabel = null;
+  const code = item.code;
+  const audit = findAuditForScan(code);
+  if (audit) {
+    qs.code = code; qs.error = null; qs.matchedAuditId = audit.audit_id;
+    toast(`Matched to ${audit.audit_id}`);
   } else {
-    scan.error = result.reason;
-    toast('Scan rejected — outside assigned scope');
+    qs.code = null; qs.error = `No assigned audit covers ${code.layout} · Rack ${code.rack} · Bay ${code.bay}. It may be outside your scope.`; qs.matchedAuditId = null;
+    toast('No matching audit for this location');
   }
   render();
 }
 
-function startFromDetails(auditId){
-  if (STATE.locMode === 'scan' && STATE.locScan && STATE.locScan.code) {
-    const { layout, rack, bay, loc } = STATE.locScan.code;
-    push('countSheet', { auditId, layout, rack, bay, loc });
-    return;
-  }
-  const { layout, rack, bay, loc } = STATE.locSelect;
-  push('countSheet', { auditId, layout, rack, bay, loc });
+// Switching location while a pallet count is mid-entry (scanned but not yet
+// saved) would silently discard it — confirm before letting that happen, via an
+// in-app modal (not the browser's native confirm(), which breaks the illusion
+// of a real mobile app with OS chrome / the page URL showing through).
+// Guards every path that can change the resolved active location: opening the
+// picker sheet, toggling manual/scan mode, and (re)scanning a location QR.
+function hasUnsavedScan(){
+  return Boolean(STATE.scan && (STATE.scan.pallet || (STATE.scan.lines && STATE.scan.lines.length > 0)));
+}
+function askConfirm(message, onConfirm){
+  STATE.confirmModal = { message, onConfirm };
+  render();
+}
+function confirmModalRespond(ok){
+  const modal = STATE.confirmModal;
+  STATE.confirmModal = null;
+  if (ok && modal) modal.onConfirm();
+  else render();
+}
+// Runs `action` immediately if there's nothing unsaved; otherwise asks first via
+// the in-app modal, discards the in-progress pallet on confirm, then runs it.
+function withLocationChangeConfirm(action){
+  if (!hasUnsavedScan()) { action(); return; }
+  askConfirm('You have an unsaved pallet count at the current location. Changing location will discard it — continue?', () => {
+    STATE.scan.pallet = null;
+    STATE.scan.lines = [];
+    action();
+  });
 }
 
 function locStatusPillClass(status){ return { 'Completed':'s-completed', 'In Progress':'s-inprogress', 'Not Started':'s-scheduled' }[status] || 's-scheduled'; }
 
 function openLocationSheet(auditId, field){
-  const { layouts, racks, rackObj, bayObj } = getLocContext(auditId);
-  let title = '', options = [];
-  if (field === 'layout') { title = 'Select Layout'; options = layouts.map(l => ({ value:l.name, label:l.name })); }
-  else if (field === 'rack') { title = 'Select Rack'; options = racks.map(r => ({ value:r.code, label:'Rack '+r.code })); }
-  else if (field === 'bay') { title = 'Select Bay'; options = rackObj ? rackObj.bays.map(b => ({ value:b.code, label:'Bay '+b.code })) : []; }
-  else if (field === 'loc') { title = 'Select Storage Location'; options = bayObj ? bayObj.locations.map(l => ({ value:l.code, label:l.code, status:l.status })) : []; }
-  STATE.sheet = { auditId, field, title, options, search:'' };
-  render();
+  withLocationChangeConfirm(() => {
+    const { layouts, racks, rackObj, bayObj } = getLocContext(auditId);
+    let title = '', options = [];
+    if (field === 'layout') { title = 'Select Layout'; options = layouts.map(l => ({ value:l.name, label:l.name })); }
+    else if (field === 'rack') { title = 'Select Rack'; options = racks.map(r => ({ value:r.code, label:'Rack '+r.code })); }
+    else if (field === 'bay') { title = 'Select Bay'; options = rackObj ? rackObj.bays.map(b => ({ value:b.code, label:'Bay '+b.code })) : []; }
+    else if (field === 'loc') { title = 'Select Storage Location'; options = bayObj ? bayObj.locations.map(l => ({ value:l.code, label:l.code, status:l.status })) : []; }
+    STATE.sheet = { auditId, field, title, options, search:'' };
+    render();
+  });
 }
 function closeSheet(){ STATE.sheet = null; render(); }
 function chooseSheetOption(value){
   const { auditId, field } = STATE.sheet;
   const sel = STATE.locSelect;
+  if (field === 'layout') sel.layout = value;
+  if (field === 'rack') sel.rack = value;
+  if (field === 'bay') sel.bay = value;
+  if (field === 'loc') sel.loc = value;
+
+  // Picking a field invalidates everything below it. Re-resolve each downstream
+  // level, but only auto-fill it when exactly one option exists (nothing to
+  // genuinely decide) — otherwise leave it unselected so the inspector still has
+  // to make a real choice there too, same rule as the initial picker state.
   if (field === 'layout') {
-    sel.layout = value;
-    const layoutObj = findLayoutIn(auditId, value);
-    sel.rack = layoutObj && layoutObj.racks[0] ? layoutObj.racks[0].code : null;
+    const layoutObj = findLayoutIn(auditId, sel.layout);
+    const racks = layoutObj ? layoutObj.racks : [];
+    sel.rack = racks.length === 1 ? racks[0].code : null;
   }
   if (field === 'layout' || field === 'rack') {
-    if (field === 'rack') sel.rack = value;
     const rackObj = findRackIn(auditId, sel.layout, sel.rack);
-    sel.bay = rackObj && rackObj.bays[0] ? rackObj.bays[0].code : null;
+    const bays = rackObj ? rackObj.bays : [];
+    sel.bay = bays.length === 1 ? bays[0].code : null;
   }
   if (field === 'layout' || field === 'rack' || field === 'bay') {
-    if (field === 'bay') sel.bay = value;
     const rackObj = findRackIn(auditId, sel.layout, sel.rack);
     const bayObj = rackObj ? rackObj.bays.find(b => b.code === sel.bay) : null;
-    sel.loc = bayObj && bayObj.locations[0] ? bayObj.locations[0].code : null;
+    const locs = bayObj ? bayObj.locations : [];
+    sel.loc = locs.length === 1 ? locs[0].code : null;
   }
-  if (field === 'loc') sel.loc = value;
+
   STATE.sheet = null;
   render();
 }
@@ -1124,12 +1400,66 @@ function resumeAudit(auditId){
 function renderCountSheet(){
   const { auditId, layout, rack, bay, loc } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
-  const locObj = findLoc(auditId, layout, rack, bay, loc);
-  if (!a || !locObj) return renderAuditDetails();
+  if (!a) return renderTasks();
 
-  if (!STATE.scan || STATE.scan.auditId !== auditId || STATE.scan.loc !== loc) {
+  // Seed the picker from explicit nav params (Resume, "Continue to X", a tapped
+  // bay-card, a Quick Scan match, completeLocation's auto-advance) — but only the
+  // first time we land on THIS specific target. After that, live edits to the
+  // picker below take over as the source of truth and this seed is never
+  // reapplied, so switching location on-screen doesn't get stomped by stale params
+  // on every re-render.
+  const seedKey = layout ? `${auditId}|${layout}|${rack}|${bay}|${loc}` : null;
+  if (seedKey && STATE._countSheetSeedKey !== seedKey) {
+    STATE._countSheetSeedKey = seedKey;
+    STATE.locSelect = { auditId, layout, rack, bay, loc };
+    STATE.locScan = { auditId, code:null, error:null, scanCount:0 };
+    STATE.locMode = 'manual';
+  } else {
+    if (!STATE.locSelect || STATE.locSelect.auditId !== auditId) STATE.locSelect = initLocSelect(auditId);
+    if (!STATE.locScan || STATE.locScan.auditId !== auditId) STATE.locScan = { auditId, code:null, error:null, scanCount:0 };
+  }
+
+  const sel = STATE.locSelect;
+  const activeLoc = STATE.locMode === 'scan'
+    ? STATE.locScan.code
+    : (sel.layout && sel.rack && sel.bay && sel.loc ? sel : null);
+
+  // Picker is ALWAYS rendered, at the top, for the whole session on this screen —
+  // this is the actual fix: no separate "next page" or hidden toggle to switch
+  // location mid-count, it's just always right there.
+  const picker = buildLocationPicker(auditId, { requiredLabels: !activeLoc });
+
+  if (!activeLoc) {
+    return `
+      ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+      <div class="body-pad">
+        <div class="banner warn"><span class="dot"></span> Select a location, or scan a location QR, to start counting.</div>
+        ${picker.html}
+        <div class="empty-state" style="flex:1; justify-content:center;">
+          <div class="glyph">${ICON.pin}</div>
+          <div>Scanning and counting tools appear here once a location is picked.</div>
+        </div>
+      </div>
+      ${renderTabBar('tasks')}
+    `;
+  }
+
+  const al = activeLoc.layout, ar = activeLoc.rack, ab = activeLoc.bay, aloc = activeLoc.loc;
+  const locObj = findLoc(auditId, al, ar, ab, aloc);
+  if (!locObj) {
+    return `
+      ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+      <div class="body-pad">
+        <div class="banner warn"><span class="dot"></span> That location isn't in your assigned scope. Pick a different one below.</div>
+        ${picker.html}
+      </div>
+      ${renderTabBar('tasks')}
+    `;
+  }
+
+  if (!STATE.scan || STATE.scan.auditId !== auditId || STATE.scan.loc !== aloc) {
     const existing = locObj.pallets.find(p => !p.saved) || null;
-    STATE.scan = { auditId, layout, rack, bay, loc, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
+    STATE.scan = { auditId, layout:al, rack:ar, bay:ab, loc:aloc, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
   }
   const scan = STATE.scan;
   const readOnly = locObj.status === 'Completed';
@@ -1154,7 +1484,7 @@ function renderCountSheet(){
 
   const savedSummary = savedPallets.length ? `
     <div class="card">
-      <div class="card-title-row"><h2>Counted at This Location</h2><span class="pill s-completed">${savedPallets.length} pallet${savedPallets.length===1?'':'s'}</span></div>
+      <div class="card-title-row" style="margin-bottom:14px;"><h2>Counted at This Location</h2><span class="pill s-completed">${savedPallets.length} pallet${savedPallets.length===1?'':'s'}</span></div>
       <div class="chip-row">${savedPallets.map(p => `<span class="chip mono">${p.pallet} · ${p.lines.length} SKU${p.lines.length===1?'':'s'}</span>`).join('')}</div>
     </div>` : '';
 
@@ -1165,7 +1495,7 @@ function renderCountSheet(){
     ? `<div class="banner good"><span class="dot"></span> This location is completed — read-only view.</div>`
     : `
       <div class="card">
-        <div class="card-title-row"><h2>Scan Pallet</h2></div>
+        <div class="card-title-row" style="margin-bottom:14px;"><h2>Scan Pallet</h2></div>
         ${scan.pallet ? `<div class="scanrow"><div class="glyph-circle">${ICON.check}</div><span class="lbl">Pallet / LPN</span><b class="mono">${scan.pallet}</b></div>` : `<div class="scan-block"><div class="glyph-circle">${ICON.camera}</div><button class="btn small primary" onclick="scanPallet()">Scan Pallet / LPN</button></div>`}
       </div>
       <div class="banner warn"><span class="dot"></span> Blind count — expected values hidden</div>
@@ -1173,27 +1503,32 @@ function renderCountSheet(){
     `;
 
   return `
-    ${headerBlock({ title: loc, sub:`${layout} · Rack ${rack} · Bay ${bay} · Blind Count`, showBack:true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title: aloc, sub:`${al} · Rack ${ar} · Bay ${ab} · Blind Count`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
       <div class="banner info"><span class="dot"></span> Online · Synced</div>
+      <div class="card">
+        <div class="card-title-row" style="margin-bottom:14px;"><h2>Location</h2></div>
+        ${picker.html}
+      </div>
       ${savedSummary}
       <div class="${STATE.device==='tablet' ? 'two-col' : ''}">
         <div style="display:flex; flex-direction:column; gap:14px;">${scanSection}</div>
         ${!readOnly ? `
         <div style="display:flex; flex-direction:column; gap:14px;">
-          <div class="card-title-row"><h2>${scan.lines.length ? 'SKU / Lot Details' : 'No SKU scanned yet'}</h2></div>
-          <div class="sku-grid">${skuCards}</div>
+          <div class="card-title-row" style="margin-bottom:14px;"><h2>${scan.lines.length ? 'SKU / Lot Details' : 'No SKU scanned yet'}</h2></div>
+          ${scan.lines.length ? `<div class="sku-grid">${skuCards}</div>` : ''}
           ${scan.pallet ? `<button class="btn outline small" onclick="scanSku()">Scan SKU to add another line on this pallet</button>` : ''}
         </div>` : ''}
       </div>
     </div>
     <div class="body-pad" style="padding-top:0;">
       <div class="sticky-actions">
-        ${scan.pallet ? `<button class="btn primary" ${!canSave?'disabled':''} onclick="saveRecord()">Save Record</button>` : ''}
-        ${!scan.pallet && canComplete ? `<button class="btn primary" onclick="completeLocation()">Mark Location Complete &amp; Continue</button>` : ''}
+        ${scan.pallet ? `<button class="btn primary btn-pill" ${!canSave?'disabled':''} onclick="saveRecord()">Save Record</button>` : ''}
+        ${!scan.pallet && canComplete ? `<button class="btn primary btn-pill" onclick="completeLocation()">Mark Location Complete &amp; Continue</button>` : ''}
         <button class="btn outline" onclick="push('progress', {auditId:'${auditId}'})">View Audit Progress</button>
       </div>
     </div>
+    ${renderTabBar('tasks')}
   `;
 }
 
@@ -1238,6 +1573,72 @@ function completeLocation(){
   }
 }
 
+/* ================= QUICK SCAN (tab bar) ================= */
+function renderQuickScan(){
+  const qs = STATE.quickScan;
+  const matched = qs.matchedAuditId ? AUDITS.find(a => a.audit_id === qs.matchedAuditId) : null;
+
+  let body;
+  if (qs.code && matched) {
+    body = `
+      <div class="card" style="border-color:var(--rag-green-border); background:var(--rag-green-soft);">
+        <div class="card-title-row" style="margin-bottom:14px;"><h2 style="color:var(--rag-green-strong);">Scanned Location</h2>${ICON.check}</div>
+        <div class="kv-list">
+          <div class="kv-row"><span class="l">Layout</span><span class="v mono">${qs.code.layout}</span></div>
+          <div class="kv-row"><span class="l">Rack</span><span class="v mono">${qs.code.rack}</span></div>
+          <div class="kv-row"><span class="l">Bay</span><span class="v mono">${qs.code.bay}</span></div>
+          <div class="kv-row" style="border-bottom:none;"><span class="l">Storage Location</span><span class="v mono">${qs.code.loc}</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row" style="margin-bottom:14px;"><h2>Matched Audit</h2><span class="pill ${pillClass(uiStatus(matched))}">${uiStatus(matched)}</span></div>
+        <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground);">${matched.audit_name}</div>
+        <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${matched.audit_id}</div>
+      </div>
+      <button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${matched.audit_id}', layout:'${qs.code.layout}', rack:'${qs.code.rack}', bay:'${qs.code.bay}', loc:'${qs.code.loc}'})">Open Count Sheet ${ICON.chevron}</button>
+      <button class="btn outline small" style="width:100%; margin-top:10px;" onclick="quickScan()">${ICON.scan} Scan Another Location</button>
+    `;
+  } else if (qs.wrongKind) {
+    // Pallet/SKU codes carry no location of their own — they only mean something
+    // once you're already inside a specific location's count sheet. Best recovery
+    // here is a clear rejection plus a shortcut back into whatever location the
+    // inspector was last counting, if any.
+    const ongoing = currentOngoing();
+    const ls = ongoing ? lastSaved(ongoing.audit_id) : null;
+    body = `
+      <div class="card" style="border-color:var(--rag-amber-border); background:var(--rag-amber-soft);">
+        <div class="card-title-row" style="margin-bottom:14px;"><h2 style="color:var(--rag-amber-strong);">Wrong Code Type</h2>${ICON.close}</div>
+        <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground); margin-bottom:4px;">This is a ${qs.wrongKind === 'pallet' ? 'Pallet' : 'SKU'} code, not a storage location.</div>
+        <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground);">${qs.wrongLabel}</div>
+      </div>
+      <div class="banner info" style="margin-top:14px;"><span class="dot"></span> Pallet and SKU codes only make sense inside an already-open location's count sheet. Scan the storage location QR first.</div>
+      ${ls ? `<button class="btn primary btn-pill" style="margin-top:14px;" onclick="push('countSheet', {auditId:'${ongoing.audit_id}', layout:'${ls.layout}', rack:'${ls.rack}', bay:'${ls.bay}', loc:'${ls.loc.code}'})">Continue at ${ls.loc.code} ${ICON.chevron}</button>` : ''}
+      <button class="btn outline small" style="width:100%; margin-top:10px;" onclick="quickScan()">${ICON.scan} Scan Again</button>
+    `;
+  } else {
+    // Short content (just the scan prompt + one banner) — center it in the
+    // available space instead of pinning to the top and leaving a dead gap
+    // above the tab bar.
+    body = `
+      <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+        <div class="scan-block">
+          <div class="glyph-circle">${ICON.camera}</div>
+          <button class="btn small primary" onclick="quickScan()">Scan Location QR</button>
+        </div>
+        ${qs.error
+          ? `<div class="banner warn" style="margin-top:14px;"><span class="dot"></span> ${qs.error}</div>`
+          : `<div class="banner info" style="margin-top:14px;"><span class="dot"></span> Scan any storage location QR to jump straight to its count sheet — checked against all of your assigned audits.</div>`}
+      </div>
+    `;
+  }
+
+  return `
+    ${headerBlock({ title:'Quick Scan', sub:'Jump to any assigned location', showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    <div class="body-pad">${body}</div>
+    ${renderTabBar('scan')}
+  `;
+}
+
 /* ================= PROGRESS ================= */
 function renderProgress(){
   const { auditId } = STATE.params;
@@ -1257,7 +1658,7 @@ function renderProgress(){
       const openLoc = (b.locations.find(l => l.status !== 'Completed') || b.locations[0]).code;
       return `
         <button class="bay-card ${isTarget?'active-target':''}" onclick="push('countSheet', {auditId:'${auditId}', layout:'${layoutName}', rack:'${rack.code}', bay:'${b.code}', loc:'${openLoc}'})">
-          <div class="bay-icon ${status==='Completed'?'completed':status==='In Progress'?'inprogress':''}">${status==='Completed' ? ICON.check : ICON.box}</div>
+          <div class="bay-icon">${status==='Completed' ? ICON.check : ICON.box}</div>
           <div class="bay-body">
             <div class="bay-name">Bay ${b.code}</div>
             <div class="bay-desc">${status} · ${done}/${total} Locations</div>
@@ -1270,14 +1671,14 @@ function renderProgress(){
     const rackDone = rack.bays.every(b => b.locations.every(l => l.status==='Completed'));
     return `
       <div class="card">
-        <div class="card-title-row"><h2>Rack ${rack.code}</h2><span class="pill ${rackDone?'s-completed':'s-inprogress'}">${rackDone?'Completed':'In Progress'}</span></div>
+        <div class="card-title-row" style="margin-bottom:14px;"><h2>Rack ${rack.code}</h2><span class="pill ${rackDone?'s-completed':'s-inprogress'}">${rackDone?'Completed':'In Progress'}</span></div>
         <div style="display:flex; flex-direction:column; gap:8px;">${bays}</div>
       </div>
     `;
   }
 
   const layoutSections = layouts.map(ly => `
-    ${layouts.length > 1 ? `<div style="font-weight:700; font-size:13px; color:var(--foreground); margin:6px 0 2px;">${ly.name}</div>` : ''}
+    ${layouts.length > 1 ? `<div style="font-weight:700; font-size:var(--text-base); color:var(--foreground); margin:6px 0 2px;">${ly.name}</div>` : ''}
     ${ly.racks.map(rack => rackBlock(ly.name, rack)).join('')}
   `).join('');
 
@@ -1295,12 +1696,81 @@ function renderProgress(){
     </div>
     <div class="body-pad" style="padding-top:0;">
       <div class="sticky-actions">
-        ${np ? `<button class="btn primary" onclick="push('countSheet', {auditId:'${auditId}', layout:'${np.layout}', rack:'${np.rack}', bay:'${np.bay}', loc:'${np.loc.code}'})">Continue to ${np.loc.code}</button>`
-             : `<button class="btn primary" onclick="toast('Opening Audit Summary')">View Audit Summary</button>`}
+        ${np ? `<button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${auditId}', layout:'${np.layout}', rack:'${np.rack}', bay:'${np.bay}', loc:'${np.loc.code}'})">Continue to ${np.loc.code}</button>`
+             : `<button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${auditId}'})">View Audit Summary</button>`}
       </div>
     </div>
     ${renderTabBar('progress')}
   `;
+}
+
+/* ================= AUDIT SUMMARY (shown once every location is completed) ================= */
+function renderAuditSummary(){
+  const { auditId } = STATE.params;
+  const a = AUDITS.find(x => x.audit_id === auditId);
+  if (!a) return renderTasks();
+  const r = rollup(auditId);
+  const s = summaryStats(auditId);
+
+  const conditionRows = CONDITIONS.filter(c => s.byCondition[c]).map(c => `
+    <div class="kv-row"><span class="l">${c}</span><span class="v mono">${s.byCondition[c]}</span></div>
+  `).join('');
+
+  const flaggedBlock = s.flagged.length ? `
+    <div class="card">
+      <div class="card-title-row" style="margin-bottom:14px;"><h2>Flagged Items</h2><span class="pill p-medium">${s.flagged.length}</span></div>
+      <div style="display:flex; flex-direction:column; gap:0;">
+        ${s.flagged.map((f,i) => `
+          <div class="kv-row" style="${i===s.flagged.length-1?'border-bottom:none;':''}">
+            <div style="min-width:0;">
+              <div style="font-weight:700; font-size:var(--text-sm); color:var(--foreground);">${f.name}</div>
+              <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:1px;">${f.sku} · ${f.locCode} · Qty ${f.qty}</div>
+            </div>
+            <span class="pill s-overdue" style="flex-shrink:0;">${f.condition}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  return `
+    ${headerBlock({ title:'Audit Summary', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    <div class="body-pad">
+      <div class="banner good"><span class="dot"></span> Audit fully counted — every assigned location has been completed.</div>
+      <div class="card"><div class="kpi-grid">
+        <div class="kpi"><span class="v">${r.rackDone}/${r.rackTotal}</span><span class="l">Racks</span></div>
+        <div class="kpi"><span class="v">${r.bayDone}/${r.bayTotal}</span><span class="l">Bays</span></div>
+        <div class="kpi"><span class="v">${r.locDone}/${r.locTotal}</span><span class="l">Locations</span></div>
+      </div></div>
+      <div class="card"><div class="kpi-grid">
+        <div class="kpi"><span class="v">${s.palletCount}</span><span class="l">Pallets</span></div>
+        <div class="kpi"><span class="v">${s.lineCount}</span><span class="l">SKU Lines</span></div>
+        <div class="kpi"><span class="v">${s.qtyTotal}</span><span class="l">Total Qty</span></div>
+      </div></div>
+      ${conditionRows ? `
+        <div class="card">
+          <div class="card-title-row" style="margin-bottom:14px;"><h2>Condition Breakdown</h2></div>
+          <div class="kv-list">${conditionRows}</div>
+        </div>` : ''}
+      ${flaggedBlock}
+      ${a.status === 'Submitted' ? `<div class="banner good"><span class="dot"></span> Already submitted — this is a read-only summary.</div>` : ''}
+    </div>
+    <div class="body-pad" style="padding-top:0;">
+      <div class="sticky-actions">
+        ${a.status === 'Submitted'
+          ? `<button class="btn outline" onclick="railTo('dashboard')">Back to Dashboard</button>`
+          : `<button class="btn primary btn-pill" onclick="submitAudit('${auditId}')">Submit Audit ${ICON.check}</button>
+             <button class="btn outline" onclick="railTo('dashboard')">Back to Dashboard</button>`}
+      </div>
+    </div>
+    ${renderTabBar('progress')}
+  `;
+}
+function submitAudit(auditId){
+  const a = AUDITS.find(x => x.audit_id === auditId);
+  if (a) a.status = 'Submitted';
+  toast('Audit submitted');
+  render();
 }
 
 /* ================= MAIN RENDER ================= */
@@ -1310,11 +1780,12 @@ function render(){
   if (screen === 'login') {
     document.getElementById('screen').innerHTML = wrap(renderLogin());
   } else {
-    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress };
+    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
   renderRail();
   renderSheetOverlay();
+  renderConfirmModal();
 }
 
 function sheetListHtml(){
@@ -1353,6 +1824,22 @@ function renderSheetOverlay(){
         </div>
         ${options.length > 6 ? `<div class="search-wrap sheet-search">${ICON.search}<input placeholder="Search..." value="${search}" oninput="filterSheetList(this.value)" /></div>` : ''}
         <div class="sheet-list" id="sheet-list">${sheetListHtml()}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderConfirmModal(){
+  const slot = document.getElementById('confirm-slot');
+  if (!STATE.confirmModal) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `
+    <div class="confirm-overlay">
+      <div class="confirm-card">
+        <p>${STATE.confirmModal.message}</p>
+        <div class="confirm-actions">
+          <button class="btn outline" onclick="confirmModalRespond(false)">Cancel</button>
+          <button class="btn primary" onclick="confirmModalRespond(true)">OK</button>
+        </div>
       </div>
     </div>
   `;
