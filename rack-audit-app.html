@@ -1590,10 +1590,7 @@ function renderCountSheet(){
 
   const scanSection = readOnly
     ? `<div class="banner good"><span class="dot"></span> This location is completed — read-only view.</div>`
-    : `
-      <div class="banner warn" style="font-size:var(--text-sm); padding:9px 14px;"><span class="dot"></span> Blind count — expected values hidden</div>
-      ${scan.lines.length ? `<div class="hint-line">Save this record before starting a new one.</div>` : ''}
-    `;
+    : `${scan.lines.length ? `<div class="hint-line">Save this record before starting a new one.</div>` : ''}`;
 
   return `
     ${headerBlock({ title: aloc, sub:`${al} · Rack ${ar} · Bay ${ab} · Blind Count`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
