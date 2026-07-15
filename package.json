@@ -1,0 +1,12 @@
+{
+  "name": "rack-audit-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rack audit inspector app (static single-page HTML app)",
+  "scripts": {
+    "dev": "http-server -c-1 -o /rack-audit-app.html"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

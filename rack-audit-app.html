@@ -356,22 +356,27 @@
   .scanrow .lbl{color:var(--muted-foreground); font-weight:600;}
   .scanrow b{margin-left:auto; color:var(--rag-green-strong); font:700 14px var(--font-mono);}
   .sku-grid{display:grid; grid-template-columns:1fr; gap:10px;}
-  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; box-shadow:var(--shadow-card);}
-  .sku-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;}
-  .sku-code{font:700 13px var(--font-mono); color:var(--foreground);}
-  .sku-lot{font-size:var(--text-xs); color:var(--slate-400);}
-  .remove-x{width:26px; height:26px; border-radius:999px; border:none; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
+  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:0 14px; display:flex; flex-direction:column; position:relative; box-shadow:var(--shadow-card); overflow:hidden;}
+  .sku-card-sec{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 0; border-bottom:1px solid var(--border);}
+  .sku-card-sec:last-child{border-bottom:none;}
+  .sku-id{min-width:0; flex-shrink:1;}
+  .sku-code{font:800 15px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
+  .remove-x{width:26px; height:26px; border-radius:999px; border:none; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:12px; transition:transform .1s ease;}
   .remove-x:active{transform:scale(.9);}
-  .stepper{display:flex; align-items:center; gap:14px; background:var(--muted); border-radius:999px; padding:6px; width:fit-content;}
-  .stepper button{width:32px; height:32px; border-radius:999px; border:none; background:var(--card); font-size:16px; font-weight:800; display:flex; align-items:center; justify-content:center; color:var(--foreground); box-shadow:var(--shadow-press); transition:transform .1s ease;}
-  .stepper button:active{transform:scale(.9);}
-  .stepper .qty{font:800 18px var(--font-mono); min-width:28px; text-align:center; color:var(--foreground);}
-  .cond-row{display:flex; flex-wrap:wrap; gap:7px;}
-  .cond-chip{display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); background:var(--card); color:var(--muted-foreground); padding:8px 14px; border-radius:999px; font-size:var(--text-sm); font-weight:700; transition:transform .1s ease;}
-  .cond-chip:active{transform:scale(.95);}
-  .cond-chip.selected{background:var(--brand-navy); color:#fff; border-color:var(--brand-navy);}
-  .sku-field{display:flex; flex-direction:column; gap:7px;}
-  .sku-field-label{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em;}
+  .sec-label{font-size:10.5px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
+  .qty-copy{display:flex; flex-direction:column; gap:2px; min-width:0;}
+  .qty-hint{font-size:11px; color:var(--muted-foreground);}
+  .qty-input{font:800 19px var(--font-body); width:64px; height:40px; text-align:center; color:var(--foreground); border:1.5px solid var(--border); background:var(--muted); border-radius:10px; outline:none; padding:0 4px; -moz-appearance:textfield;}
+  .qty-input:focus{border-color:var(--brand-navy); background:var(--card); box-shadow:0 0 0 3px var(--accent-blue-soft);}
+  .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  .cond-row{display:grid; grid-template-columns:1fr 1fr; gap:2px 12px; width:100%;}
+  .cond-radio{display:flex; align-items:center; gap:8px; padding:6px 2px; border-radius:8px; cursor:pointer; transition:background .1s ease;}
+  .cond-radio:active{background:var(--muted);}
+  .cond-radio input{appearance:none; -webkit-appearance:none; width:18px; height:18px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); flex-shrink:0; transition:border-color .1s ease;}
+  .cond-radio input:checked{border-color:var(--brand-navy); border-width:5.5px;}
+  .cond-radio span{font-size:13px; font-weight:600; color:var(--muted-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cond-radio input:checked ~ span{color:var(--foreground); font-weight:700;}
 
   .bay-card{display:flex; align-items:center; gap:12px; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; width:100%; text-align:left; box-shadow:var(--shadow-card); transition:transform .12s ease;}
   .bay-card:active{transform:scale(.98);}
@@ -1564,17 +1569,19 @@ function renderCountSheet(){
 
   const skuCards = scan.lines.map((line, idx) => `
     <div class="sku-card">
-      <div class="sku-top">
-        <div><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
+      <div class="sku-card-sec">
+        <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
         <button class="remove-x" onclick="removeLine(${idx})">✕</button>
       </div>
-      <div class="sku-field">
-        <span class="sku-field-label">Quantity</span>
-        <div class="stepper"><button onclick="stepQty(${idx}, -1)">−</button><span class="qty mono">${line.qty}</span><button onclick="stepQty(${idx}, 1)">+</button></div>
+      <div class="sku-card-sec">
+        <div class="qty-copy">
+          <span class="sec-label">Quantity</span>
+          <span class="qty-hint">Enter the counted amount</span>
+        </div>
+        <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" onchange="setQty(${idx}, this.value)">
       </div>
-      <div class="sku-field">
-        <span class="sku-field-label">Condition</span>
-        <div class="cond-row">${CONDITIONS.map(c => `<button class="cond-chip ${line.condition===c?'selected':''}" onclick="setCondition(${idx}, '${c}')">${line.condition===c?ICON.checkSm:''} ${c}</button>`).join('')}</div>
+      <div class="sku-card-sec">
+        <div class="cond-row">${CONDITIONS.map(c => `<label class="cond-radio"><input type="radio" name="cond-${idx}" ${line.condition===c?'checked':''} onchange="setCondition(${idx}, '${c}')"><span>${c}</span></label>`).join('')}</div>
       </div>
     </div>
   `).join('');
@@ -1608,14 +1615,12 @@ function renderCountSheet(){
           ${scan.lines.length ? `
             <div class="card-title-row" style="margin-bottom:14px;"><h2>SKU / Lot Details</h2></div>
             <div class="sku-grid">${skuCards}</div>
-            <button class="btn outline small" onclick="scanSku()">Scan SKU to add a line</button>
-          ` : `
-            <div class="scan-block">
-              <div class="glyph-circle">${ICON.camera}</div>
-              <span style="font-size:var(--text-sm); color:var(--muted-foreground);">No SKU scanned yet</span>
-              <button class="btn small primary" onclick="scanSku()">Scan SKU</button>
-            </div>
-          `}
+          ` : ''}
+          <div class="scan-block">
+            <div class="glyph-circle">${ICON.camera}</div>
+            <span style="font-size:var(--text-sm); color:var(--muted-foreground);">${scan.lines.length ? 'Scan the next SKU' : 'No SKU scanned yet'}</span>
+            <button class="btn small primary" onclick="scanSku()">Scan SKU</button>
+          </div>
         </div>` : ''}
       </div>
     </div>
@@ -1653,7 +1658,7 @@ function applySkuResult(pick){
   else { STATE.scan.lines.push({ sku:pick.sku, name:pick.name, lot:pick.lot, qty:1, condition:'Good' }); }
   render();
 }
-function stepQty(idx, delta){ STATE.scan.lines[idx].qty = Math.max(0, STATE.scan.lines[idx].qty + delta); render(); }
+function setQty(idx, val){ const n = parseInt(val, 10); STATE.scan.lines[idx].qty = isNaN(n) ? 0 : Math.max(0, n); render(); }
 function setCondition(idx, cond){ STATE.scan.lines[idx].condition = cond; render(); }
 function removeLine(idx){ STATE.scan.lines.splice(idx,1); render(); }
 
