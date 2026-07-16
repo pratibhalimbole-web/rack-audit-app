@@ -450,8 +450,17 @@
   .device.tablet .sticky-actions{flex-direction:row;}
   .device.tablet .sticky-actions .btn{width:auto; flex:1;}
 
-  .toast{position:absolute; left:18px; right:18px; bottom:18px; background:var(--foreground); color:var(--background); padding:12px 16px; border-radius:var(--radius); font-size:var(--text-base); font-weight:600; box-shadow:var(--shadow); display:flex; align-items:center; gap:8px; z-index:60; opacity:0; transform:translateY(8px); transition:opacity .18s ease, transform .18s ease; pointer-events:none;}
+  /* Success/error/info toasts reuse the same rag-color tokens and pill shape as
+     the rest of the design system (.banner, .pill, .btn-pill) — a flat dark bar
+     with a near-square 6px radius read as an off-system, generic default next to
+     the app's dominant fully-rounded/soft-tinted visual language. */
+  .toast{position:absolute; left:18px; right:18px; bottom:18px; padding:12px 16px; border-radius:999px; border:1px solid transparent; font-size:var(--text-base); font-weight:600; box-shadow:var(--shadow); display:flex; align-items:center; gap:9px; z-index:60; opacity:0; transform:translateY(8px); transition:opacity .18s ease, transform .18s ease; pointer-events:none;}
   .toast.show{opacity:1; transform:translateY(0);}
+  .toast .toast-icon{width:20px; height:20px; border-radius:999px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:currentColor;}
+  .toast .toast-icon svg{color:var(--card);}
+  .toast.success{background:var(--rag-green-soft); color:var(--rag-green-strong); border-color:var(--rag-green-border);}
+  .toast.error{background:var(--rag-red-soft); color:var(--rag-red-strong); border-color:var(--rag-red-border);}
+  .toast.info{background:var(--accent-blue-soft); color:var(--accent-blue-strong); border-color:var(--accent-blue-border);}
 
   .modal-overlay{position:fixed; inset:0; background:rgba(10,14,15,.55); display:none; align-items:center; justify-content:center; z-index:100; padding:24px;}
   .modal-overlay.open{display:flex;}
@@ -884,8 +893,11 @@ async function doLogin(){
   STATE.authBusy = false; STATE.stack = ['dashboard']; render(); scrollTop();
 }
 
-function toast(msg){
-  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+function toast(msg, type){
+  type = type || 'success'; // 'success' | 'error' | 'info'
+  const el = document.createElement('div'); el.className = `toast ${type}`;
+  const icon = type === 'error' ? ICON.close : type === 'info' ? '' : ICON.check;
+  el.innerHTML = `${icon ? `<span class="toast-icon">${icon}</span>` : ''}<span>${msg}</span>`;
   document.getElementById('device').appendChild(el);
   requestAnimationFrame(()=> el.classList.add('show'));
   setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=> el.remove(), 200); }, 2200);
@@ -1227,7 +1239,7 @@ function scanStorageLocationField(auditId){
     const { bayObj } = getLocContext(auditId);
     const code = text.trim();
     const match = bayObj && bayObj.locations.find(l => l.code === code);
-    if (!match) { toast(`"${code}" isn't a Storage Location in this bay`); return; }
+    if (!match) { toast(`"${code}" isn't a Storage Location in this bay`, 'error'); return; }
     sel.loc = code;
     sel.locScanned = true;
     toast('Storage Location scanned');
@@ -1430,7 +1442,7 @@ function scanLocationQR(){
       try { code = JSON.parse(text); } catch(e) { code = null; }
       if (!code || !code.layout || !code.rack || !code.bay || !code.loc) {
         scan.error = 'That QR isn\'t a valid location code — expected JSON with layout/rack/bay/loc.';
-        toast('Scan rejected — invalid code format');
+        toast('Scan rejected — invalid code format', 'error');
         render();
         return;
       }
@@ -1458,7 +1470,7 @@ function applyLocationQRResult(scan, code){
     toast(hadPrevious ? 'Location updated — previous scan replaced' : 'Location scanned successfully');
   } else {
     scan.error = result.reason;
-    toast('Scan rejected — outside assigned scope');
+    toast('Scan rejected — outside assigned scope', 'error');
   }
   render();
 }
@@ -1493,7 +1505,7 @@ function quickScan(){
     qs.code = null; qs.matchedAuditId = null; qs.error = null;
     qs.wrongKind = item.kind;
     qs.wrongLabel = item.kind === 'pallet' ? item.code : `${item.code.sku} · ${item.code.name}`;
-    toast(`That's a ${item.kind === 'pallet' ? 'pallet' : 'SKU'} code, not a location`);
+    toast(`That's a ${item.kind === 'pallet' ? 'pallet' : 'SKU'} code, not a location`, 'error');
     render();
     return;
   }
@@ -1506,7 +1518,7 @@ function quickScan(){
     toast(`Matched to ${audit.audit_id}`);
   } else {
     qs.code = null; qs.error = `No assigned audit covers ${code.layout} · Rack ${code.rack} · Bay ${code.bay}. It may be outside your scope.`; qs.matchedAuditId = null;
-    toast('No matching audit for this location');
+    toast('No matching audit for this location', 'error');
   }
   render();
 }
@@ -1771,7 +1783,7 @@ function scanSkuSimulated(){
 }
 function applySkuResult(pick){
   const dup = STATE.scan.lines.find(l => l.sku === pick.sku);
-  if (dup) { dup.qty += 1; toast('Duplicate SKU — quantity merged'); STATE.scan.expandedIdx = STATE.scan.lines.indexOf(dup); }
+  if (dup) { dup.qty += 1; toast('Duplicate SKU — quantity merged', 'info'); STATE.scan.expandedIdx = STATE.scan.lines.indexOf(dup); }
   else { STATE.scan.lines.push({ sku:pick.sku, name:pick.name, lot:pick.lot, qty:1, condition:'Good' }); STATE.scan.expandedIdx = STATE.scan.lines.length - 1; }
   render();
 }
@@ -1790,7 +1802,7 @@ function removeLine(idx){
 // Fire-and-forget background sync — the local mutation above already updated the
 // UI instantly, so a failed write here just gets logged + toasted rather than
 // blocking anything; there's no offline retry queue in this prototype.
-function syncWriteFailed(err){ console.error('Supabase sync failed', err); toast('Sync failed — will retry next save'); }
+function syncWriteFailed(err){ console.error('Supabase sync failed', err); toast('Sync failed — will retry next save', 'error'); }
 
 function deleteRecord(pallet){
   askConfirm(`Delete record ${pallet}? This can't be undone.`, () => {
