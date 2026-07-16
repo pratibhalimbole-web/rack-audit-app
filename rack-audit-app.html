@@ -300,9 +300,6 @@
 
   .chip-row{display:flex; flex-wrap:wrap; gap:6px;}
   .chip{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-xs); font-weight:700; padding:4px 10px; border-radius:5px;}
-  .chip-removable{display:inline-flex; align-items:center; gap:6px; padding:4px 4px 4px 10px;}
-  .chip-remove-x{width:16px; height:16px; border-radius:999px; border:none; background:rgba(0,0,0,.12); color:inherit; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:9px; line-height:1; transition:transform .1s ease;}
-  .chip-remove-x:active{transform:scale(.9);}
 
   .field{display:flex; flex-direction:column; gap:5px;}
   .field label{font-size:var(--text-sm); font-weight:700; color:var(--muted-foreground);}
@@ -753,7 +750,7 @@ async function loadAllData(){
     const palletsByPalletId = {};
     (countsByLoc[loc.id] || []).forEach(c => {
       const p = palletsByPalletId[c.pallet_id] || (palletsByPalletId[c.pallet_id] = { pallet: c.pallet_id, lines: [], saved: c.saved });
-      p.lines.push({ sku: c.sku, name: c.sku_name, lot: c.lot, qty: c.qty, condition: c.condition });
+      p.lines.push({ id: c.id, sku: c.sku, name: c.sku_name, lot: c.lot, qty: c.qty, condition: c.condition });
     });
 
     // db_id carries the real Supabase row id, used by saveRecord/completeLocation/
@@ -1676,6 +1673,7 @@ function renderCountSheet(){
   if (!STATE.scan || STATE.scan.auditId !== auditId || STATE.scan.loc !== aloc) {
     const existing = locObj.pallets.find(p => !p.saved) || null;
     STATE.scan = { auditId, layout:al, rack:ar, bay:ab, loc:aloc, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
+    STATE.expandedSavedPallet = null;
   }
   const scan = STATE.scan;
   const readOnly = locObj.status === 'Completed';
@@ -1710,15 +1708,38 @@ function renderCountSheet(){
     </button>
   `).join('');
 
+  // Same collapsed-row / edit-card accordion pattern as the in-progress SKU
+  // lines above (.sku-row-collapsed <-> .sku-card), so a saved record edits
+  // the same way any other SKU line does instead of being a dead-end chip.
   const savedSummary = savedPallets.length ? `
     <div class="card">
       <div class="card-title-row" style="margin-bottom:14px;"><h2>Counted at This Location</h2><span class="pill s-completed">${savedPallets.length} record${savedPallets.length===1?'':'s'}</span></div>
-      <div class="chip-row">${savedPallets.map(p => `
-        <span class="chip mono chip-removable">
-          ${p.pallet} · ${p.lines.length} SKU${p.lines.length===1?'':'s'}
-          ${!readOnly ? `<button type="button" class="chip-remove-x" onclick="deleteRecord('${p.pallet}')">✕</button>` : ''}
-        </span>
-      `).join('')}</div>
+      <div style="display:flex; flex-direction:column; gap:8px;">${savedPallets.map(p => {
+        const isOpen = STATE.expandedSavedPallet === p.pallet;
+        const header = `
+          <button type="button" class="sku-row-collapsed" onclick="toggleSavedPallet('${p.pallet}')">
+            <div class="sku-id"><div class="sku-code">${p.pallet}</div><div class="sku-lot">${p.lines.length} SKU${p.lines.length===1?'':'s'}</div></div>
+            <div class="sku-row-right"><span class="sku-row-edit">${isOpen ? ICON.check + ' Done' : ICON.pencil + ' Edit'}</span></div>
+          </button>`;
+        if (!isOpen) return header;
+        const lineCards = p.lines.map((line, li) => `
+          <div class="sku-card active">
+            <div class="sku-card-sec"><div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div></div>
+            <div class="sku-card-sec">
+              <div class="qty-copy"><span class="sec-label">Quantity</span><span class="qty-hint">Enter the counted amount</span></div>
+              <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${readOnly?'disabled':''} onchange="setSavedLineQty('${p.pallet}', ${li}, this.value)">
+            </div>
+            <div class="sku-card-sec">
+              <div class="cond-row">${CONDITIONS.map(c => `<label class="cond-radio"><input type="radio" name="saved-cond-${p.pallet}-${li}" ${line.condition===c?'checked':''} ${readOnly?'disabled':''} onchange="setSavedLineCondition('${p.pallet}', ${li}, '${c}')"><span>${c}</span></label>`).join('')}</div>
+            </div>
+          </div>
+        `).join('');
+        return `<div style="display:flex; flex-direction:column; gap:8px;">
+          ${header}
+          ${lineCards}
+          ${!readOnly ? `<button type="button" class="link-btn" style="width:100%; text-align:center; padding:4px 0; color:var(--rag-red-strong);" onclick="deleteRecord('${p.pallet}')">Delete Record</button>` : ''}
+        </div>`;
+      }).join('')}</div>
     </div>` : '';
 
   const canSave = scan.lines.length > 0;
@@ -1790,6 +1811,29 @@ function applySkuResult(pick){
 function editLine(idx){ STATE.scan.expandedIdx = idx; render(); }
 function setQty(idx, val){ const n = parseInt(val, 10); STATE.scan.lines[idx].qty = isNaN(n) ? 0 : Math.max(0, n); render(); }
 function setCondition(idx, cond){ STATE.scan.lines[idx].condition = cond; render(); }
+
+function toggleSavedPallet(pallet){ STATE.expandedSavedPallet = STATE.expandedSavedPallet === pallet ? null : pallet; render(); }
+function findSavedLine(pallet, lineIdx){
+  const { auditId, layout, rack, bay, loc } = STATE.scan;
+  const locObj = findLoc(auditId, layout, rack, bay, loc);
+  const p = locObj.pallets.find(pp => pp.pallet === pallet);
+  return p.lines[lineIdx];
+}
+function syncSavedLine(line){
+  if (sb && line.id) sb.from('count_records').update({ qty: line.qty, condition: line.condition }).eq('id', line.id).then(({error}) => { if (error) syncWriteFailed(error); });
+}
+function setSavedLineQty(pallet, lineIdx, val){
+  const line = findSavedLine(pallet, lineIdx);
+  const n = parseInt(val, 10); line.qty = isNaN(n) ? 0 : Math.max(0, n);
+  syncSavedLine(line);
+  render();
+}
+function setSavedLineCondition(pallet, lineIdx, cond){
+  const line = findSavedLine(pallet, lineIdx);
+  line.condition = cond;
+  syncSavedLine(line);
+  render();
+}
 function removeLine(idx){
   const line = STATE.scan.lines[idx];
   askConfirm(`Remove ${line.sku} from this record?`, () => {
@@ -1834,7 +1878,13 @@ function saveRecord(){
       audit_id: auditId, location_id: locObj.db_id, pallet_id: recordId,
       sku: l.sku, sku_name: l.name, lot: l.lot, qty: l.qty, condition: l.condition, saved: true,
     }));
-    sb.from('count_records').insert(rows).then(({error}) => { if (error) syncWriteFailed(error); });
+    // .select() so the inserted rows' ids come back and get attached to the
+    // local lines — needed so later edits (setSavedLineQty/Condition) know
+    // which count_records row to update.
+    sb.from('count_records').insert(rows).select().then(({data, error}) => {
+      if (error) { syncWriteFailed(error); return; }
+      (data || []).forEach((row, i) => { if (savedLines[i]) savedLines[i].id = row.id; });
+    });
     sb.from('locations').update({ status: locObj.status }).eq('id', locObj.db_id)
       .then(({error}) => { if (error) syncWriteFailed(error); });
   }
