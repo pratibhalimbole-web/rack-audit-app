@@ -368,8 +368,6 @@
   .sku-id{min-width:0; flex-shrink:1;}
   .sku-code{font:800 15px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
-  .remove-x{width:26px; height:26px; border-radius:999px; border:none; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:12px; transition:transform .1s ease;}
-  .remove-x:active{transform:scale(.9);}
   .sec-label{font-size:10.5px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
   .qty-copy{display:flex; flex-direction:column; gap:2px; min-width:0;}
   .qty-hint{font-size:11px; color:var(--muted-foreground);}
@@ -1681,11 +1679,15 @@ function renderCountSheet(){
 
   const activeIdx = scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
 
+  // Delete lives as a labeled text action below the card — same convention as
+  // "Delete Record" on the saved-pallet edit card below — instead of a small,
+  // easy-to-miss ✕ icon buried in the header. Quantity/condition already save
+  // instantly on change, so there's no separate per-card Save button; "Save
+  // Record" for the whole pallet stays the one save action, at the bottom.
   const skuCards = scan.lines.map((line, idx) => idx === activeIdx ? `
     <div class="sku-card active">
       <div class="sku-card-sec">
         <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
-        <button class="remove-x" onclick="removeLine(${idx})">✕</button>
       </div>
       <div class="sku-card-sec">
         <div class="qty-copy">
@@ -1698,6 +1700,7 @@ function renderCountSheet(){
         <div class="cond-row">${CONDITIONS.map(c => `<label class="cond-radio"><input type="radio" name="cond-${idx}" ${line.condition===c?'checked':''} onchange="setCondition(${idx}, '${c}')"><span>${c}</span></label>`).join('')}</div>
       </div>
     </div>
+    <button type="button" class="link-btn" style="width:100%; text-align:center; padding:4px 0; color:var(--rag-red-strong);" onclick="removeLine(${idx})">Delete</button>
   ` : `
     <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
       <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
