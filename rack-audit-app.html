@@ -572,7 +572,7 @@ const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 // Falls back to null (pure mock-data prototype, exactly as before) until real
 // credentials are pasted in above — lets the app keep working during setup.
-const supabase = SUPABASE_URL.startsWith('http') && window.supabase
+const sb = SUPABASE_URL.startsWith('http') && window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
@@ -707,17 +707,17 @@ function layoutsOf(auditId){ return (LOCATIONS[auditId]||{}).layouts || []; }
 // over them keeps working unchanged) with real rows from Supabase, reshaped into
 // the exact nested tree shape those functions expect. Called once right after login.
 async function loadAllData(){
-  if (!supabase) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  if (!sb) return;
+  const { data: { user } } = await sb.auth.getUser();
   if (user) {
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
     if (profile) Object.assign(INSPECTOR, { name: profile.full_name, initials: profile.initials, warehouse: profile.warehouse });
   }
 
   const [{ data: auditRows, error: e1 }, { data: locRows, error: e2 }, { data: countRows, error: e3 }] = await Promise.all([
-    supabase.from('audit_plans').select('*'),
-    supabase.from('locations').select('*'),
-    supabase.from('count_records').select('*'),
+    sb.from('audit_plans').select('*'),
+    sb.from('locations').select('*'),
+    sb.from('count_records').select('*'),
   ]);
   if (e1 || e2 || e3) { console.error('loadAllData failed', e1, e2, e3); return; }
 
@@ -867,7 +867,7 @@ let STATE = {
 
 function push(screen, params){ STATE.stack.push(screen); STATE.params = params || {}; STATE.menuOpen = false; render(); scrollTop(); }
 function back(){ if (STATE.stack.length > 1) STATE.stack.pop(); STATE.menuOpen = false; render(); scrollTop(); }
-function goHome(){ if (supabase) supabase.auth.signOut(); STATE.stack = ['login']; STATE.scan = null; render(); scrollTop(); }
+function goHome(){ if (sb) sb.auth.signOut(); STATE.stack = ['login']; STATE.scan = null; render(); scrollTop(); }
 function railTo(screen, params){ STATE.stack = ['dashboard']; if (screen !== 'dashboard') STATE.stack.push(screen); STATE.params = params || {}; render(); scrollTop(); }
 function scrollTop(){ const s = document.getElementById('screen'); if (s) s.scrollTop = 0; }
 function toggleMenu(){ STATE.menuOpen = !STATE.menuOpen; render(); }
@@ -876,9 +876,9 @@ function syncNow(btn){
   toast('Synced');
 }
 async function doLogin(){
-  if (!supabase) { STATE.stack = ['dashboard']; render(); scrollTop(); return; } // no backend configured yet — old no-op prototype behavior
+  if (!sb) { STATE.stack = ['dashboard']; render(); scrollTop(); return; } // no backend configured yet — old no-op prototype behavior
   STATE.loginError = null; STATE.authBusy = true; render();
-  const { error } = await supabase.auth.signInWithPassword({ email: STATE.loginEmail, password: STATE.loginPassword });
+  const { error } = await sb.auth.signInWithPassword({ email: STATE.loginEmail, password: STATE.loginPassword });
   if (error) { STATE.authBusy = false; STATE.loginError = error.message; render(); return; }
   await loadAllData();
   STATE.authBusy = false; STATE.stack = ['dashboard']; render(); scrollTop();
@@ -1798,11 +1798,11 @@ function deleteRecord(pallet){
     const locObj = findLoc(auditId, layout, rack, bay, loc);
     locObj.pallets = locObj.pallets.filter(p => p.pallet !== pallet);
     if (locObj.status === 'In Progress' && !locObj.pallets.some(p => p.saved) && STATE.scan.lines.length === 0) locObj.status = 'Not Started';
-    if (supabase && locObj.db_id) {
-      supabase.from('count_records').delete().eq('location_id', locObj.db_id).eq('pallet_id', pallet)
+    if (sb && locObj.db_id) {
+      sb.from('count_records').delete().eq('location_id', locObj.db_id).eq('pallet_id', pallet)
         .then(({error}) => { if (error) syncWriteFailed(error); });
       if (locObj.status === 'Not Started') {
-        supabase.from('locations').update({ status:'Not Started' }).eq('id', locObj.db_id)
+        sb.from('locations').update({ status:'Not Started' }).eq('id', locObj.db_id)
           .then(({error}) => { if (error) syncWriteFailed(error); });
       }
     }
@@ -1817,13 +1817,13 @@ function saveRecord(){
   const savedLines = STATE.scan.lines.slice();
   locObj.pallets.push({ pallet:recordId, lines: savedLines, saved:true });
   if (locObj.status === 'Not Started') locObj.status = 'In Progress';
-  if (supabase && locObj.db_id) {
+  if (sb && locObj.db_id) {
     const rows = savedLines.map(l => ({
       audit_id: auditId, location_id: locObj.db_id, pallet_id: recordId,
       sku: l.sku, sku_name: l.name, lot: l.lot, qty: l.qty, condition: l.condition, saved: true,
     }));
-    supabase.from('count_records').insert(rows).then(({error}) => { if (error) syncWriteFailed(error); });
-    supabase.from('locations').update({ status: locObj.status }).eq('id', locObj.db_id)
+    sb.from('count_records').insert(rows).then(({error}) => { if (error) syncWriteFailed(error); });
+    sb.from('locations').update({ status: locObj.status }).eq('id', locObj.db_id)
       .then(({error}) => { if (error) syncWriteFailed(error); });
   }
   toast('Record saved');
@@ -1834,8 +1834,8 @@ function completeLocation(){
   const { auditId, layout, rack, bay, loc } = STATE.scan;
   const locObj = findLoc(auditId, layout, rack, bay, loc);
   locObj.status = 'Completed';
-  if (supabase && locObj.db_id) {
-    supabase.from('locations').update({ status:'Completed' }).eq('id', locObj.db_id)
+  if (sb && locObj.db_id) {
+    sb.from('locations').update({ status:'Completed' }).eq('id', locObj.db_id)
       .then(({error}) => { if (error) syncWriteFailed(error); });
   }
   const next = nextPending(auditId);
@@ -2044,8 +2044,8 @@ function renderAuditSummary(){
 function submitAudit(auditId){
   const a = AUDITS.find(x => x.audit_id === auditId);
   if (a) a.status = 'Submitted';
-  if (supabase) {
-    supabase.from('audit_plans').update({ status:'Submitted' }).eq('audit_id', auditId)
+  if (sb) {
+    sb.from('audit_plans').update({ status:'Submitted' }).eq('audit_id', auditId)
       .then(({error}) => { if (error) syncWriteFailed(error); });
   }
   toast('Audit submitted');
