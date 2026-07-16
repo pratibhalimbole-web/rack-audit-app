@@ -356,31 +356,38 @@
   .scanrow .lbl{color:var(--muted-foreground); font-weight:600;}
   .scanrow b{margin-left:auto; color:var(--rag-green-strong); font:700 14px var(--font-mono);}
   .sku-grid{display:grid; grid-template-columns:1fr; gap:10px;}
-  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:0 14px; display:flex; flex-direction:column; position:relative; box-shadow:var(--shadow-card); overflow:hidden;}
+  /* Modern edit card: no internal divider lines (spacing carries the grouping
+     instead), a tactile +/- quantity stepper in place of a bare number field,
+     and condition as tappable chips instead of small radio dots. */
+  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:16px; position:relative; box-shadow:var(--shadow-card);}
   .sku-card.active{border-color:var(--brand-navy); box-shadow:0 0 0 3px var(--accent-blue-soft);}
   .sku-row-collapsed{width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:13px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; box-shadow:var(--shadow-card); text-align:left; transition:transform .1s ease;}
   .sku-row-collapsed:active{transform:scale(.98);}
   .sku-row-right{display:flex; align-items:center; gap:12px; flex-shrink:0;}
   .sku-row-qty{font:700 13px var(--font-mono); color:var(--muted-foreground);}
   .sku-row-edit{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--brand-navy); background:var(--accent-blue-soft); padding:6px 10px; border-radius:999px;}
-  .sku-card-sec{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 0; border-bottom:1px solid var(--border);}
-  .sku-card-sec:last-child{border-bottom:none;}
+  .sku-card-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
   .sku-id{min-width:0; flex-shrink:1;}
   .sku-code{font:800 15px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
   .sec-label{font-size:10.5px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
-  .qty-copy{display:flex; flex-direction:column; gap:2px; min-width:0;}
-  .qty-hint{font-size:11px; color:var(--muted-foreground);}
-  .qty-input{font:800 19px var(--font-body); width:64px; height:40px; text-align:center; color:var(--foreground); border:1.5px solid var(--border); background:var(--muted); border-radius:10px; outline:none; padding:0 4px; -moz-appearance:textfield;}
-  .qty-input:focus{border-color:var(--brand-navy); background:var(--card); box-shadow:0 0 0 3px var(--accent-blue-soft);}
+  .qty-stepper-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .qty-stepper{display:flex; align-items:center; gap:8px;}
+  .qty-stepper button{width:32px; height:32px; border-radius:999px; border:1.5px solid var(--border); background:var(--muted); color:var(--foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease, background .1s ease;}
+  .qty-stepper button:active{transform:scale(.88); background:var(--accent-blue-soft);}
+  .qty-stepper button:disabled{opacity:.4;}
+  .qty-input{font:800 19px var(--font-body); width:46px; height:32px; text-align:center; color:var(--foreground); border:none; background:none; outline:none; padding:0; -moz-appearance:textfield;}
   .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
-  .cond-row{display:grid; grid-template-columns:1fr 1fr; gap:2px 12px; width:100%;}
-  .cond-radio{display:flex; align-items:center; gap:8px; padding:6px 2px; border-radius:8px; cursor:pointer; transition:background .1s ease;}
-  .cond-radio:active{background:var(--muted);}
-  .cond-radio input{appearance:none; -webkit-appearance:none; width:18px; height:18px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); flex-shrink:0; transition:border-color .1s ease;}
-  .cond-radio input:checked{border-color:var(--brand-navy); border-width:5.5px;}
-  .cond-radio span{font-size:13px; font-weight:600; color:var(--muted-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cond-radio input:checked ~ span{color:var(--foreground); font-weight:700;}
+  .cond-chip-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .cond-chip{display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); font-size:12.5px; font-weight:700; color:var(--muted-foreground); transition:transform .1s ease, background .12s ease, color .12s ease, border-color .12s ease;}
+  .cond-chip:active{transform:scale(.95);}
+  .cond-chip.selected{background:var(--brand-navy); border-color:var(--brand-navy); color:#fff;}
+  .cond-chip:disabled{opacity:.6;}
+  .sku-card-footer{display:flex; gap:8px; align-items:center;}
+  .sku-card-footer .btn{flex:1;}
+  .card-icon-btn{width:40px; height:40px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
+  .card-icon-btn:active{transform:scale(.9);}
+  .card-icon-btn.danger{border-color:var(--rag-red-border); background:var(--rag-red-soft); color:var(--rag-red-strong);}
 
   .bay-card{display:flex; align-items:center; gap:12px; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; width:100%; text-align:left; box-shadow:var(--shadow-card); transition:transform .12s ease;}
   .bay-card:active{transform:scale(.98);}
@@ -938,6 +945,9 @@ const ICON = {
   power: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 4v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 6.5a7.5 7.5 0 1 0 10 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   playTri: '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l10-5.5z"/></svg>',
   calendar: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v2.5M10.5 2v2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  trash: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 5h10M6.5 5V3.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V5M6 7.5v4M10 7.5v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M4 5l.6 8a1.5 1.5 0 0 0 1.5 1.4h3.8a1.5 1.5 0 0 0 1.5-1.4l.6-8" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  minus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
 };
 
 /* ================= BOTTOM TAB BAR ================= */
@@ -1609,6 +1619,34 @@ function resumeAudit(auditId){
 }
 
 /* ================= COUNT SHEET ================= */
+// Shared body for the SKU edit card (stepper + condition chips) — used by both
+// the in-progress line editor and the saved-record editor below, so the two
+// stay pixel-identical. qtySetter/condSetter build the onclick JS for each
+// caller's own setter (setQty/setCondition vs setSavedLineQty/Condition).
+function skuEditCardBody(line, { qtySetter, condSetter, disabled }){
+  return `
+    <div class="sku-card-head">
+      <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
+    </div>
+    <div class="qty-stepper-row">
+      <span class="sec-label">Quantity</span>
+      <div class="qty-stepper">
+        <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(Math.max(0, line.qty - 1))}">${ICON.minus}</button>
+        <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
+        <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(line.qty + 1)}">${ICON.plus}</button>
+      </div>
+    </div>
+    <div class="cond-chip-row">${CONDITIONS.map(c => `<button type="button" class="cond-chip ${line.condition===c?'selected':''}" ${disabled?'disabled':''} onclick="${condSetter(c)}">${line.condition===c?ICON.checkSm:''}${c}</button>`).join('')}</div>
+  `;
+}
+function skuCardFooter(saveOnclick, deleteOnclick, deleteLabel){
+  return `
+    <div class="sku-card-footer">
+      <button type="button" class="btn primary small" onclick="${saveOnclick}">Save</button>
+      <button type="button" class="card-icon-btn danger" onclick="${deleteOnclick}" aria-label="${deleteLabel}">${ICON.trash}</button>
+    </div>
+  `;
+}
 function renderCountSheet(){
   const { auditId, layout, rack, bay, loc } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
@@ -1682,32 +1720,11 @@ function renderCountSheet(){
   const activeIdx = scan.expandedIdx === -1 ? -1
     : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
 
-  // Delete lives as a labeled text action below the card — same convention as
-  // "Delete Record" on the saved-pallet edit card below — instead of a small,
-  // easy-to-miss ✕ icon buried in the header. Quantity/condition already save
-  // instantly on change; "Save" here just collapses the card back to its row
-  // (same as the saved-pallet card's Edit/Done toggle), giving an explicit,
-  // deliberate way to close out editing a line instead of only via Delete.
   const skuCards = scan.lines.map((line, idx) => idx === activeIdx ? `
     <div class="sku-card active">
-      <div class="sku-card-sec">
-        <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
-      </div>
-      <div class="sku-card-sec">
-        <div class="qty-copy">
-          <span class="sec-label">Quantity</span>
-          <span class="qty-hint">Enter the counted amount</span>
-        </div>
-        <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" onchange="setQty(${idx}, this.value)">
-      </div>
-      <div class="sku-card-sec">
-        <div class="cond-row">${CONDITIONS.map(c => `<label class="cond-radio"><input type="radio" name="cond-${idx}" ${line.condition===c?'checked':''} onchange="setCondition(${idx}, '${c}')"><span>${c}</span></label>`).join('')}</div>
-      </div>
+      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
     </div>
-    <div class="confirm-actions">
-      <button type="button" class="btn small primary" onclick="collapseLine()">Save</button>
-      <button type="button" class="btn small outline" style="color:var(--rag-red-strong); border-color:var(--rag-red-border);" onclick="removeLine(${idx})">Delete</button>
-    </div>
+    ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
   ` : `
     <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
       <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
@@ -1734,24 +1751,17 @@ function renderCountSheet(){
         if (!isOpen) return header;
         const lineCards = p.lines.map((line, li) => `
           <div class="sku-card active">
-            <div class="sku-card-sec"><div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div></div>
-            <div class="sku-card-sec">
-              <div class="qty-copy"><span class="sec-label">Quantity</span><span class="qty-hint">Enter the counted amount</span></div>
-              <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${readOnly?'disabled':''} onchange="setSavedLineQty('${p.pallet}', ${li}, this.value)">
-            </div>
-            <div class="sku-card-sec">
-              <div class="cond-row">${CONDITIONS.map(c => `<label class="cond-radio"><input type="radio" name="saved-cond-${p.pallet}-${li}" ${line.condition===c?'checked':''} ${readOnly?'disabled':''} onchange="setSavedLineCondition('${p.pallet}', ${li}, '${c}')"><span>${c}</span></label>`).join('')}</div>
-            </div>
+            ${skuEditCardBody(line, {
+              qtySetter: v => `setSavedLineQty('${p.pallet}', ${li}, ${v})`,
+              condSetter: c => `setSavedLineCondition('${p.pallet}', ${li}, '${c}')`,
+              disabled: readOnly,
+            })}
           </div>
         `).join('');
         return `<div style="display:flex; flex-direction:column; gap:8px;">
           ${header}
           ${lineCards}
-          ${!readOnly ? `
-          <div class="confirm-actions">
-            <button type="button" class="btn small primary" onclick="toggleSavedPallet('${p.pallet}')">Save</button>
-            <button type="button" class="btn small outline" style="color:var(--rag-red-strong); border-color:var(--rag-red-border);" onclick="deleteRecord('${p.pallet}')">Delete Record</button>
-          </div>` : ''}
+          ${!readOnly ? skuCardFooter(`toggleSavedPallet('${p.pallet}')`, `deleteRecord('${p.pallet}')`, 'Delete record') : ''}
         </div>`;
       }).join('')}</div>
     </div>` : '';
