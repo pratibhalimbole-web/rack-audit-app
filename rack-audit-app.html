@@ -1677,13 +1677,17 @@ function renderCountSheet(){
   const readOnly = locObj.status === 'Completed';
   const savedPallets = locObj.pallets.filter(p => p.saved);
 
-  const activeIdx = scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
+  // expandedIdx === -1 is an explicit "collapsed" state (via Save); null/undefined
+  // means "not yet set" and defaults to the most recently scanned line.
+  const activeIdx = scan.expandedIdx === -1 ? -1
+    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
 
   // Delete lives as a labeled text action below the card — same convention as
   // "Delete Record" on the saved-pallet edit card below — instead of a small,
   // easy-to-miss ✕ icon buried in the header. Quantity/condition already save
-  // instantly on change, so there's no separate per-card Save button; "Save
-  // Record" for the whole pallet stays the one save action, at the bottom.
+  // instantly on change; "Save" here just collapses the card back to its row
+  // (same as the saved-pallet card's Edit/Done toggle), giving an explicit,
+  // deliberate way to close out editing a line instead of only via Delete.
   const skuCards = scan.lines.map((line, idx) => idx === activeIdx ? `
     <div class="sku-card active">
       <div class="sku-card-sec">
@@ -1700,7 +1704,10 @@ function renderCountSheet(){
         <div class="cond-row">${CONDITIONS.map(c => `<label class="cond-radio"><input type="radio" name="cond-${idx}" ${line.condition===c?'checked':''} onchange="setCondition(${idx}, '${c}')"><span>${c}</span></label>`).join('')}</div>
       </div>
     </div>
-    <button type="button" class="link-btn" style="width:100%; text-align:center; padding:4px 0; color:var(--rag-red-strong);" onclick="removeLine(${idx})">Delete</button>
+    <div class="confirm-actions">
+      <button type="button" class="btn small primary" onclick="collapseLine()">Save</button>
+      <button type="button" class="btn small outline" style="color:var(--rag-red-strong); border-color:var(--rag-red-border);" onclick="removeLine(${idx})">Delete</button>
+    </div>
   ` : `
     <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
       <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
@@ -1740,7 +1747,11 @@ function renderCountSheet(){
         return `<div style="display:flex; flex-direction:column; gap:8px;">
           ${header}
           ${lineCards}
-          ${!readOnly ? `<button type="button" class="link-btn" style="width:100%; text-align:center; padding:4px 0; color:var(--rag-red-strong);" onclick="deleteRecord('${p.pallet}')">Delete Record</button>` : ''}
+          ${!readOnly ? `
+          <div class="confirm-actions">
+            <button type="button" class="btn small primary" onclick="toggleSavedPallet('${p.pallet}')">Save</button>
+            <button type="button" class="btn small outline" style="color:var(--rag-red-strong); border-color:var(--rag-red-border);" onclick="deleteRecord('${p.pallet}')">Delete Record</button>
+          </div>` : ''}
         </div>`;
       }).join('')}</div>
     </div>` : '';
@@ -1812,6 +1823,7 @@ function applySkuResult(pick){
   render();
 }
 function editLine(idx){ STATE.scan.expandedIdx = idx; render(); }
+function collapseLine(){ STATE.scan.expandedIdx = -1; render(); }
 function setQty(idx, val){ const n = parseInt(val, 10); STATE.scan.lines[idx].qty = isNaN(n) ? 0 : Math.max(0, n); render(); }
 function setCondition(idx, cond){ STATE.scan.lines[idx].condition = cond; render(); }
 
