@@ -178,7 +178,7 @@
   .statusbar .icons{display:flex; align-items:center; gap:5px;}
   .sb-dot{width:6px; height:6px; border-radius:999px; background:#4ade80; display:inline-block;}
 
-  .navtop{background:var(--brand-navy); border-bottom:none; flex-shrink:0;}
+  .navtop{background:var(--brand-navy); border-bottom:none; flex-shrink:0; position:sticky; top:0; z-index:30;}
   .back-btn{display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:999px; border:none; background:rgba(255,255,255,.14); color:#fff; flex-shrink:0; transition:transform .1s ease, background .15s ease;}
   .back-btn:active{transform:scale(.88); background:rgba(255,255,255,.22);}
   .app-header{padding:12px 18px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
@@ -216,8 +216,8 @@
   .sync-line .dot{width:6px; height:6px; border-radius:999px; background:currentColor; flex-shrink:0;}
   .sync-line .time{margin-left:auto; font-weight:500; color:var(--muted-foreground); white-space:nowrap;}
 
-  .card{background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:18px; box-shadow:var(--shadow-card);}
-  .card-title-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .card{background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; box-shadow:var(--shadow-card);}
+  .card-title-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
   .card-title-row h2{font-size:var(--text-xs); font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted-foreground); margin:0;}
   .link-btn{background:none; border:none; color:var(--primary); font-weight:600; font-size:var(--text-sm); padding:0;}
 
@@ -242,8 +242,8 @@
   .pill.s-completed{background:var(--rag-green-soft); color:var(--rag-green-strong);}
   .pill.s-overdue{background:var(--rag-red-soft); color:var(--rag-red-strong);}
 
-  .kpi-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
-  .kpi{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); text-align:center; padding:14px 6px;}
+  .kpi-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .kpi{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); text-align:center; padding:11px 6px;}
   .kpi .v{font:800 20px/1.1 var(--font-mono); display:block; color:var(--foreground); letter-spacing:-.02em;}
   .kpi .l{font-size:var(--text-xs); color:var(--muted-foreground); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-top:4px; display:block;}
 
@@ -294,7 +294,7 @@
 
   /* Flat key/value list — matches the RAMS reference's Audit Details rows */
   .kv-list{display:flex; flex-direction:column;}
-  .kv-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); font-size:var(--text-base);}
+  .kv-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); font-size:var(--text-base);}
   .kv-row .l{color:var(--muted-foreground); text-transform:none; letter-spacing:0; font-weight:500;}
   .kv-row .v{font-weight:700; color:var(--foreground);}
 
@@ -408,8 +408,11 @@
   .login-field label{display:block; font-size:var(--text-sm); font-weight:600; color:rgba(255,255,255,.6); margin-bottom:6px;}
   .login-input{display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:var(--radius-lg); padding:12px 13px; color:#fff; font-size:var(--text-base);}
   .login-input .ph{color:rgba(255,255,255,.42);}
+  .login-input input{outline:none;}
+  .login-input input::placeholder{color:rgba(255,255,255,.42);}
   .login-btn{width:100%; background:#fff; color:var(--brand-navy); text-align:center; font-weight:700; font-size:var(--text-base); border-radius:999px; padding:14px; margin-top:10px; border:none; transition:transform .1s ease;}
   .login-btn:active{transform:scale(.98);}
+  .login-btn:disabled{opacity:.6;}
   .login-foot{color:rgba(255,255,255,.5); font-size:var(--text-xs); margin-top:20px;}
 
   .foot-note{text-align:center; color:var(--slate-400); font-size:var(--text-xs); margin-top:22px;}
@@ -440,6 +443,7 @@
   .device.tablet .kpi-grid{gap:12px;}
   .device.tablet .task-list{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-content:start;}
   .device.tablet .sku-grid{grid-template-columns:1fr 1fr;}
+  .two-col{display:flex; flex-direction:column; gap:16px;}
   .device.tablet .two-col{display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:start;}
   .device.tablet .detail-grid{grid-template-columns:repeat(3,1fr);}
   .device.tablet .dash-grid{display:grid; grid-template-columns:1.15fr .85fr; gap:18px; align-items:start;}
@@ -461,6 +465,19 @@
   .badge-new{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-2xs); font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px;}
 
   @media (max-width:960px){ .device.tablet{width:100%; max-width:900px;} }
+
+  /* On a short desktop/laptop viewport (e.g. a maximized 1920x1080 browser,
+     where chrome/tabs eat into the 1080px), compact the studio chrome and
+     shrink the phone mockup so the whole prototype fits without scrolling. */
+  @media (max-height:1000px) and (min-width:601px){
+    .page{padding-top:12px; padding-bottom:16px;}
+    .studio-head{margin-bottom:10px; padding-bottom:10px;}
+    .studio-sub{display:none;}
+    .stage{padding:14px 10px;}
+    .device-inner{height:min(78vh, 700px);}
+    .device.tablet .device-inner{height:min(78vh, 620px);}
+    .foot-note{display:none;}
+  }
 
   /* On an actual phone screen, drop the desktop "prototype studio" chrome
      (title, theme/device toggles, footer note) and let the device frame fill
@@ -544,7 +561,21 @@ inventory_reconciliation_count_records  -- what the inspector scans
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+/* ================= SUPABASE ================= */
+// Paste your project's URL + anon public key from Supabase Dashboard > Settings > API.
+// The anon key is meant to be public (it's a static site, no build step to hide it
+// behind an env var) — real protection is the RLS policies in supabase/schema.sql,
+// which give the `anon` role zero access, so nothing works until a real user logs in.
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// Falls back to null (pure mock-data prototype, exactly as before) until real
+// credentials are pasted in above — lets the app keep working during setup.
+const supabase = SUPABASE_URL.startsWith('http') && window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
 /* ================= DATA ================= */
 // Real device detection (not the Phone/Tablet studio toggle) — lets Scan
 // buttons open the live camera only when actually running on a phone/tablet,
@@ -671,6 +702,57 @@ LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[1].pallets.push(
 function findLayoutIn(auditId, layoutName){ return ((LOCATIONS[auditId]||{}).layouts||[]).find(l => l.name === layoutName); }
 function layoutsOf(auditId){ return (LOCATIONS[auditId]||{}).layouts || []; }
 
+// Replaces the mock AUDITS/LOCATIONS/INSPECTOR content in place (keeping the same
+// array/object bindings, so every render/rollup/lookup function that already closes
+// over them keeps working unchanged) with real rows from Supabase, reshaped into
+// the exact nested tree shape those functions expect. Called once right after login.
+async function loadAllData(){
+  if (!supabase) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (profile) Object.assign(INSPECTOR, { name: profile.full_name, initials: profile.initials, warehouse: profile.warehouse });
+  }
+
+  const [{ data: auditRows, error: e1 }, { data: locRows, error: e2 }, { data: countRows, error: e3 }] = await Promise.all([
+    supabase.from('audit_plans').select('*'),
+    supabase.from('locations').select('*'),
+    supabase.from('count_records').select('*'),
+  ]);
+  if (e1 || e2 || e3) { console.error('loadAllData failed', e1, e2, e3); return; }
+
+  AUDITS.length = 0;
+  (auditRows || []).forEach(r => AUDITS.push({
+    audit_id: r.audit_id, audit_name: r.audit_name, audit_type: r.audit_type, count_method: r.count_method,
+    scope_type: r.scope_type, scope_values: r.scope_values || [], team_members: r.team_members || [],
+    start_date: r.start_date, end_date: r.end_date, status: r.status, priority: r.priority,
+  }));
+
+  Object.keys(LOCATIONS).forEach(k => delete LOCATIONS[k]);
+  const countsByLoc = {};
+  (countRows || []).forEach(c => { (countsByLoc[c.location_id] = countsByLoc[c.location_id] || []).push(c); });
+
+  (locRows || []).forEach(loc => {
+    const tree = LOCATIONS[loc.audit_id] || (LOCATIONS[loc.audit_id] = { layouts: [] });
+    let layout = tree.layouts.find(l => l.name === loc.layout_name);
+    if (!layout) { layout = { name: loc.layout_name, racks: [] }; tree.layouts.push(layout); }
+    let rack = layout.racks.find(r => r.code === loc.rack_code);
+    if (!rack) { rack = { code: loc.rack_code, bays: [] }; layout.racks.push(rack); }
+    let bay = rack.bays.find(b => b.code === loc.bay_code);
+    if (!bay) { bay = { code: loc.bay_code, locations: [] }; rack.bays.push(bay); }
+
+    const palletsByPalletId = {};
+    (countsByLoc[loc.id] || []).forEach(c => {
+      const p = palletsByPalletId[c.pallet_id] || (palletsByPalletId[c.pallet_id] = { pallet: c.pallet_id, lines: [], saved: c.saved });
+      p.lines.push({ sku: c.sku, name: c.sku_name, lot: c.lot, qty: c.qty, condition: c.condition });
+    });
+
+    // db_id carries the real Supabase row id, used by saveRecord/completeLocation/
+    // deleteRecord/submitAudit below to target the right row for their writes.
+    bay.locations.push({ code: loc.location_code, status: loc.status, pallets: Object.values(palletsByPalletId), db_id: loc.id });
+  });
+}
+
 // QR pool for the "Scan Location QR" flow — some payloads are deliberately
 // outside any given audit's assigned scope, to exercise the reject/rescan path.
 const QR_POOL = [
@@ -725,7 +807,7 @@ function uiStatus(a){
   return 'To Do';
 }
 function pillClass(uis){ return { 'To Do':'s-scheduled', 'In Progress':'s-inprogress', 'Completed':'s-completed', 'Overdue':'s-overdue' }[uis]; }
-function priorityFor(a){ const n = a.audit_id.replace(/\D/g,''); const m = Number(n) % 3; return ['High','Medium','Low'][m]; }
+function priorityFor(a){ if (a.priority) return a.priority; const n = a.audit_id.replace(/\D/g,''); const m = Number(n) % 3; return ['High','Medium','Low'][m]; }
 function allLocations(auditId){
   const layouts = layoutsOf(auditId); const out = [];
   layouts.forEach(ly => ly.racks.forEach(r => r.bays.forEach(b => b.locations.forEach(l =>
@@ -780,11 +862,12 @@ let STATE = {
   tasksTab: 'To Do', tasksSearch: '', scan: null, menuOpen: false,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
+  loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
 };
 
 function push(screen, params){ STATE.stack.push(screen); STATE.params = params || {}; STATE.menuOpen = false; render(); scrollTop(); }
 function back(){ if (STATE.stack.length > 1) STATE.stack.pop(); STATE.menuOpen = false; render(); scrollTop(); }
-function goHome(){ STATE.stack = ['login']; STATE.scan = null; render(); scrollTop(); }
+function goHome(){ if (supabase) supabase.auth.signOut(); STATE.stack = ['login']; STATE.scan = null; render(); scrollTop(); }
 function railTo(screen, params){ STATE.stack = ['dashboard']; if (screen !== 'dashboard') STATE.stack.push(screen); STATE.params = params || {}; render(); scrollTop(); }
 function scrollTop(){ const s = document.getElementById('screen'); if (s) s.scrollTop = 0; }
 function toggleMenu(){ STATE.menuOpen = !STATE.menuOpen; render(); }
@@ -792,7 +875,14 @@ function syncNow(btn){
   if (btn) { btn.classList.add('spinning'); setTimeout(() => btn.classList.remove('spinning'), 600); }
   toast('Synced');
 }
-function doLogin(){ STATE.stack = ['dashboard']; render(); scrollTop(); }
+async function doLogin(){
+  if (!supabase) { STATE.stack = ['dashboard']; render(); scrollTop(); return; } // no backend configured yet — old no-op prototype behavior
+  STATE.loginError = null; STATE.authBusy = true; render();
+  const { error } = await supabase.auth.signInWithPassword({ email: STATE.loginEmail, password: STATE.loginPassword });
+  if (error) { STATE.authBusy = false; STATE.loginError = error.message; render(); return; }
+  await loadAllData();
+  STATE.authBusy = false; STATE.stack = ['dashboard']; render(); scrollTop();
+}
 
 function toast(msg){
   const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
@@ -924,9 +1014,10 @@ function renderLogin(){
         <h2>RAMS 2.0</h2>
         <p>Inventory Reconciliation · Mobile</p>
         <div class="login-wh">${ICON.wh} ${INSPECTOR.warehouse}</div>
-        <div class="login-field"><label>Employee ID</label><div class="login-input">${ICON.user}<span class="ph">Enter employee ID</span></div></div>
-        <div class="login-field"><label>Password</label><div class="login-input">${ICON.lock}<span class="ph">••••••••</span></div></div>
-        <button class="login-btn" onclick="doLogin()">Log in</button>
+        <div class="login-field"><label>Email</label><div class="login-input">${ICON.user}<input type="email" placeholder="Enter email" value="${STATE.loginEmail}" oninput="STATE.loginEmail=this.value" style="background:none; border:none; color:#fff; font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
+        <div class="login-field"><label>Password</label><div class="login-input">${ICON.lock}<input type="password" placeholder="••••••••" value="${STATE.loginPassword}" oninput="STATE.loginPassword=this.value" onkeydown="if(event.key==='Enter') doLogin()" style="background:none; border:none; color:#fff; font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
+        ${STATE.loginError ? `<div class="banner warn" style="width:100%; margin-bottom:13px;"><span class="dot"></span> ${STATE.loginError}</div>` : ''}
+        <button class="login-btn" onclick="doLogin()" ${STATE.authBusy ? 'disabled' : ''}>${STATE.authBusy ? 'Logging in…' : 'Log in'}</button>
         <div class="login-foot">Forgot password? Contact your supervisor</div>
       </div>
     </div>
@@ -1262,29 +1353,32 @@ function renderAuditDetails(){
   const infoList = `<div class="kv-list">${infoRows.map(([l,v]) => `<div class="kv-row"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}</div>`;
 
   const scopeBlock = `
-    <div class="kv-row" style="border-bottom:none; padding-bottom:8px;"><span class="l" style="font-weight:700; color:var(--foreground); text-transform:none; font-size:var(--text-base); letter-spacing:0;">Assigned scope</span><span class="pill s-scheduled">${a.scope_type}</span></div>
-    <div class="chip-row" style="margin-bottom:16px;">${a.scope_values.map(s => `<span class="chip mono">${s}</span>`).join('')}</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div class="kv-row" style="border-bottom:none; padding:0;"><span class="l" style="font-weight:700; color:var(--foreground); text-transform:none; font-size:var(--text-base); letter-spacing:0;">Assigned scope</span><span class="pill s-scheduled">${a.scope_type}</span></div>
+      <div class="chip-row">${a.scope_values.map(s => `<span class="chip mono">${s}</span>`).join('')}</div>
+    </div>
   `;
 
-  const kpiBlock = `<div class="kpi-grid" style="margin-bottom:12px;">
-    <div class="kpi"><span class="v">${r.rackTotal}</span><span class="l">Racks</span></div>
-    <div class="kpi"><span class="v">${r.bayTotal}</span><span class="l">Bays</span></div>
-    <div class="kpi"><span class="v">${r.locTotal}</span><span class="l">Locations</span></div>
-  </div>
-  <div class="banner ${remaining===0 && r.locTotal>0 ? 'good' : 'info'}" style="margin-bottom:20px;"><span class="dot"></span> ${remaining===0 && r.locTotal>0 ? `All ${r.locTotal} location${r.locTotal===1?'':'s'} completed` : `${remaining} of ${r.locTotal} location${r.locTotal===1?'':'s'} still remaining in your assigned scope`}</div>`;
+  const kpiBlock = `<div style="display:flex; flex-direction:column; gap:10px;">
+    <div class="kpi-grid">
+      <div class="kpi"><span class="v">${r.rackTotal}</span><span class="l">Racks</span></div>
+      <div class="kpi"><span class="v">${r.bayTotal}</span><span class="l">Bays</span></div>
+      <div class="kpi"><span class="v">${r.locTotal}</span><span class="l">Locations</span></div>
+    </div>
+    <div class="banner ${remaining===0 && r.locTotal>0 ? 'good' : 'info'}"><span class="dot"></span> ${remaining===0 && r.locTotal>0 ? `All ${r.locTotal} location${r.locTotal===1?'':'s'} completed` : `${remaining} of ${r.locTotal} location${r.locTotal===1?'':'s'} still remaining in your assigned scope`}</div>
+  </div>`;
 
   let rightColumn;
   if (showCompletedState) {
     rightColumn = `
       <div class="card" style="border-color:var(--rag-green-border); background:var(--rag-green-soft);">
-        <div class="card-title-row" style="margin-bottom:14px;"><h2 style="color:var(--rag-green-strong);">${isSubmitted ? 'Audit Completed' : 'Fully Counted'}</h2>${ICON.check}</div>
+        <div class="card-title-row"><h2 style="color:var(--rag-green-strong);">${isSubmitted ? 'Audit Completed' : 'Fully Counted'}</h2>${ICON.check}</div>
         <div style="font-size:var(--text-sm); color:var(--foreground);">${isSubmitted
           ? 'This audit has been submitted — location selection and scanning are closed.'
           : 'Every assigned location has been counted. Review the results and submit from the summary.'}</div>
       </div>
       <button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${a.audit_id}'})">View Audit Summary ${ICON.chevron}</button>
-      <div style="height:10px;"></div>
-      <button class="link-btn" style="width:100%; text-align:center; padding:8px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Full Rack/Bay Breakdown</button>
+      <button class="link-btn" style="width:100%; text-align:center; padding:4px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Full Rack/Bay Breakdown</button>
     `;
   } else {
     // No location picker here anymore — Count Sheet owns that now, permanently
@@ -1294,22 +1388,20 @@ function renderAuditDetails(){
     const startLabel = a.status === 'In Progress' ? 'Resume Audit' : 'Start Audit';
     rightColumn = `
       <button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${a.audit_id}'})">${startLabel} ${ICON.playTri}</button>
-      <div style="height:10px;"></div>
-      <button class="link-btn" style="width:100%; text-align:center; padding:8px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Audit Progress</button>
+      <button class="link-btn" style="width:100%; text-align:center; padding:4px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Audit Progress</button>
     `;
   }
 
   return `
     ${headerBlock({ title:'Audit Details', sub:`${a.audit_id} · ${INSPECTOR.warehouse}`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad" style="gap:0;">
-      <div class="${STATE.device==='tablet' ? 'two-col' : ''}">
-        <div>
+      <div class="two-col">
+        <div style="display:flex; flex-direction:column; gap:14px;">
           ${infoList}
-          <div style="height:18px;"></div>
           ${scopeBlock}
           ${kpiBlock}
         </div>
-        <div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
           ${rightColumn}
         </div>
       </div>
@@ -1546,7 +1638,7 @@ function renderCountSheet(){
     return `
       ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
       <div class="body-pad">
-        ${picker.html}
+        <div>${picker.html}</div>
         <div class="empty-state" style="flex:1; justify-content:center;">
           <div class="glyph">${ICON.pin}</div>
           <div>Scanning and counting tools appear here once a location is picked.</div>
@@ -1563,7 +1655,7 @@ function renderCountSheet(){
       ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
       <div class="body-pad">
         <div class="banner warn"><span class="dot"></span> That location isn't in your assigned scope. Pick a different one below.</div>
-        ${picker.html}
+        <div>${picker.html}</div>
       </div>
       ${renderTabBar('tasks')}
     `;
@@ -1633,7 +1725,7 @@ function renderCountSheet(){
         ${picker.html}
       </div>
       ${savedSummary}
-      <div class="${STATE.device==='tablet' ? 'two-col' : ''}">
+      <div class="two-col">
         <div style="display:flex; flex-direction:column; gap:14px;">${scanSection}</div>
         ${!readOnly ? `
         <div style="display:flex; flex-direction:column; gap:14px;">
@@ -1695,12 +1787,25 @@ function removeLine(idx){
   });
 }
 
+// Fire-and-forget background sync — the local mutation above already updated the
+// UI instantly, so a failed write here just gets logged + toasted rather than
+// blocking anything; there's no offline retry queue in this prototype.
+function syncWriteFailed(err){ console.error('Supabase sync failed', err); toast('Sync failed — will retry next save'); }
+
 function deleteRecord(pallet){
   askConfirm(`Delete record ${pallet}? This can't be undone.`, () => {
     const { auditId, layout, rack, bay, loc } = STATE.scan;
     const locObj = findLoc(auditId, layout, rack, bay, loc);
     locObj.pallets = locObj.pallets.filter(p => p.pallet !== pallet);
     if (locObj.status === 'In Progress' && !locObj.pallets.some(p => p.saved) && STATE.scan.lines.length === 0) locObj.status = 'Not Started';
+    if (supabase && locObj.db_id) {
+      supabase.from('count_records').delete().eq('location_id', locObj.db_id).eq('pallet_id', pallet)
+        .then(({error}) => { if (error) syncWriteFailed(error); });
+      if (locObj.status === 'Not Started') {
+        supabase.from('locations').update({ status:'Not Started' }).eq('id', locObj.db_id)
+          .then(({error}) => { if (error) syncWriteFailed(error); });
+      }
+    }
     toast('Record deleted');
     render();
   });
@@ -1709,8 +1814,18 @@ function saveRecord(){
   const { auditId, layout, rack, bay, loc } = STATE.scan;
   const locObj = findLoc(auditId, layout, rack, bay, loc);
   const recordId = loc + '-' + (locObj.pallets.length + 1);
-  locObj.pallets.push({ pallet:recordId, lines: STATE.scan.lines.slice(), saved:true });
+  const savedLines = STATE.scan.lines.slice();
+  locObj.pallets.push({ pallet:recordId, lines: savedLines, saved:true });
   if (locObj.status === 'Not Started') locObj.status = 'In Progress';
+  if (supabase && locObj.db_id) {
+    const rows = savedLines.map(l => ({
+      audit_id: auditId, location_id: locObj.db_id, pallet_id: recordId,
+      sku: l.sku, sku_name: l.name, lot: l.lot, qty: l.qty, condition: l.condition, saved: true,
+    }));
+    supabase.from('count_records').insert(rows).then(({error}) => { if (error) syncWriteFailed(error); });
+    supabase.from('locations').update({ status: locObj.status }).eq('id', locObj.db_id)
+      .then(({error}) => { if (error) syncWriteFailed(error); });
+  }
   toast('Record saved');
   STATE.scan = { auditId, layout, rack, bay, loc, pallet:null, lines:[], scanCount: STATE.scan.scanCount };
   render();
@@ -1719,6 +1834,10 @@ function completeLocation(){
   const { auditId, layout, rack, bay, loc } = STATE.scan;
   const locObj = findLoc(auditId, layout, rack, bay, loc);
   locObj.status = 'Completed';
+  if (supabase && locObj.db_id) {
+    supabase.from('locations').update({ status:'Completed' }).eq('id', locObj.db_id)
+      .then(({error}) => { if (error) syncWriteFailed(error); });
+  }
   const next = nextPending(auditId);
   if (next) {
     toast('Location complete — moving to next');
@@ -1752,7 +1871,7 @@ function renderQuickScan(){
         <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${matched.audit_id}</div>
       </div>
       <button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${matched.audit_id}', layout:'${qs.code.layout}', rack:'${qs.code.rack}', bay:'${qs.code.bay}', loc:'${qs.code.loc}'})">Open Count Sheet ${ICON.chevron}</button>
-      <button class="btn outline small" style="width:100%; margin-top:10px;" onclick="quickScan()">${ICON.scan} Scan Another Location</button>
+      <button class="btn outline small" style="width:100%;" onclick="quickScan()">${ICON.scan} Scan Another Location</button>
     `;
   } else if (qs.wrongKind) {
     // Pallet/SKU codes carry no location of their own — they only mean something
@@ -1767,9 +1886,9 @@ function renderQuickScan(){
         <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground); margin-bottom:4px;">This is a ${qs.wrongKind === 'pallet' ? 'Pallet' : 'SKU'} code, not a storage location.</div>
         <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground);">${qs.wrongLabel}</div>
       </div>
-      <div class="banner info" style="margin-top:14px;"><span class="dot"></span> Pallet and SKU codes only make sense inside an already-open location's count sheet. Scan the storage location QR first.</div>
-      ${ls ? `<button class="btn primary btn-pill" style="margin-top:14px;" onclick="push('countSheet', {auditId:'${ongoing.audit_id}', layout:'${ls.layout}', rack:'${ls.rack}', bay:'${ls.bay}', loc:'${ls.loc.code}'})">Continue at ${ls.loc.code} ${ICON.chevron}</button>` : ''}
-      <button class="btn outline small" style="width:100%; margin-top:10px;" onclick="quickScan()">${ICON.scan} Scan Again</button>
+      <div class="banner info"><span class="dot"></span> Pallet and SKU codes only make sense inside an already-open location's count sheet. Scan the storage location QR first.</div>
+      ${ls ? `<button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${ongoing.audit_id}', layout:'${ls.layout}', rack:'${ls.rack}', bay:'${ls.bay}', loc:'${ls.loc.code}'})">Continue at ${ls.loc.code} ${ICON.chevron}</button>` : ''}
+      <button class="btn outline small" style="width:100%;" onclick="quickScan()">${ICON.scan} Scan Again</button>
     `;
   } else {
     // Short content (just the scan prompt + one banner) — center it in the
@@ -1925,6 +2044,10 @@ function renderAuditSummary(){
 function submitAudit(auditId){
   const a = AUDITS.find(x => x.audit_id === auditId);
   if (a) a.status = 'Submitted';
+  if (supabase) {
+    supabase.from('audit_plans').update({ status:'Submitted' }).eq('audit_id', auditId)
+      .then(({error}) => { if (error) syncWriteFailed(error); });
+  }
   toast('Audit submitted');
   render();
 }
