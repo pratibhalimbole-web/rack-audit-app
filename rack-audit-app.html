@@ -356,32 +356,37 @@
   .scanrow .lbl{color:var(--muted-foreground); font-weight:600;}
   .scanrow b{margin-left:auto; color:var(--rag-green-strong); font:700 14px var(--font-mono);}
   .sku-grid{display:grid; grid-template-columns:1fr; gap:10px;}
-  /* Modern edit card: no internal divider lines (spacing carries the grouping
-     instead), a tactile +/- quantity stepper in place of a bare number field,
-     and condition as tappable chips instead of small radio dots. */
-  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:16px; position:relative; box-shadow:var(--shadow-card);}
+  /* Modern edit card, v3: identity uses an icon avatar + inline lot badge instead
+     of a form-like bordered grid, and quantity/condition each sit on their own
+     tinted surface block — grouping comes from color contrast, not rule lines. */
+  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; box-shadow:var(--shadow-card);}
   .sku-card.active{border-color:var(--brand-navy); box-shadow:0 0 0 3px var(--accent-blue-soft);}
   .sku-row-collapsed{width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:13px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; box-shadow:var(--shadow-card); text-align:left; transition:transform .1s ease;}
   .sku-row-collapsed:active{transform:scale(.98);}
   .sku-row-right{display:flex; align-items:center; gap:12px; flex-shrink:0;}
   .sku-row-qty{font:700 13px var(--font-mono); color:var(--muted-foreground);}
   .sku-row-edit{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--brand-navy); background:var(--accent-blue-soft); padding:6px 10px; border-radius:999px;}
-  .sku-card-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
-  .sku-id{min-width:0; flex-shrink:1;}
-  .sku-code{font:800 15px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sku-card-head{display:flex; align-items:center; gap:12px;}
+  .sku-avatar{width:40px; height:40px; border-radius:var(--radius-xl); background:var(--accent-blue-soft); color:var(--brand-navy); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .sku-id{min-width:0; flex-shrink:1; display:flex; flex-direction:column; gap:5px;}
+  .sku-code{font:800 15.5px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
+  .lot-badge{display:inline-flex; align-items:center; gap:5px; width:fit-content; font:700 11.5px var(--font-mono); color:var(--muted-foreground); background:var(--muted); padding:3px 9px 3px 7px; border-radius:999px;}
+  .lot-badge .dot{width:5px; height:5px; border-radius:999px; background:var(--rag-amber-strong, var(--muted-foreground));}
   .sec-label{font-size:10.5px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
+  .sku-section{background:var(--muted); border-radius:var(--radius-xl); padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
   .qty-stepper-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
   .qty-stepper{display:flex; align-items:center; gap:8px;}
-  .qty-stepper button{width:32px; height:32px; border-radius:999px; border:1.5px solid var(--border); background:var(--muted); color:var(--foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease, background .1s ease;}
+  .qty-stepper button{width:32px; height:32px; border-radius:999px; border:none; background:var(--card); color:var(--foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:var(--shadow-card); transition:transform .1s ease, background .1s ease;}
   .qty-stepper button:active{transform:scale(.88); background:var(--accent-blue-soft);}
   .qty-stepper button:disabled{opacity:.4;}
-  .qty-input{font:800 19px var(--font-body); width:46px; height:32px; text-align:center; color:var(--foreground); border:none; background:none; outline:none; padding:0; -moz-appearance:textfield;}
+  .qty-input{font:800 17px var(--font-body); width:56px; height:36px; text-align:center; color:var(--foreground); border:1.5px solid var(--border); background:var(--card); border-radius:var(--radius-lg); outline:none; padding:0; -moz-appearance:textfield; transition:border-color .12s ease;}
+  .qty-input:focus{border-color:var(--brand-navy);}
   .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
   .cond-chip-row{display:flex; flex-wrap:wrap; gap:8px;}
-  .cond-chip{display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); font-size:12.5px; font-weight:700; color:var(--muted-foreground); transition:transform .1s ease, background .12s ease, color .12s ease, border-color .12s ease;}
+  .cond-chip{display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; border:none; background:var(--card); font-size:12.5px; font-weight:700; color:var(--muted-foreground); box-shadow:var(--shadow-card); transition:transform .1s ease, background .12s ease, color .12s ease;}
   .cond-chip:active{transform:scale(.95);}
-  .cond-chip.selected{background:var(--brand-navy); border-color:var(--brand-navy); color:#fff;}
+  .cond-chip.selected{background:var(--brand-navy); color:#fff;}
   .cond-chip:disabled{opacity:.6;}
   .sku-card-footer{display:flex; gap:8px; align-items:center;}
   .sku-card-footer .btn{flex:1;}
@@ -1626,17 +1631,26 @@ function resumeAudit(auditId){
 function skuEditCardBody(line, { qtySetter, condSetter, disabled }){
   return `
     <div class="sku-card-head">
-      <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
-    </div>
-    <div class="qty-stepper-row">
-      <span class="sec-label">Quantity</span>
-      <div class="qty-stepper">
-        <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(Math.max(0, line.qty - 1))}">${ICON.minus}</button>
-        <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
-        <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(line.qty + 1)}">${ICON.plus}</button>
+      <div class="sku-avatar">${ICON.box}</div>
+      <div class="sku-id">
+        <div class="sku-code">${line.sku}</div>
+        <span class="lot-badge"><span class="dot"></span>LOT ${line.lot}</span>
       </div>
     </div>
-    <div class="cond-chip-row">${CONDITIONS.map(c => `<button type="button" class="cond-chip ${line.condition===c?'selected':''}" ${disabled?'disabled':''} onclick="${condSetter(c)}">${line.condition===c?ICON.checkSm:''}${c}</button>`).join('')}</div>
+    <div class="sku-section">
+      <div class="qty-stepper-row">
+        <span class="sec-label">Quantity</span>
+        <div class="qty-stepper">
+          <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(Math.max(0, line.qty - 1))}">${ICON.minus}</button>
+          <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
+          <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(line.qty + 1)}">${ICON.plus}</button>
+        </div>
+      </div>
+    </div>
+    <div class="sku-section">
+      <span class="sec-label">Condition</span>
+      <div class="cond-chip-row">${CONDITIONS.map(c => `<button type="button" class="cond-chip ${line.condition===c?'selected':''}" ${disabled?'disabled':''} onclick="${condSetter(c)}">${line.condition===c?ICON.checkSm:''}${c}</button>`).join('')}</div>
+    </div>
   `;
 }
 function skuCardFooter(saveOnclick, deleteOnclick, deleteLabel){
@@ -1723,8 +1737,8 @@ function renderCountSheet(){
   const skuCards = scan.lines.map((line, idx) => idx === activeIdx ? `
     <div class="sku-card active">
       ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
+      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
     </div>
-    ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
   ` : `
     <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
       <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
