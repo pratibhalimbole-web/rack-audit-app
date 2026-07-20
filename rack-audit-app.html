@@ -140,7 +140,7 @@
   .mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
 
   /* ============ PAGE CHROME ============ */
-  .page{max-width:1180px; margin:0 auto; padding:28px 20px 64px;}
+  .page{max-width:1340px; margin:0 auto; padding:28px 20px 64px;}
   .studio-head{
     display:flex; align-items:flex-end; justify-content:space-between; gap:24px;
     flex-wrap:wrap; margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid var(--border);
@@ -159,9 +159,9 @@
   /* ============ DEVICE FRAMES ============ */
   .device{background:var(--card); border:1px solid var(--border); border-radius:32px; box-shadow:var(--shadow); overflow:hidden; position:relative; transition:width .2s ease;}
   .device.phone{width:390px;}
-  .device.tablet{width:900px; border-radius:20px;}
+  .device.tablet{width:1280px; border-radius:20px;}
   .device-inner{display:flex; height:800px;}
-  .device.tablet .device-inner{height:660px;}
+  .device.tablet .device-inner{height:800px;}
   .screen{flex:1; min-width:0; overflow-y:auto; overflow-x:hidden; background:var(--muted); display:flex; flex-direction:column; position:relative; scrollbar-width:thin;}
 
   /* ============ TABLET NAV RAIL ============ */
@@ -286,7 +286,34 @@
   .task-meta{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .task-footer{display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:12px; border-top:1px solid var(--border);}
   .task-due{display:flex; align-items:center; gap:5px; font-size:var(--text-xs); color:var(--muted-foreground); font-weight:600;}
+  .ongoing-body{display:flex; flex-direction:column;}
+  .ongoing-progress{margin:0 0 12px;}
+  .ongoing-meta{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:14px;}
+  .ongoing-action .btn{width:100%;}
   .chev{color:var(--slate-400); flex-shrink:0;}
+
+  /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
+  .audit-banner{display:flex; align-items:center; gap:28px; flex-wrap:wrap; border:1.5px dashed var(--accent-blue-strong); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:16px 20px;}
+  .audit-banner-field{display:flex; flex-direction:column; gap:4px;}
+  .audit-banner-field .l{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground);}
+  .audit-banner-field .v{font-size:var(--text-sm); font-weight:700; color:var(--foreground); display:flex; align-items:center; gap:6px;}
+  .audit-banner .btn{margin-left:auto; flex-shrink:0; width:auto;}
+  .overview-row{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:stretch;}
+  .overview-pct{font-size:32px; font-weight:800; color:var(--foreground); margin:14px 0 8px;}
+  .overview-caption{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:8px;}
+  .overview-stats{display:flex; gap:28px; margin-top:20px; padding-top:16px; border-top:1px solid var(--border);}
+  .overview-stats .stat .v{font-size:var(--text-lg); font-weight:800; color:var(--foreground);}
+  .overview-stats .stat .l{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;}
+  .op-detail-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:12px;}
+  .op-detail-grid .l{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.02em; margin-bottom:4px;}
+  .op-detail-grid .v{font-size:var(--text-sm); font-weight:700; color:var(--foreground);}
+  .op-section-label{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); margin-top:16px; padding-top:14px; border-top:1px solid var(--border);}
+  .audit-list{display:flex; flex-direction:column; margin-top:6px;}
+  .audit-list-row{display:flex; align-items:center; gap:16px; padding:14px 8px; border-bottom:1px solid var(--border); cursor:pointer; border-radius:var(--radius-lg); transition:background .12s ease;}
+  .audit-list-row:last-child{border-bottom:none;}
+  .audit-list-row:hover{background:var(--muted);}
+  .audit-list-row:active{transform:scale(.997);}
+  .audit-list-meta{display:flex; flex-direction:column; align-items:flex-end; gap:3px; font-size:var(--text-xs); color:var(--muted-foreground); flex-shrink:0; min-width:120px;}
 
   .detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px;}
   .detail-item .l{font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--slate-400); font-weight:700; margin-bottom:3px;}
@@ -448,14 +475,27 @@
   .device.tablet .app-header h1{font-size:21px;}
   .device.tablet .body-pad{padding:16px 26px 24px;}
   .device.tablet .kpi-grid{gap:12px;}
-  .device.tablet .task-list{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-content:start;}
+  .device.tablet .task-list{display:flex; flex-direction:column; gap:10px;}
+  .device.tablet .task-card{flex-direction:row; align-items:center; gap:16px; padding:14px 20px;}
+  .device.tablet .task-due{flex-shrink:0;}
+  .device.tablet .pill{flex-shrink:0;}
   .device.tablet .sku-grid{grid-template-columns:1fr 1fr;}
   .two-col{display:flex; flex-direction:column; gap:16px;}
   .device.tablet .two-col{display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:start;}
   .device.tablet .detail-grid{grid-template-columns:repeat(3,1fr);}
-  .device.tablet .dash-grid{display:grid; grid-template-columns:1.15fr .85fr; gap:18px; align-items:start;}
+  .device.tablet .ongoing-body{display:flex; flex-direction:row; align-items:center; gap:28px;}
+  .device.tablet .ongoing-info{flex:0 0 240px;}
+  .device.tablet .ongoing-progress{flex:1; margin:0;}
+  .device.tablet .ongoing-meta{flex:0 0 auto; flex-direction:column; align-items:flex-end; margin-bottom:0; gap:6px;}
+  .device.tablet .ongoing-action{flex:0 0 auto;}
+  .device.tablet .ongoing-action .btn{width:auto; white-space:nowrap;}
   .device.tablet .sticky-actions{flex-direction:row;}
   .device.tablet .sticky-actions .btn{width:auto; flex:1;}
+  .device.tablet .tabbar{position:sticky; bottom:0; max-width:none; margin:0; width:100%; border-radius:0; border:none; border-top:1px solid var(--border); background:var(--card); backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none; padding:10px 12px; gap:0;}
+  .device.tablet .tabbar-item{flex:1 1 0; gap:4px;}
+  .device.tablet .tabbar-item .icon-slot{width:auto; height:auto; background:none !important;}
+  .device.tablet .tabbar-item svg{width:21px; height:21px;}
+  .device.tablet .tabbar-item .lbl{font-size:var(--text-xs);}
 
   /* Success/error/info toasts reuse the same rag-color tokens and pill shape as
      the rest of the design system (.banner, .pill, .btn-pill) — a flat dark bar
@@ -480,7 +520,7 @@
   .modal-body pre{background:var(--muted); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px 16px; overflow-x:auto; font-family:var(--font-mono); font-size:var(--text-xs); line-height:1.6; color:var(--foreground); margin:10px 0 18px;}
   .badge-new{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-2xs); font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px;}
 
-  @media (max-width:960px){ .device.tablet{width:100%; max-width:900px;} }
+  @media (max-width:1340px){ .device.tablet{width:100%; max-width:1280px;} }
 
   /* On a short desktop/laptop viewport (e.g. a maximized 1920x1080 browser,
      where chrome/tabs eat into the 1080px), compact the studio chrome and
@@ -491,7 +531,7 @@
     .studio-sub{display:none;}
     .stage{padding:14px 10px;}
     .device-inner{height:min(78vh, 700px);}
-    .device.tablet .device-inner{height:min(78vh, 620px);}
+    .device.tablet .device-inner{height:min(78vh, 760px);}
     .foot-note{display:none;}
   }
 
@@ -522,6 +562,11 @@
       <div class="segmented" role="group" aria-label="Device preview">
         <button id="btn-phone" class="active" onclick="setDevice('phone')">Phone</button>
         <button id="btn-tablet" onclick="setDevice('tablet')">Tablet</button>
+      </div>
+      <div class="segmented" role="group" aria-label="Data preview">
+        <button id="btn-preview-normal" class="active" onclick="setPreviewMode('normal')">Normal</button>
+        <button id="btn-preview-noaudits" onclick="setPreviewMode('noAudits')">No Audits</button>
+        <button id="btn-preview-emptysummary" onclick="setPreviewMode('emptySummary')">Empty Summary</button>
       </div>
       <button class="ghost-btn" onclick="openSchema()">View data model</button>
       <button class="ghost-btn" onclick="goHome()">Restart</button>
@@ -840,6 +885,9 @@ function rollup(auditId){
     if (r.bays.every(b => b.locations.every(l => l.status === 'Completed'))) rackDone++;
     r.bays.forEach(b => { bayTotal++; if (b.locations.every(l => l.status === 'Completed')) bayDone++; });
   }));
+  // "Empty Summary" preview forces the done-counts to zero (keeping real totals)
+  // so the Audit Summary screen can be inspected as if nothing had been counted yet.
+  if (STATE.previewMode === 'emptySummary') return { rackDone:0, rackTotal, bayDone:0, bayTotal, locDone:0, locTotal:locs.length };
   return { rackDone, rackTotal, bayDone, bayTotal, locDone, locTotal:locs.length };
 }
 function lastSaved(auditId){
@@ -854,6 +902,7 @@ function summaryStats(auditId){
   let palletCount = 0, lineCount = 0, qtyTotal = 0;
   const byCondition = {};
   const flagged = [];
+  if (STATE.previewMode === 'emptySummary') return { palletCount, lineCount, qtyTotal, byCondition, flagged };
   allLocations(auditId).forEach(({ layout, rack, bay, loc }) => {
     (loc.pallets || []).forEach(p => {
       palletCount++;
@@ -869,12 +918,15 @@ function summaryStats(auditId){
   });
   return { palletCount, lineCount, qtyTotal, byCondition, flagged };
 }
-function mine(){ return AUDITS.filter(a => a.team_members.includes(INSPECTOR.name)); }
+function mine(){
+  if (STATE.previewMode === 'noAudits') return [];
+  return AUDITS.filter(a => a.team_members.includes(INSPECTOR.name));
+}
 function currentOngoing(){ return mine().find(a => a.status === 'In Progress' && !isOverdue(a)); }
 
 /* ================= STATE ================= */
 let STATE = {
-  device: 'phone', stack: ['login'], params: {},
+  device: 'phone', stack: ['login'], params: {}, previewMode: 'normal',
   tasksTab: 'To Do', tasksSearch: '', scan: null, menuOpen: false,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
@@ -915,6 +967,25 @@ function setDevice(d){
   document.getElementById('btn-phone').classList.toggle('active', d==='phone');
   document.getElementById('btn-tablet').classList.toggle('active', d==='tablet');
   render();
+}
+// Lets the toolbar preview what each screen looks like with no data, without
+// touching the real seeded/loaded AUDITS — mine()/rollup()/summaryStats() all
+// check STATE.previewMode and substitute empty results while it's active.
+function setPreviewMode(m){
+  STATE.previewMode = m;
+  document.getElementById('btn-preview-normal').classList.toggle('active', m==='normal');
+  document.getElementById('btn-preview-noaudits').classList.toggle('active', m==='noAudits');
+  document.getElementById('btn-preview-emptysummary').classList.toggle('active', m==='emptySummary');
+  if (m === 'noAudits') {
+    STATE.stack = ['dashboard']; STATE.params = {};
+  } else if (m === 'emptySummary') {
+    const a = AUDITS.find(x => x.team_members.includes(INSPECTOR.name)) || AUDITS[0];
+    STATE.stack = a ? ['dashboard', 'auditSummary'] : ['dashboard'];
+    STATE.params = a ? { auditId: a.audit_id } : {};
+  } else {
+    STATE.stack = ['dashboard']; STATE.params = {};
+  }
+  render(); scrollTop();
 }
 function openSchema(){ document.getElementById('schema-modal').classList.add('open'); }
 function closeSchema(){ document.getElementById('schema-modal').classList.remove('open'); }
@@ -957,7 +1028,6 @@ const ICON = {
 
 /* ================= BOTTOM TAB BAR ================= */
 function renderTabBar(active){
-  if (STATE.device !== 'phone') return '';
   const ongoing = currentOngoing();
   const items = [
     { key:'dashboard', label:'Home', icon:ICON.home, onclick:"railTo('dashboard')" },
@@ -968,28 +1038,10 @@ function renderTabBar(active){
   return `<div class="tabbar">${items.map(it => `<button class="tabbar-item ${active===it.key?'active':''}" onclick="${it.onclick}"><span class="icon-slot">${it.icon}</span><span class="lbl">${it.label}</span></button>`).join('')}</div>`;
 }
 
-/* ================= TABLET NAV RAIL ================= */
+/* ================= TABLET NAV RAIL (retired — bottom tab bar now covers both devices) ================= */
 function renderRail(){
-  if (STATE.device !== 'tablet' || STATE.stack[0] === 'login') { document.getElementById('rail-slot').innerHTML = ''; return; }
-  const screen = STATE.stack[STATE.stack.length - 1];
-  const ongoing = currentOngoing();
-  const items = [
-    { key:'dashboard', label:'Home', icon:ICON.home, on:() => railTo('dashboard') },
-    { key:'tasks', label:'Tasks', icon:ICON.tasks, on:() => railTo('tasks') },
-    { key:'scan', label:'Scan', icon:ICON.scan, on:() => openQuickScan() },
-  ];
-  if (ongoing) items.push({ key:'progress', label:'Progress', icon:ICON.progress, on:() => railTo('progress', { auditId: ongoing.audit_id }) });
-  const isActive = (key) => (key==='dashboard' && screen==='dashboard') || (key==='tasks' && (screen==='tasks'||screen==='auditDetails'||screen==='countSheet')) || (key==='scan' && screen==='scan') || (key==='progress' && (screen==='progress'||screen==='auditSummary'));
-  document.getElementById('rail-slot').innerHTML = `
-    <div class="rail">
-      <div class="rail-logo">R</div>
-      ${items.map((it,i) => `<button class="rail-item ${isActive(it.key)?'active':''}" onclick="railItemClick(${i})">${it.icon}<span>${it.label}</span></button>`).join('')}
-      <div class="rail-spacer"></div>
-      <button class="rail-item logout" onclick="goHome()">${ICON.power}<span>Log out</span></button>
-    </div>`;
-  window.__railItems = items;
+  document.getElementById('rail-slot').innerHTML = '';
 }
-function railItemClick(i){ window.__railItems[i].on(); }
 
 /* ================= HEADER / SCREEN SHELL ================= */
 function statusBarHtml(){
@@ -1048,6 +1100,7 @@ function renderLogin(){
 
 /* ================= DASHBOARD ================= */
 function renderDashboard(){
+  if (STATE.device === 'tablet') return renderDashboardTablet();
   const myTasks = mine();
   const ongoing = currentOngoing();
   const others = myTasks.filter(a => a !== ongoing).sort((a,b)=> new Date(a.end_date) - new Date(b.end_date)).slice(0,3);
@@ -1061,30 +1114,35 @@ function renderDashboard(){
     // location's already completed, that's now read-only and a dead end; the
     // real next step is reviewing and submitting the summary.
     const isFullyCounted = r.locTotal > 0 && r.locDone === r.locTotal;
+    const actionBtn = isFullyCounted
+      ? `<button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${ongoing.audit_id}'})">View Audit Summary ${ICON.chevron}</button>`
+      : `<button class="btn primary btn-pill" onclick="resumeAudit('${ongoing.audit_id}')">Resume Audit ${ICON.chevron}</button>`;
     ongoingCard = `
-      <div class="card">
+      <div class="card ongoing-card">
         <div class="card-title-row" style="padding-bottom:12px; margin-bottom:16px; border-bottom:1px solid var(--border);"><h2>Ongoing Audit</h2></div>
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px;">
-          <div style="min-width:0;">
-            <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground); line-height:1.3;">${ongoing.audit_name}</div>
+        <div class="ongoing-body">
+          <div class="ongoing-info">
+            <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:4px;">
+              <div style="min-width:0;">
+                <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground); line-height:1.3;">${ongoing.audit_name}</div>
+              </div>
+              <span class="pill p-${priorityFor(ongoing).toLowerCase()}" style="flex-shrink:0;">${priorityFor(ongoing)}</span>
+            </div>
+            <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground);">${ongoing.audit_id} · ${ongoing.scope_values.join(', ')}</div>
           </div>
-          <span class="pill p-${priorityFor(ongoing).toLowerCase()}" style="flex-shrink:0;">${priorityFor(ongoing)}</span>
-        </div>
-        <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:16px;">${ongoing.audit_id} · ${ongoing.scope_values.join(', ')}</div>
-        <div style="margin:0 0 12px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:6px;">
-            <span>${r.locDone}/${r.locTotal} locations counted</span>
-            <span style="font-weight:700; color:var(--foreground);">${pct}%</span>
+          <div class="ongoing-progress">
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:6px;">
+              <span>${r.locDone}/${r.locTotal} locations counted</span>
+              <span style="font-weight:700; color:var(--foreground);">${pct}%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
           </div>
-          <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
+          <div class="ongoing-meta">
+            <span>Due ${fmtDate(ongoing.end_date)}</span>
+            ${ls ? `<span style="white-space:nowrap;">Last <strong class="mono" style="color:var(--foreground);">${ls.loc.code}</strong></span>` : ''}
+          </div>
+          <div class="ongoing-action">${actionBtn}</div>
         </div>
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:14px;">
-          <span>Due ${fmtDate(ongoing.end_date)}</span>
-          ${ls ? `<span style="display:flex; align-items:center; gap:4px; min-width:0;">${ICON.pin}<span style="white-space:nowrap;">Last <strong class="mono" style="color:var(--foreground);">${ls.loc.code}</strong></span></span>` : ''}
-        </div>
-        ${isFullyCounted
-          ? `<button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${ongoing.audit_id}'})">View Audit Summary ${ICON.chevron}</button>`
-          : `<button class="btn primary btn-pill" onclick="resumeAudit('${ongoing.audit_id}')">Resume Audit ${ICON.chevron}</button>`}
       </div>`;
   } else {
     ongoingCard = `<div class="card"><div class="empty-state" style="padding:22px 10px;"><div class="glyph">${ICON.box}</div><div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">No audit in progress</div><div style="font-size:var(--text-sm);">Open a task below to start one.</div></div></div>`;
@@ -1104,7 +1162,7 @@ function renderDashboard(){
     })}
     <div class="body-pad">
       <div class="sync-line"><span class="dot"></span> All caught up <span class="time">Synced 2 min ago</span></div>
-      <div class="${STATE.device==='tablet' ? 'dash-grid' : ''}" style="${STATE.device==='tablet' ? '' : 'display:flex; flex-direction:column; gap:14px;'}">
+      <div style="display:flex; flex-direction:column; gap:14px;">
         <div style="display:flex; flex-direction:column; gap:14px;">${ongoingCard}</div>
         <div style="display:flex; flex-direction:column; gap:14px;">
           <div class="card-title-row">
@@ -1119,9 +1177,147 @@ function renderDashboard(){
   `;
 }
 
+// Tablet-only dashboard laid out to match the wider web-dashboard reference:
+// a dashed-border "current audit" banner, an overview/ongoing-audit card row,
+// and a table-style task list — instead of the phone's stacked cards.
+function renderDashboardTablet(){
+  const myTasks = mine();
+  const ongoing = currentOngoing();
+  const banner = ongoing || myTasks[0] || null;
+
+  let bannerHtml = '';
+  if (banner) {
+    const r = rollup(banner.audit_id); const ls = lastSaved(banner.audit_id);
+    const isFullyCounted = r.locTotal > 0 && r.locDone === r.locTotal;
+    const isOngoing = banner === ongoing;
+    const actionBtn = !isOngoing
+      ? `<button class="btn primary btn-pill" onclick="push('auditDetails', {auditId:'${banner.audit_id}'})">Open Audit ${ICON.chevron}</button>`
+      : isFullyCounted
+        ? `<button class="btn primary btn-pill" onclick="push('auditSummary', {auditId:'${banner.audit_id}'})">View Audit Summary ${ICON.chevron}</button>`
+        : `<button class="btn primary btn-pill" onclick="resumeAudit('${banner.audit_id}')">Resume Audit ${ICON.chevron}</button>`;
+    bannerHtml = `
+      <div class="audit-banner">
+        <div class="audit-banner-field"><span class="l">Audit Name</span><span class="v">${banner.audit_name}</span></div>
+        <div class="audit-banner-field"><span class="l">Scheduled</span><span class="v">${fmtDate(banner.start_date)} to ${fmtDate(banner.end_date)}</span></div>
+        <div class="audit-banner-field"><span class="l">Total Locations</span><span class="v">${r.locTotal}</span></div>
+        <div class="audit-banner-field"><span class="l">Last Counted</span><span class="v">${ls ? ls.loc.code : '—'}</span></div>
+        ${actionBtn}
+      </div>`;
+  }
+
+  const totalAudits = myTasks.length;
+  const ongoingCount = myTasks.filter(a => uiStatus(a) === 'In Progress').length;
+  const completedCount = myTasks.filter(a => uiStatus(a) === 'Completed').length;
+  const sumLoc = myTasks.reduce((acc,a) => { const r = rollup(a.audit_id); acc.done += r.locDone; acc.total += r.locTotal; return acc; }, { done:0, total:0 });
+  const overallPct = sumLoc.total ? Math.round((sumLoc.done / sumLoc.total) * 100) : 0;
+
+  const overviewCard = `
+    <div class="card">
+      <div class="card-title-row"><h2>Audit Overview</h2><button class="btn outline small" onclick="push('tasks')">See All</button></div>
+      <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">Progress across all assigned audits</div>
+      <div class="overview-pct">${overallPct}%</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${overallPct}%;"></div></div>
+      <div class="overview-caption">${sumLoc.done}/${sumLoc.total} assigned locations counted</div>
+      <div class="overview-stats">
+        <div class="stat"><div class="v">${totalAudits}</div><div class="l">Total Audits</div></div>
+        <div class="stat"><div class="v">${ongoingCount}</div><div class="l">Ongoing</div></div>
+        <div class="stat"><div class="v">${completedCount}</div><div class="l">Completed</div></div>
+      </div>
+    </div>`;
+
+  let ongoingProjectCard;
+  if (ongoing) {
+    const r = rollup(ongoing.audit_id);
+    ongoingProjectCard = `
+      <div class="card">
+        <div class="card-title-row"><h2>Ongoing Audit</h2><button class="btn outline small" onclick="push('auditDetails', {auditId:'${ongoing.audit_id}'})">See Details</button></div>
+        <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">${ongoing.audit_id} · ${ongoing.audit_name}</div>
+        <div class="op-section-label" style="margin-top:14px; border-top:none; padding-top:0;">Inspection Details</div>
+        <div class="op-detail-grid">
+          <div><div class="l">Warehouse</div><div class="v">${INSPECTOR.warehouse}</div></div>
+          <div><div class="l">Scope</div><div class="v">${ongoing.scope_values.join(', ')}</div></div>
+          <div><div class="l">Total Bays</div><div class="v">${r.bayTotal}</div></div>
+          <div><div class="l">Pending Bays</div><div class="v">${r.bayTotal - r.bayDone}</div></div>
+        </div>
+        <div class="op-section-label">Location Counts</div>
+        <div class="op-detail-grid" style="grid-template-columns:repeat(2,1fr);">
+          <div><div class="l">Total Locations</div><div class="v">${r.locTotal}</div></div>
+          <div><div class="l">Pending Locations</div><div class="v">${r.locTotal - r.locDone}</div></div>
+        </div>
+      </div>`;
+  } else {
+    ongoingProjectCard = `<div class="card"><div class="empty-state" style="padding:22px 10px;"><div class="glyph">${ICON.box}</div><div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">No audit in progress</div><div style="font-size:var(--text-sm);">Open a task below to start one.</div></div></div>`;
+  }
+
+  const listRows = myTasks.map(a => {
+    const r = rollup(a.audit_id); const uis = uiStatus(a);
+    return `
+      <div class="audit-list-row" onclick="push('auditDetails', {auditId:'${a.audit_id}'})">
+        <span class="task-icon">${auditTypeIcon(a.audit_type)}</span>
+        <div class="task-info">
+          <div class="task-name">${a.audit_name}</div>
+          <div class="task-meta mono">${a.audit_id} · ${a.scope_values.join(', ')}</div>
+        </div>
+        <div class="audit-list-meta">
+          <span>Due ${fmtDate(a.end_date)}</span>
+          <span>${r.locTotal} locations</span>
+        </div>
+        <span class="pill ${pillClass(uis)}">${uis}</span>
+        <span class="chev">${ICON.chevron}</span>
+      </div>`;
+  }).join('');
+
+  return `
+    ${headerBlock({
+      title:'Dashboard', sub:`${INSPECTOR.name.split(' ')[0]} · ${INSPECTOR.warehouse}`, showBack:false, avatar:true,
+      menuItems:[
+        { label:'Refresh', action:"toast('Refreshed')" },
+        { label:'Settings', action:"toast('Settings')" },
+        { label:'Help', action:"toast('Help')" },
+        { label:'Log out', action:'goHome()' },
+      ]
+    })}
+    <div class="body-pad">
+      <div class="sync-line"><span class="dot"></span> All caught up <span class="time">Synced 2 min ago</span></div>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        ${bannerHtml}
+        <div class="overview-row">${overviewCard}${ongoingProjectCard}</div>
+        <div class="card">
+          <div class="card-title-row">
+            <div>
+              <h2>My Audit Tasks</h2>
+              <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">Total Audits : ${totalAudits}</div>
+            </div>
+            <button class="btn outline small" onclick="push('tasks')">View All Tasks</button>
+          </div>
+          <div class="audit-list">${listRows || `<div class="empty-state" style="padding:20px;"><div>No audits assigned.</div></div>`}</div>
+        </div>
+      </div>
+    </div>
+    ${renderTabBar('dashboard')}
+  `;
+}
+
 function auditTypeIcon(type){ return { 'Full':ICON.box, 'Cycle Count':ICON.sync, 'Spot Check':ICON.pin }[type] || ICON.box; }
 function taskCard(a){
   const uis = uiStatus(a);
+  if (STATE.device === 'tablet') {
+    // Flat single-row layout — icon, name/meta (grows), due date, status pill,
+    // chevron all as direct siblings so they align on one baseline with no
+    // leftover mid-row gap from the phone layout's nested row/footer split.
+    return `
+      <button class="task-card ${uis==='Overdue'?'overdue':''}" onclick="push('auditDetails', {auditId:'${a.audit_id}'})">
+        <span class="task-icon">${auditTypeIcon(a.audit_type)}</span>
+        <div class="task-info">
+          <div class="task-name">${a.audit_name}</div>
+          <div class="task-meta mono">${a.audit_id} · ${a.scope_values.join(', ')}</div>
+        </div>
+        <span class="task-due">Due ${fmtDate(a.end_date)}</span>
+        <span class="pill ${pillClass(uis)}">${uis}</span>
+        <span class="chev">${ICON.chevron}</span>
+      </button>
+    `;
+  }
   return `
     <button class="task-card ${uis==='Overdue'?'overdue':''}" onclick="push('auditDetails', {auditId:'${a.audit_id}'})">
       <div class="task-row">
@@ -1133,7 +1329,7 @@ function taskCard(a){
         <span class="chev">${ICON.chevron}</span>
       </div>
       <div class="task-footer">
-        <span class="task-due">${ICON.calendar} Due ${fmtDate(a.end_date)}</span>
+        <span class="task-due">Due ${fmtDate(a.end_date)}</span>
         <span class="pill ${pillClass(uis)}">${uis}</span>
       </div>
     </button>
@@ -1153,7 +1349,7 @@ function renderTasks(){
   });
 
   return `
-    ${headerBlock({ title:'My Audit Tasks', sub:`${myTasks.length} Assigned · ${INSPECTOR.warehouse}`, showBack: STATE.device!=='tablet',
+    ${headerBlock({ title:'My Audit Tasks', sub:`${myTasks.length} Assigned · ${INSPECTOR.warehouse}`, showBack: true,
       menuItems:[{label:'Sync Now', action:"toast('Synced')"},{label:'Settings', action:"toast('Settings')"}] })}
     <div class="body-pad">
       <div class="search-wrap">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
@@ -1415,7 +1611,7 @@ function renderAuditDetails(){
   }
 
   return `
-    ${headerBlock({ title:'Audit Details', sub:`${a.audit_id} · ${INSPECTOR.warehouse}`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title:'Audit Details', sub:`${a.audit_id} · ${INSPECTOR.warehouse}`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad" style="gap:0;">
       <div class="two-col">
         <div style="display:flex; flex-direction:column; gap:14px;">
@@ -1695,7 +1891,7 @@ function renderCountSheet(){
 
   if (!activeLoc) {
     return `
-      ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+      ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
       <div class="body-pad">
         <div>${picker.html}</div>
         <div class="empty-state" style="flex:1; justify-content:center;">
@@ -1711,7 +1907,7 @@ function renderCountSheet(){
   const locObj = findLoc(auditId, al, ar, ab, aloc);
   if (!locObj) {
     return `
-      ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+      ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
       <div class="body-pad">
         <div class="banner warn"><span class="dot"></span> That location isn't in your assigned scope. Pick a different one below.</div>
         <div>${picker.html}</div>
@@ -1788,7 +1984,7 @@ function renderCountSheet(){
     : '';
 
   return `
-    ${headerBlock({ title: aloc, sub:`${al} · Rack ${ar} · Bay ${ab} · Blind Count`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title: aloc, sub:`${al} · Rack ${ar} · Bay ${ab} · Blind Count`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
       <div class="sync-line"><span class="dot"></span> Online · Synced</div>
       <div class="card">
@@ -2009,7 +2205,7 @@ function renderQuickScan(){
   }
 
   return `
-    ${headerBlock({ title:'Quick Scan', sub:'Jump to any assigned location', showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title:'Quick Scan', sub:'Jump to any assigned location', showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">${body}</div>
     ${renderTabBar('scan')}
   `;
@@ -2059,7 +2255,7 @@ function renderProgress(){
   `).join('');
 
   return `
-    ${headerBlock({ title:'Audit Progress', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title:'Audit Progress', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
       <div class="banner info"><span class="dot"></span> Online · Synced</div>
       <div class="card"><div class="kpi-grid">
@@ -2109,10 +2305,14 @@ function renderAuditSummary(){
     </div>
   ` : '';
 
+  const nothingCounted = s.palletCount === 0;
+
   return `
-    ${headerBlock({ title:'Audit Summary', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: STATE.device!=='tablet', menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${headerBlock({ title:'Audit Summary', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
-      <div class="banner good"><span class="dot"></span> Audit fully counted — every assigned location has been completed.</div>
+      ${nothingCounted
+        ? `<div class="banner info"><span class="dot"></span> No locations counted yet — totals below will fill in as the inspector saves pallet records.</div>`
+        : `<div class="banner good"><span class="dot"></span> Audit fully counted — every assigned location has been completed.</div>`}
       <div class="card"><div class="kpi-grid">
         <div class="kpi"><span class="v">${r.rackDone}/${r.rackTotal}</span><span class="l">Racks</span></div>
         <div class="kpi"><span class="v">${r.bayDone}/${r.bayTotal}</span><span class="l">Bays</span></div>
@@ -2123,12 +2323,16 @@ function renderAuditSummary(){
         <div class="kpi"><span class="v">${s.lineCount}</span><span class="l">SKU Lines</span></div>
         <div class="kpi"><span class="v">${s.qtyTotal}</span><span class="l">Total Qty</span></div>
       </div></div>
-      ${conditionRows ? `
-        <div class="card">
-          <div class="card-title-row" style="margin-bottom:14px;"><h2>Condition Breakdown</h2></div>
-          <div class="kv-list">${conditionRows}</div>
-        </div>` : ''}
-      ${flaggedBlock}
+      ${nothingCounted ? `
+        <div class="card"><div class="empty-state" style="padding:26px 10px;"><div class="glyph">${ICON.box}</div><div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">Nothing counted yet</div><div style="font-size:var(--text-sm);">Condition breakdown and flagged items will show up here once pallets are saved.</div></div></div>
+      ` : `
+        ${conditionRows ? `
+          <div class="card">
+            <div class="card-title-row" style="margin-bottom:14px;"><h2>Condition Breakdown</h2></div>
+            <div class="kv-list">${conditionRows}</div>
+          </div>` : ''}
+        ${flaggedBlock}
+      `}
       ${a.status === 'Submitted' ? `<div class="banner good"><span class="dot"></span> Already submitted — this is a read-only summary.</div>` : ''}
     </div>
     <div class="body-pad" style="padding-top:0;">
