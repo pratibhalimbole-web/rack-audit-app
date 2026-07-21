@@ -2116,8 +2116,8 @@ function renderCountSheet(){
             <div class="card-title-row" style="margin-bottom:14px;"><h2>SKU / Lot Details</h2></div>
             <div class="sku-grid">${skuCards}</div>
           ` : ''}
-          <div class="scan-block">
-            <div class="glyph-circle">${ICON.camera}</div>
+          <div class="scan-block" style="border-radius:var(--radius-lg); padding:14px; gap:8px;">
+            <div class="glyph-circle" style="width:38px; height:38px;">${ICON.camera}</div>
             <span style="font-size:var(--text-sm); color:var(--muted-foreground);">${scan.lines.length ? 'Scan the next SKU' : 'No SKU scanned yet'}</span>
             <button class="btn small primary" onclick="scanSku()">Scan SKU</button>
           </div>
