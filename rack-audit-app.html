@@ -430,15 +430,16 @@
   /* Modern edit card, v3: identity uses an icon avatar + inline lot badge instead
      of a form-like bordered grid, and quantity/condition each sit on their own
      tinted surface block — grouping comes from color contrast, not rule lines. */
-  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; box-shadow:var(--shadow-card);}
-  .sku-card.active{border-color:var(--brand-navy); box-shadow:0 0 0 3px var(--accent-blue-soft);}
-  .sku-row-collapsed{width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-2xl); padding:13px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; box-shadow:var(--shadow-card); text-align:left; transition:transform .1s ease;}
+  .sku-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px; display:flex; flex-direction:column; gap:12px; position:relative; box-shadow:var(--shadow-card); width:100%;}
+  .sku-card.active{border-color:var(--brand-navy); box-shadow:0 0 0 3px var(--accent-blue-soft); grid-column:1 / -1;}
+  .sku-row-collapsed{width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 12px; display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-card); text-align:left; transition:transform .1s ease;}
   .sku-row-collapsed:active{transform:scale(.98);}
-  .sku-row-right{display:flex; align-items:center; gap:12px; flex-shrink:0;}
+  .sku-row-right{display:flex; align-items:center; gap:12px; flex-shrink:0; margin-left:auto;}
   .sku-row-qty{font:700 13px var(--font-mono); color:var(--muted-foreground);}
   .sku-row-edit{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--accent-blue-strong); background:var(--accent-blue-soft); padding:6px 10px; border-radius:999px;}
   .sku-card-head{display:flex; align-items:center; gap:12px;}
   .sku-avatar{width:40px; height:40px; border-radius:var(--radius-xl); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .sku-avatar.sm{width:34px; height:34px; border-radius:var(--radius-lg);}
   .sku-id{min-width:0; flex-shrink:1; display:flex; flex-direction:column; gap:5px;}
   .sku-code{font:800 15.5px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
@@ -2058,6 +2059,7 @@ function renderCountSheet(){
     </div>
   ` : `
     <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
+      <span class="sku-avatar sm">${ICON.box}</span>
       <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
       <div class="sku-row-right">
         <span class="sku-row-qty">Qty ${line.qty}</span>
@@ -2076,6 +2078,7 @@ function renderCountSheet(){
         const isOpen = STATE.expandedSavedPallet === p.pallet;
         const header = `
           <button type="button" class="sku-row-collapsed" onclick="toggleSavedPallet('${p.pallet}')">
+            <span class="sku-avatar sm">${ICON.box}</span>
             <div class="sku-id"><div class="sku-code">${p.pallet}</div><div class="sku-lot">${p.lines.length} SKU${p.lines.length===1?'':'s'}</div></div>
             <div class="sku-row-right"><span class="sku-row-edit">${isOpen ? ICON.check + ' Done' : ICON.pencil + ' Edit'}</span></div>
           </button>`;
@@ -2117,7 +2120,10 @@ function renderCountSheet(){
       <div style="display:flex; flex-direction:column; gap:14px;">
         ${scan.lines.length ? `
           <div class="card" style="border-radius:var(--radius-lg); padding:14px;">
-            <div class="card-title-row" style="margin-bottom:14px;"><h2>SKU / Lot Details</h2></div>
+            <div class="insp-section-label" style="margin-bottom:14px;">
+              <span class="icon-box">${ICON.box}</span>SKU / Lot Details
+              <span class="acc-badge" style="margin-left:auto;">${scan.lines.length} scanned</span>
+            </div>
             <div class="sku-grid">${skuCards}</div>
           </div>
         ` : ''}
