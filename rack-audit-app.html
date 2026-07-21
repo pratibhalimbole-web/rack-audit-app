@@ -993,10 +993,15 @@ let STATE = {
 function toggleDetailSection(key){ STATE.auditDetailsClosed[key] = !STATE.auditDetailsClosed[key]; render(); }
 function isDetailSectionOpen(key){ return !STATE.auditDetailsClosed[key]; }
 
-function push(screen, params){ STATE.stack.push(screen); STATE.params = params || {}; STATE.menuOpen = false; render(); scrollTop(); }
-function back(){ if (STATE.stack.length > 1) STATE.stack.pop(); STATE.menuOpen = false; render(); scrollTop(); }
-function goHome(){ if (sb) sb.auth.signOut(); STATE.stack = ['login']; STATE.scan = null; render(); scrollTop(); }
-function railTo(screen, params){ STATE.stack = ['dashboard']; if (screen !== 'dashboard') STATE.stack.push(screen); STATE.params = params || {}; render(); scrollTop(); }
+// Remembers where you were across a page refresh (only while an actual
+// logged-in Supabase session exists — see boot() below) so a reload lands
+// back on the same screen instead of forcing login + re-navigation every
+// time. Cleared on logout so a fresh session always starts at login.
+function saveNav(){ sessionStorage.setItem('navState', JSON.stringify({ stack: STATE.stack, params: STATE.params })); }
+function push(screen, params){ STATE.stack.push(screen); STATE.params = params || {}; STATE.menuOpen = false; saveNav(); render(); scrollTop(); }
+function back(){ if (STATE.stack.length > 1) STATE.stack.pop(); STATE.menuOpen = false; saveNav(); render(); scrollTop(); }
+function goHome(){ if (sb) sb.auth.signOut(); STATE.stack = ['login']; STATE.scan = null; sessionStorage.removeItem('navState'); render(); scrollTop(); }
+function railTo(screen, params){ STATE.stack = ['dashboard']; if (screen !== 'dashboard') STATE.stack.push(screen); STATE.params = params || {}; saveNav(); render(); scrollTop(); }
 function scrollTop(){ const s = document.getElementById('screen'); if (s) s.scrollTop = 0; }
 function toggleMenu(){ STATE.menuOpen = !STATE.menuOpen; render(); }
 function syncNow(btn){
@@ -1009,7 +1014,7 @@ async function doLogin(){
   const { error } = await sb.auth.signInWithPassword({ email: STATE.loginEmail, password: STATE.loginPassword });
   if (error) { STATE.authBusy = false; STATE.loginError = error.message; render(); return; }
   await loadAllData();
-  STATE.authBusy = false; STATE.stack = ['dashboard']; render(); scrollTop();
+  STATE.authBusy = false; STATE.stack = ['dashboard']; saveNav(); render(); scrollTop();
 }
 
 function toast(msg, type){
@@ -2108,21 +2113,19 @@ function renderCountSheet(){
         ${picker.html}
       </div>
       ${savedSummary}
-      <div class="two-col">
-        <div style="display:flex; flex-direction:column; gap:14px;">${scanSection}</div>
-        ${!readOnly ? `
-        <div style="display:flex; flex-direction:column; gap:14px;">
-          ${scan.lines.length ? `
+      ${readOnly ? `<div style="display:flex; flex-direction:column; gap:14px;">${scanSection}</div>` : `
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        ${scan.lines.length ? `
+          <div class="card" style="border-radius:var(--radius-lg); padding:14px;">
             <div class="card-title-row" style="margin-bottom:14px;"><h2>SKU / Lot Details</h2></div>
             <div class="sku-grid">${skuCards}</div>
-          ` : ''}
-          <div class="scan-block" style="border-radius:var(--radius-lg); padding:14px; gap:8px;">
-            <div class="glyph-circle" style="width:38px; height:38px;">${ICON.camera}</div>
-            <span style="font-size:var(--text-sm); color:var(--muted-foreground);">${scan.lines.length ? 'Scan the next SKU' : 'No SKU scanned yet'}</span>
-            <button class="btn small primary" onclick="scanSku()">Scan SKU</button>
           </div>
-        </div>` : ''}
-      </div>
+        ` : ''}
+        <div class="scan-block" style="border-radius:var(--radius-lg); padding:14px; gap:8px;">
+          <div class="glyph-circle" style="width:38px; height:38px;">${ICON.camera}</div>
+          <button class="btn small primary" onclick="scanSku()">Scan SKU</button>
+        </div>
+      </div>`}
     </div>
     <div class="footer-bar">
       <button class="btn outline" onclick="push('progress', {auditId:'${auditId}'})">View Progress</button>
@@ -2638,5 +2641,26 @@ function renderCameraOverlay(){
   startCameraStream();
 }
 
-render();
+// Boot: if Supabase already has a persisted session (survives a page
+// refresh by default), skip the login screen and jump straight back to
+// wherever the nav was left via saveNav(). Falls back to the login screen
+// on ANY failure here (network hiccup, storage error, etc.) — render()
+// must always run, or the page is left permanently blank.
+(async function boot(){
+  try {
+    if (sb) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) {
+        await loadAllData();
+        const saved = JSON.parse(sessionStorage.getItem('navState') || 'null');
+        STATE.stack = (saved && saved.stack && saved.stack[0] !== 'login') ? saved.stack : ['dashboard'];
+        STATE.params = (saved && saved.params) || {};
+      }
+    }
+  } catch (e) {
+    console.error('boot() session restore failed, falling back to login', e);
+    STATE.stack = ['login'];
+  }
+  render();
+})();
 </script>
