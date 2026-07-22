@@ -266,9 +266,15 @@
   .btn.small{height:38px; padding:0 14px; font-size:var(--text-sm); width:auto;}
 
   .sticky-actions{position:sticky; bottom:0; background:linear-gradient(to top, var(--muted) 70%, transparent); padding:16px 0 4px; margin-top:auto; display:flex; flex-direction:column; gap:8px;}
-  .footer-bar{position:sticky; bottom:0; margin-top:auto; display:flex; width:100%; border-top:1px solid var(--border); background:var(--table-surface);}
-  .footer-bar .btn{flex:1; height:56px; border-radius:0; font-weight:700;}
-  .footer-bar .btn.outline{border:none; border-right:1px solid var(--border);}
+  /* Mobile: stacked floating pills (primary on top, outline below), same
+     language as .sticky-actions and the dashboard's Resume/Start Audit pills —
+     .btn's own border-radius:999px is left alone instead of being flattened.
+     Sits in normal flow (not pinned to the viewport bottom) with no filled
+     background, so it reads as part of the page rather than a fixed toolbar.
+     Tablet keeps its own look via the .device.tablet override below, since
+     mobile and tablet footer bars are meant to stay independent. */
+  .footer-bar{margin-top:auto; display:flex; flex-direction:column-reverse; gap:10px; width:100%; padding:14px 20px;}
+  .footer-bar .btn{height:52px; font-weight:700;}
 
   .search-wrap{display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--border); border-radius:999px; padding:11px 16px; box-shadow:var(--shadow-press);}
   .search-wrap input{flex:1; border:none; background:none; font-size:var(--text-base); outline:none; color:var(--foreground);}
@@ -348,15 +354,27 @@
   .device.tablet .insp-grid{grid-template-columns:repeat(4,1fr);}
 
   .bay-summary-row{display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-top:6px;}
+  /* Mobile-only: forces Total Bay / Completed / Pending onto one row instead of
+     wrapping — shorter gap + no-wrap + shrinkable legend text fit it in the
+     narrower width. Tablet keeps its own .bay-summary-row wrap behavior above. */
+  .bay-summary-row-nowrap{flex-wrap:nowrap; gap:10px; overflow-x:auto;}
+  .bay-summary-row-nowrap .bay-summary-count{flex-shrink:0;}
+  .bay-summary-row-nowrap .bay-legend{flex-shrink:0; white-space:nowrap;}
   .bay-summary-count{display:flex; align-items:center; gap:10px;}
   .bay-summary-count .badge{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-weight:800; font-size:var(--text-sm); padding:4px 12px; border-radius:var(--radius-lg);}
   .bay-legend{display:flex; align-items:center; gap:6px; font-size:var(--text-xs); color:var(--muted-foreground); font-weight:600;}
   .bay-legend .dot{width:10px; height:10px; border-radius:999px; flex-shrink:0;}
   .bay-legend .dot.done{background:var(--rag-green-soft); border:1.5px solid var(--rag-green);}
   .bay-legend .dot.pending{background:var(--muted); border:1.5px solid var(--border);}
-  .bay-pill-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:16px 20px; margin-top:20px;}
-  .device.tablet .bay-pill-grid{grid-template-columns:repeat(7, 1fr);}
-  .bay-pill{text-align:center; padding:14px 16px; border-radius:999px; font-weight:700; font-size:var(--text-sm); border:1px solid transparent; cursor:pointer; transition:transform .12s ease;}
+  /* Mobile: a fixed grid column forced every bay code into an equal-width
+     cell, and the 999px radius on that fixed box turned it into a circle
+     rather than a pill — long codes like "E-01-01" wrapped to two lines
+     inside a circle. Flex-wrap + content-sized padding (same pattern as
+     .cond-chip-row) lets each capsule size to its own text on one line, at
+     any code length. Tablet keeps its original circle grid via the
+     .device.tablet override below — mobile and tablet stay independent. */
+  .bay-pill-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:20px;}
+  .bay-pill{display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; padding:7px 12px; border-radius:999px; font-weight:700; font-size:12.5px; font-family:var(--font-mono); border:1px solid transparent; cursor:pointer; transition:transform .12s ease;}
   .bay-pill:active{transform:scale(.95);}
   .bay-pill.done{background:var(--rag-green-soft); color:var(--rag-green-strong); border-color:var(--rag-green-border);}
   .bay-pill.pending{background:var(--muted); color:var(--muted-foreground); border-color:var(--border);}
@@ -374,6 +392,7 @@
 
   .field{display:flex; flex-direction:column; gap:5px;}
   .field label{font-size:var(--text-sm); font-weight:700; color:var(--muted-foreground);}
+  .loc-picker-toprow{display:flex; flex-direction:column; gap:12px;}
   .select-wrap{position:relative;}
   select{width:100%; appearance:none; background:var(--input-background); border:1px solid var(--border); border-radius:12px; padding:11px 34px 11px 12px; font-size:var(--text-base); font-weight:600; color:var(--foreground);}
   .select-wrap .chev{position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--slate-400);}
@@ -536,6 +555,17 @@
   .device.tablet .ongoing-action .btn{width:auto; white-space:nowrap;}
   .device.tablet .sticky-actions{flex-direction:row;}
   .device.tablet .sticky-actions .btn{width:auto; flex:1;}
+  /* Tablet footer bar keeps its original sticky, filled, joined edge-to-edge
+     look — only mobile's base .footer-bar rule above was redesigned into
+     stacked, non-sticky, unfilled pills. */
+  .device.tablet .footer-bar{position:sticky; bottom:0; flex-direction:row; gap:0; padding:0; border-top:1px solid var(--border); background:var(--table-surface);}
+  /* Tablet keeps its original fixed 7-column circle grid for bay codes —
+     only mobile's base .bay-pill/.bay-pill-grid rules above were redesigned
+     into flex-wrap, single-line chips. */
+  .device.tablet .bay-pill-grid{display:grid; grid-template-columns:repeat(7, 1fr); gap:16px 20px;}
+  .device.tablet .bay-pill{display:block; text-align:center; padding:14px 16px; white-space:normal; font-family:var(--font-body);}
+  .device.tablet .footer-bar .btn{flex:1; height:56px; border-radius:0; font-weight:700;}
+  .device.tablet .footer-bar .btn.outline{border:none; border-right:1px solid var(--border);}
   .device.tablet .tabbar{position:sticky; bottom:0; max-width:none; margin:0; width:100%; border-radius:0; border:none; border-top:1px solid var(--border); background:var(--card); backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none; padding:10px 12px; gap:0;}
   .device.tablet .tabbar-item{flex:1 1 0; gap:4px;}
   .device.tablet .tabbar-item .icon-slot{width:auto; height:auto; background:none !important;}
@@ -551,6 +581,11 @@
   .device.tablet .sheet-header{padding:12px 14px 8px;}
   .device.tablet .sheet-search{margin:0 14px 8px;}
   .device.tablet .sheet-list{padding:4px 8px 10px;}
+  /* Layout/Rack/Bay/Storage Location + scan button read as one compact row on
+     tablet, instead of stacking full-width like the mobile picker — avoids
+     forcing a scroll just to pick a location when there's ample width to spare. */
+  .device.tablet .loc-picker-toprow{flex-direction:row; flex-wrap:wrap; align-items:flex-end;}
+  .device.tablet .loc-picker-toprow .field{flex:1 1 160px; min-width:0;}
 
   /* Success/error/info toasts reuse the same rag-color tokens and pill shape as
      the rest of the design system (.banner, .pill, .btn-pill) — a flat dark bar
@@ -1476,19 +1511,19 @@ function initLocSelect(auditId){
   return { auditId, layout, rack, bay, loc };
 }
 
-function pickerRow(label, displayValue, tag, onOpen, required){
+function pickerRow(label, displayValue, tag, onOpen, required, scanned, id){
   const isEmpty = !displayValue;
-  return `<div class="field"><label>${label}${required ? ' *' : ''}</label>
+  return `<div class="field"${id ? ` id="${id}"` : ''}><label>${label}${required ? ' *' : ''}</label>
     <button class="picker-btn" onclick="${onOpen}">
       <span class="mono" style="${isEmpty ? 'color:var(--muted-foreground); font-weight:500;' : ''}">${isEmpty ? `Select ${label}` : displayValue}</span>
-      <span style="display:flex; align-items:center; gap:8px;">${tag ? `<span class="pill ${locStatusPillClass(tag)}">${tag}</span>` : ''}<span class="chevronDown">${ICON.chevronDown}</span></span>
+      <span style="display:flex; align-items:center; gap:8px;">${tag ? `<span class="pill ${locStatusPillClass(tag)}">${tag}</span>` : ''}${scanned ? ICON.checkSm : ''}<span class="chevronDown">${ICON.chevronDown}</span></span>
     </button>
   </div>`;
 }
 // Same shape as pickerRow but for a level with only one option — reads as the
 // same field list, just muted/non-interactive instead of a different-looking box.
-function fixedFieldRow(label, displayValue, required){
-  return `<div class="field"><label>${label}${required ? ' *' : ''}</label>
+function fixedFieldRow(label, displayValue, required, id){
+  return `<div class="field"${id ? ` id="${id}"` : ''}><label>${label}${required ? ' *' : ''}</label>
     <div class="picker-btn fixed">
       <span class="mono">${displayValue}</span>
     </div>
@@ -1542,12 +1577,12 @@ function scanStorageLocationFieldSimulated(auditId){
   render();
 }
 
-// The "select manual / scan QR" location picker — lives permanently at the top
-// of Count Sheet (before and during counting, not a separate step). Reads and
-// writes STATE.locSelect / STATE.locScan / STATE.locMode — the caller is
-// responsible for having those already initialized for the right auditId.
-function buildLocationPicker(auditId, opts){
-  const required = Boolean(opts && opts.requiredLabels);
+// Builds each of the 4 field fragments with stable ids (picker-slot-layout/
+// rack/bay/loc, plus picker-slot-loc-scan for tablet's inline scan button) so
+// a downstream-only pick (see refreshDownstreamPickerSlots) can replace just
+// the fields that actually changed and leave the untouched ones' DOM nodes
+// completely alone — no flicker on fields whose value didn't move.
+function computeLocationFieldParts(auditId, isTablet, required){
   const { layouts, layoutObj, racks, rackObj, bayObj } = getLocContext(auditId);
   const sel = STATE.locSelect;
 
@@ -1560,29 +1595,110 @@ function buildLocationPicker(auditId, opts){
   // most audits are assigned exactly one layout (fixed), but a Layout-scoped
   // audit can be assigned several, and then this genuinely opens as a picker.
   const layoutField = layouts.length === 0 ? '' : layoutFixed
-    ? fixedFieldRow('Layout', layouts[0].name, required)
-    : pickerRow('Layout', sel.layout, null, `openLocationSheet('${auditId}', 'layout', this)`, required);
+    ? fixedFieldRow('Layout', layouts[0].name, required, 'picker-slot-layout')
+    : pickerRow('Layout', sel.layout, null, `openLocationSheet('${auditId}', 'layout', this)`, required, false, 'picker-slot-layout');
 
-  const rackField = !layoutObj ? '' : rackFixed
-    ? fixedFieldRow('Rack', `Rack ${racks[0].code}`, required)
-    : pickerRow('Rack', sel.rack ? `Rack ${sel.rack}` : null, null, `openLocationSheet('${auditId}', 'rack', this)`, required);
+  // A field with no upstream selection yet (no rackObj/bayObj) still renders an
+  // empty, hidden placeholder carrying its slot id — refreshDownstreamPickerSlots
+  // does an outerHTML *replace*, which needs a node already in the DOM to target;
+  // without this placeholder, a field that only becomes eligible after picking
+  // its parent (e.g. Bay only exists once a Rack is chosen) would compute fine
+  // but have nowhere to be inserted, and silently never appear.
+  const rackField = !layoutObj
+    ? `<div class="field" id="picker-slot-rack" style="display:none;"></div>`
+    : rackFixed
+      ? fixedFieldRow('Rack', `Rack ${racks[0].code}`, required, 'picker-slot-rack')
+      : pickerRow('Rack', sel.rack ? `Rack ${sel.rack}` : null, null, `openLocationSheet('${auditId}', 'rack', this)`, required, false, 'picker-slot-rack');
 
-  const bayField = !rackObj ? '' : bayFixed
-    ? fixedFieldRow('Bay', `Bay ${rackObj.bays[0].code}`, required)
-    : pickerRow('Bay', sel.bay ? `Bay ${sel.bay}` : null, null, `openLocationSheet('${auditId}', 'bay', this)`, required);
+  const bayField = !rackObj
+    ? `<div class="field" id="picker-slot-bay" style="display:none;"></div>`
+    : bayFixed
+      ? fixedFieldRow('Bay', `Bay ${rackObj.bays[0].code}`, required, 'picker-slot-bay')
+      : pickerRow('Bay', sel.bay ? `Bay ${sel.bay}` : null, null, `openLocationSheet('${auditId}', 'bay', this)`, required, false, 'picker-slot-bay');
 
-  const locField = !bayObj ? '' : locFixed
-    ? fixedFieldRow('Storage Location', bayObj.locations[0].code, required)
-    : buildStorageLocationField(auditId, bayObj, sel, required);
+  // Tablet has room to fold the Storage Location scan into a small icon button
+  // next to its dropdown instead of the OR-divider + big dashed scan block —
+  // the dropdown already shows sel.loc's value regardless of how it got set, so
+  // a separate "Scanned" confirmation card would just be duplicate real estate;
+  // a checkmark on the dropdown itself (via pickerRow's `scanned` param) covers it.
+  let locField = '', locScanBtn = '';
+  if (!bayObj) {
+    locField = `<div class="field" id="picker-slot-loc" style="display:none;"></div>`;
+  } else if (locFixed) {
+    locField = fixedFieldRow('Storage Location', bayObj.locations[0].code, required, 'picker-slot-loc');
+  } else if (isTablet) {
+    const tag = (bayObj.locations.find(l => l.code === sel.loc) || {}).status;
+    locField = pickerRow('Storage Location', sel.loc, tag, `openLocationSheet('${auditId}', 'loc', this)`, required, sel.locScanned, 'picker-slot-loc');
+    locScanBtn = `<div class="field" id="picker-slot-loc-scan" style="flex:0 0 auto;"><label style="visibility:hidden;">Scan</label>
+      <button type="button" class="card-icon-btn" title="Scan Storage Location" aria-label="Scan Storage Location" onclick="scanStorageLocationField('${auditId}')">${ICON.camera}</button>
+    </div>`;
+  } else {
+    locField = buildStorageLocationField(auditId, bayObj, sel, required);
+  }
+
+  return { layoutField, rackField, bayField, locField, locScanBtn };
+}
+
+// Tablet-only surgical update: replaces only the field DOM nodes from
+// `fromField` onward (layout→rack→bay→loc) after a pick that leaves the
+// location still incomplete — see chooseSheetOption. Everything before
+// `fromField` is never touched, so already-settled fields never flicker.
+function refreshDownstreamPickerSlots(auditId, fromField){
+  const order = ['layout', 'rack', 'bay', 'loc'];
+  const startIdx = order.indexOf(fromField);
+  if (startIdx === -1) return false;
+  // Only ever called while the location is still incomplete (see
+  // chooseSheetOption's wasComplete/isComplete guard), so labels are required
+  // the same way renderCountSheet's initial `requiredLabels: !activeLoc` is.
+  const parts = computeLocationFieldParts(auditId, true, true);
+  const htmlByField = { layout: parts.layoutField, rack: parts.rackField, bay: parts.bayField, loc: parts.locField };
+  let touchedAny = false;
+  order.slice(startIdx).forEach(key => {
+    const el = document.getElementById(`picker-slot-${key}`);
+    if (!el) return;
+    // outerHTML replace (not innerHTML) because a field's own shape can change
+    // between a muted "fixed" box and a real dropdown depending on the newly
+    // resolved upstream selection (e.g. a rack with only one bay vs several).
+    el.outerHTML = htmlByField[key];
+    touchedAny = true;
+  });
+  // The scan icon button isn't nested inside picker-slot-loc (it's a sibling
+  // flex item), and whether it exists at all depends on whether the resolved
+  // bay has more than one Storage Location — always drop the old one and
+  // reinsert fresh rather than trying to diff "was there, still is / wasn't,
+  // now is" by hand.
+  const existingScanEl = document.getElementById('picker-slot-loc-scan');
+  if (existingScanEl) existingScanEl.remove();
+  const locEl = document.getElementById('picker-slot-loc');
+  if (parts.locScanBtn && locEl) locEl.insertAdjacentHTML('afterend', parts.locScanBtn);
+  return touchedAny;
+}
+
+// The "select manual / scan QR" location picker — lives permanently at the top
+// of Count Sheet (before and during counting, not a separate step). Reads and
+// writes STATE.locSelect / STATE.locScan / STATE.locMode — the caller is
+// responsible for having those already initialized for the right auditId.
+function buildLocationPicker(auditId, opts){
+  const required = Boolean(opts && opts.requiredLabels);
+  const isTablet = STATE.device === 'tablet';
+  const sel = STATE.locSelect;
+  const { layoutField, rackField, bayField, locField, locScanBtn } = computeLocationFieldParts(auditId, isTablet, required);
 
   const scan = STATE.locScan;
   const canGo = STATE.locMode === 'scan'
     ? Boolean(scan.code)
     : Boolean(sel.layout && sel.rack && sel.bay && sel.loc);
-  const modeToggle = `<div class="segmented" style="width:100%; margin-bottom:14px;">
-    <button class="${STATE.locMode==='manual'?'active':''}" style="flex:1;" onclick="setLocMode('manual')">Select Manually</button>
-    <button class="${STATE.locMode==='scan'?'active':''}" style="flex:1;" onclick="setLocMode('scan')">Scan QR Code</button>
-  </div>`;
+  // Tablet: compact, content-width toggle instead of the mobile full-bleed bar —
+  // there's no need to stretch it edge-to-edge when the row below it isn't full-width either.
+  const modeToggle = isTablet
+    ? `<div class="segmented" style="margin-bottom:14px;">
+        <button class="${STATE.locMode==='manual'?'active':''}" onclick="setLocMode('manual')">Select Manually</button>
+        <button class="${STATE.locMode==='scan'?'active':''}" onclick="setLocMode('scan')">Scan QR Code</button>
+      </div>`
+    : `<div class="segmented" style="width:100%; margin-bottom:14px;">
+        <button class="${STATE.locMode==='manual'?'active':''}" style="flex:1;" onclick="setLocMode('manual')">Select Manually</button>
+        <button class="${STATE.locMode==='scan'?'active':''}" style="flex:1;" onclick="setLocMode('scan')">Scan QR Code</button>
+      </div>`;
 
   let scanBlock = '';
   if (STATE.locMode === 'scan') {
@@ -1610,14 +1726,23 @@ function buildLocationPicker(auditId, opts){
     }
   }
 
+  // Mobile keeps the "Select location" caption above the toggle; on tablet the
+  // card's own "Location" header (in renderCountSheet) already says this.
+  const introLabel = isTablet ? '' : `<div style="font-weight:700; font-size:var(--text-base); color:var(--foreground); margin-bottom:12px;">Select location</div>`;
+
+  const manualFields = !layoutField
+    ? `<div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-bottom:16px;">No location hierarchy is attached to this audit yet.</div>`
+    : isTablet
+      ? `<div class="loc-picker-toprow" style="margin-bottom:14px;">${layoutField}${rackField}${bayField}${locField}${locScanBtn}</div>`
+      : `<div class="loc-picker-row" style="display:flex; flex-direction:column; gap:12px; margin-bottom:14px;">
+          <div class="loc-picker-toprow" style="margin-bottom:0;">${layoutField}${rackField}${bayField}</div>
+          ${locField}
+        </div>`;
+
   const html = `
-    <div style="font-weight:700; font-size:var(--text-base); color:var(--foreground); margin-bottom:12px;">Select location</div>
+    ${introLabel}
     ${modeToggle}
-    ${STATE.locMode === 'manual' ? (
-      layouts.length === 0 ? `<div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-bottom:16px;">No location hierarchy is attached to this audit yet.</div>` : `
-      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:14px;">${layoutField}${rackField}${bayField}${locField}</div>
-      `
-    ) : scanBlock}
+    ${STATE.locMode === 'manual' ? manualFields : scanBlock}
   `;
 
   return { html, canGo };
@@ -1626,6 +1751,7 @@ function buildLocationPicker(auditId, opts){
 function renderAuditDetails(){
   const a = AUDITS.find(x => x.audit_id === STATE.params.auditId);
   if (!a) return renderTasks();
+  const isTablet = STATE.device === 'tablet';
   const r = rollup(a.audit_id);
   const uis = uiStatus(a);
   const remaining = r.locTotal - r.locDone;
@@ -1707,12 +1833,31 @@ function renderAuditDetails(){
     `;
   }).join('') : `<div class="bay-pill-grid">${flatBays.length ? flatBays.map(bayPill).join('') : `<div class="empty-state" style="padding:12px 0;"><div>No bays in scope yet.</div></div>`}</div>`;
 
-  const bayGridBlock = `
+  // Mobile's narrower width wrapped "Inspection Completed"/"Inspection Pending"
+  // onto their own rows below "Total Bay" — shorter labels plus a no-wrap row
+  // keep it on one line there. Tablet has the room for the fuller wording and
+  // already fits on one line, so it keeps its original labels/wrap behavior.
+  const completedLabel = isTablet ? 'Inspection Completed' : 'Completed';
+  const pendingLabel = isTablet ? 'Inspection Pending' : 'Pending';
+  // Mobile: Total Bay sits on its own top row, with Completed/Pending together
+  // on a second row below it — reads better in the narrower width than all
+  // three squeezed onto one line. Tablet has the room to keep everything on
+  // one row, so its layout/wording stay exactly as they were.
+  const bayGridBlock = isTablet ? `
     <div class="card">
       <div class="bay-summary-row">
         <div class="bay-summary-count"><span class="icon-box">${ICON.box}</span><strong>Total Bay :</strong> <span class="badge">${flatBays.length}</span></div>
-        <div class="bay-legend"><span class="dot done"></span>Inspection Completed : ${String(bayDoneCount).padStart(2,'0')}</div>
-        <div class="bay-legend"><span class="dot pending"></span>Inspection Pending : ${String(bayPendingCount).padStart(2,'0')}</div>
+        <div class="bay-legend"><span class="dot done"></span>${completedLabel} : ${String(bayDoneCount).padStart(2,'0')}</div>
+        <div class="bay-legend"><span class="dot pending"></span>${pendingLabel} : ${String(bayPendingCount).padStart(2,'0')}</div>
+      </div>
+      ${bayBody}
+    </div>
+  ` : `
+    <div class="card">
+      <div class="bay-summary-count"><span class="icon-box">${ICON.box}</span><strong>Total Bay :</strong> <span class="badge">${flatBays.length}</span></div>
+      <div class="bay-summary-row bay-summary-row-nowrap" style="margin-top:10px;">
+        <div class="bay-legend"><span class="dot done"></span>${completedLabel} : ${String(bayDoneCount).padStart(2,'0')}</div>
+        <div class="bay-legend"><span class="dot pending"></span>${pendingLabel} : ${String(bayPendingCount).padStart(2,'0')}</div>
       </div>
       ${bayBody}
     </div>
@@ -1897,10 +2042,14 @@ function anchorRectFor(btnEl){
   const deviceRect = deviceEl.getBoundingClientRect();
   return { top: btnRect.bottom - deviceRect.top + 6, left: btnRect.left - deviceRect.left, width: btnRect.width };
 }
-function closeSheet(){ STATE.sheet = null; render(); }
+// STATE.sheet only feeds renderSheetOverlay/#sheet-slot — nothing in the
+// underlying screen reads it — so dismissing the dropdown (backdrop tap or the
+// X) only needs that one slot updated, not a full-screen re-render.
+function closeSheet(){ STATE.sheet = null; renderSheetOverlay(); }
 function chooseSheetOption(value){
   const { auditId, field } = STATE.sheet;
   const sel = STATE.locSelect;
+  const wasComplete = Boolean(sel.layout && sel.rack && sel.bay && sel.loc);
   sel.locScanned = false;
   if (field === 'layout') sel.layout = value;
   if (field === 'rack') sel.rack = value;
@@ -1929,7 +2078,19 @@ function chooseSheetOption(value){
   }
 
   STATE.sheet = null;
-  render();
+  const isComplete = Boolean(sel.layout && sel.rack && sel.bay && sel.loc);
+  // Tablet, still mid-selection (incomplete before AND after this pick): only
+  // the field just picked and whatever comes after it in the Layout→Rack→Bay→
+  // Storage Location chain actually changed — swap just those DOM nodes and
+  // leave the rest of the row (and the whole rest of the screen) untouched.
+  // Once the location completes/un-completes, or a Storage Location pick swaps
+  // an already-complete location's data, that's a real screen-level change and
+  // falls through to the normal full render().
+  if (STATE.device === 'tablet' && !wasComplete && !isComplete && refreshDownstreamPickerSlots(auditId, field)) {
+    renderSheetOverlay();
+  } else {
+    render();
+  }
 }
 
 function findLoc(auditId, layout, rack, bay, locCode){
@@ -2007,14 +2168,44 @@ function renderCountSheet(){
   const activeLoc = STATE.locMode === 'scan'
     ? STATE.locScan.code
     : (sel.layout && sel.rack && sel.bay && sel.loc ? sel : null);
+  const isTablet = STATE.device === 'tablet';
 
   // Picker is ALWAYS rendered, at the top, for the whole session on this screen —
   // this is the actual fix: no separate "next page" or hidden toggle to switch
   // location mid-count, it's just always right there.
   const picker = buildLocationPicker(auditId, { requiredLabels: !activeLoc });
 
+  // Tablet keeps one constant header + one constant "Location" card shell across
+  // every state (no location yet / invalid location / actively counting) — on
+  // mobile, completing the location swaps the header to the location's own
+  // title, which reads fine on a single-focus phone screen but feels like a
+  // full page navigation on tablet where the picker row is meant to stay put.
+  const headerHtml = isTablet
+    ? headerBlock({ title: a.audit_name, sub: a.audit_id, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })
+    : null; // mobile computes its own header per-branch below, unchanged
+  // #location-picker-slot is the surgical-update target for chooseSheetOption
+  // below — picking Rack/Bay while still mid-selection only refreshes this one
+  // div's innerHTML instead of the whole screen, so it doesn't flash/reload.
+  // No separate "Online · Synced" line here — the header's own "Synced" badge
+  // already says that, so it was just a redundant duplicate on tablet.
+  const pickerCardHtml = isTablet
+    ? `<div class="card">
+         <div class="card-title-row" style="margin-bottom:14px;"><h2>Location</h2></div>
+         <div id="location-picker-slot">${picker.html}</div>
+       </div>`
+    : null;
+
   if (!activeLoc) {
-    return `
+    return isTablet ? `
+      ${headerHtml}
+      <div class="body-pad">
+        ${pickerCardHtml}
+        <div class="empty-state" style="flex:1; justify-content:center;">
+          <div class="glyph">${ICON.pin}</div>
+          <div>Scanning and counting tools appear here once a location is picked.</div>
+        </div>
+      </div>
+    ` : `
       ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
       <div class="body-pad">
         <div>${picker.html}</div>
@@ -2029,7 +2220,13 @@ function renderCountSheet(){
   const al = activeLoc.layout, ar = activeLoc.rack, ab = activeLoc.bay, aloc = activeLoc.loc;
   const locObj = findLoc(auditId, al, ar, ab, aloc);
   if (!locObj) {
-    return `
+    return isTablet ? `
+      ${headerHtml}
+      <div class="body-pad">
+        <div class="banner warn"><span class="dot"></span> That location isn't in your assigned scope. Pick a different one below.</div>
+        ${pickerCardHtml}
+      </div>
+    ` : `
       ${headerBlock({ title: a.audit_name, sub:`${a.audit_id} · Select a location to begin`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
       <div class="body-pad">
         <div class="banner warn"><span class="dot"></span> That location isn't in your assigned scope. Pick a different one below.</div>
@@ -2103,18 +2300,29 @@ function renderCountSheet(){
   const canSave = scan.lines.length > 0;
   const canComplete = scan.lines.length === 0 && savedPallets.length > 0;
 
+  // Tablet only: this location being read-only/Completed doesn't mean the
+  // audit is — "Mark Complete" on an already-completed, read-only location was
+  // a dead click with nothing left to actually complete. If every location in
+  // the audit is done, route straight to the summary instead; otherwise there's
+  // nothing actionable here, so just disable the primary slot.
+  const auditFullyCounted = isTablet && readOnly ? (() => {
+    const roll = rollup(auditId);
+    return roll.locTotal > 0 && roll.locDone === roll.locTotal;
+  })() : false;
+
   const scanSection = readOnly
     ? `<div class="banner good"><span class="dot"></span> This location is completed — read-only view.</div>`
     : '';
 
   return `
-    ${headerBlock({ title: aloc, sub:`${al} · Rack ${ar} · Bay ${ab} · Blind Count`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${isTablet ? headerHtml : headerBlock({ title: aloc, sub:`${al} · Rack ${ar} · Bay ${ab} · Blind Count`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
+      ${isTablet ? pickerCardHtml : `
       <div class="sync-line"><span class="dot"></span> Online · Synced</div>
       <div class="card">
         <div class="card-title-row" style="margin-bottom:14px;"><h2>Location</h2></div>
         ${picker.html}
-      </div>
+      </div>`}
       ${savedSummary}
       ${readOnly ? `<div style="display:flex; flex-direction:column; gap:14px;">${scanSection}</div>` : `
       <div style="display:flex; flex-direction:column; gap:14px;">
@@ -2135,7 +2343,11 @@ function renderCountSheet(){
     </div>
     <div class="footer-bar">
       <button class="btn outline" onclick="push('progress', {auditId:'${auditId}'})">View Progress</button>
-      ${scan.lines.length ? `<button class="btn primary" ${!canSave?'disabled':''} onclick="saveRecord()">Save Record</button>`
+      ${isTablet && readOnly
+        ? (auditFullyCounted
+            ? `<button class="btn primary" onclick="push('auditSummary', {auditId:'${auditId}'})">View Audit Summary</button>`
+            : `<button class="btn primary" disabled>Save Record</button>`)
+        : scan.lines.length ? `<button class="btn primary" ${!canSave?'disabled':''} onclick="saveRecord()">Save Record</button>`
         : canComplete ? `<button class="btn primary" onclick="completeLocation()">Mark Complete</button>`
         : `<button class="btn primary" disabled>Save Record</button>`}
     </div>
@@ -2481,7 +2693,15 @@ function submitAudit(auditId){
 }
 
 /* ================= MAIN RENDER ================= */
+// Every state change re-renders the whole screen from a fresh HTML string
+// (no diffing) — replacing #screen's innerHTML would otherwise reset its
+// scroll position on every keystroke/tap, which reads as "the page reloaded"
+// on something as small as picking one dropdown value. Capture/restore it
+// around the swap so in-place edits (a picker choice, a qty step) don't yank
+// the viewport back to the top of a long tablet screen.
 function render(){
+  const screenEl = document.getElementById('screen');
+  const prevScrollTop = screenEl ? screenEl.scrollTop : 0;
   const screen = STATE.stack[STATE.stack.length - 1];
   const wrap = (html) => `<div class="screen-content" style="display:flex; flex-direction:column; flex:1; min-height:100%;">${html}</div>`;
   if (screen === 'login') {
@@ -2490,6 +2710,7 @@ function render(){
     const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
+  if (screenEl) screenEl.scrollTop = prevScrollTop;
   renderRail();
   renderSheetOverlay();
   renderConfirmModal();
