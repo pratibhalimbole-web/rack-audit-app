@@ -1,6 +1,7 @@
 <meta charset="utf-8" />
 <title>RAMS Field Audit — Mobile &amp; Tablet Prototype</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -160,7 +161,7 @@
   .device{background:var(--card); border:1px solid var(--border); border-radius:32px; box-shadow:var(--shadow); overflow:hidden; position:relative; transition:width .2s ease;}
   .device.phone{width:390px;}
   .device.tablet{width:1280px; border-radius:20px;}
-  .device-inner{display:flex; height:800px;}
+  .device-inner{display:flex; height:844px;}
   .device.tablet .device-inner{height:800px;}
   .screen{flex:1; min-width:0; overflow-y:auto; overflow-x:hidden; background:var(--muted); display:flex; flex-direction:column; position:relative; scrollbar-width:thin;}
 
@@ -1255,6 +1256,27 @@ function renderDashboard(){
 
   const taskPreview = others.map(a => taskCard(a)).join('');
 
+  const totalTasks = myTasks.length;
+  const completedTasks = myTasks.filter(a => uiStatus(a) === 'Completed').length;
+  const taskPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const donutR = 22, donutC = 2 * Math.PI * donutR;
+  const taskProgressWidget = `
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <svg width="56" height="56" viewBox="0 0 56 56" style="flex-shrink:0; transform:rotate(-90deg);">
+          <circle cx="28" cy="28" r="${donutR}" fill="none" stroke="var(--muted)" stroke-width="6"/>
+          <circle cx="28" cy="28" r="${donutR}" fill="none" stroke="var(--primary)" stroke-width="6"
+            stroke-linecap="round" stroke-dasharray="${donutC}" stroke-dashoffset="${donutC - (taskPct/100) * donutC}"/>
+          <text x="28" y="28" transform="rotate(90 28 28)" text-anchor="middle" dominant-baseline="central"
+            font-size="12" font-weight="800" fill="var(--foreground)">${taskPct}%</text>
+        </svg>
+        <div>
+          <div style="font-size:var(--text-sm); font-weight:700; color:var(--foreground);">Task Progress</div>
+          <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${completedTasks}/${totalTasks} audits completed</div>
+        </div>
+      </div>
+    </div>`;
+
   return `
     ${headerBlock({
       title:'Dashboard', sub:`${INSPECTOR.name.split(' ')[0]} · ${INSPECTOR.warehouse}`, showBack:false, avatar:true,
@@ -1268,7 +1290,7 @@ function renderDashboard(){
     <div class="body-pad">
       <div class="sync-line"><span class="dot"></span> All caught up <span class="time">Synced 2 min ago</span></div>
       <div style="display:flex; flex-direction:column; gap:14px;">
-        <div style="display:flex; flex-direction:column; gap:14px;">${ongoingCard}</div>
+        <div style="display:flex; flex-direction:column; gap:14px;">${ongoingCard}${taskProgressWidget}</div>
         <div style="display:flex; flex-direction:column; gap:14px;">
           <div class="card-title-row">
             <h2>My Audit Tasks</h2>
