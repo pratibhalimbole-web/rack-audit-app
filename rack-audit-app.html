@@ -407,6 +407,26 @@
   .picker-btn.fixed{background:var(--muted); color:var(--muted-foreground); cursor:default;}
   .picker-btn.fixed:active{transform:none;}
 
+  /* Rack View (tablet-only) — schematic elevation of a single bay: levels
+     stacked bottom-up (L1 at the floor), a fixed number of slots per level,
+     drawn as a bordered rack outline. Only the slots that map to a real
+     Storage Location in this bay are interactive/colored; the rest are
+     structural filler so the bay still reads as a physical rack even when
+     the audit's location count doesn't fill every level. */
+  .rack-diagram-card{display:flex; justify-content:center; padding:10px 0 4px;}
+  .rack-diagram{display:flex; flex-direction:column;}
+  .rack-diagram-row{display:flex; align-items:center; gap:10px;}
+  .rack-diagram-row-label{width:28px; text-align:right; font-size:11.5px; font-weight:700; color:var(--muted-foreground); font-family:var(--font-mono); flex-shrink:0;}
+  .rack-diagram-row-cells{display:flex; gap:4px; padding:5px 6px; border-left:1.5px solid var(--foreground); border-right:1.5px solid var(--foreground); border-top:1px solid var(--border);}
+  .rack-diagram-row:first-child .rack-diagram-row-cells{border-top:1.5px solid var(--foreground);}
+  .rack-diagram-row:last-child .rack-diagram-row-cells{border-bottom:1.5px solid var(--foreground);}
+  .rack-diagram-cell{width:34px; height:28px; border-radius:2px; background:var(--muted); border:1px solid var(--border); flex-shrink:0; padding:0; transition:transform .1s ease, background .1s ease;}
+  .rack-diagram-cell.empty{border:1px dashed var(--border); opacity:.5;}
+  .rack-diagram-cell.filled{cursor:pointer;}
+  .rack-diagram-cell.filled:active{transform:scale(.9);}
+  .rack-diagram-cell.selected{background:var(--accent-blue); border-color:var(--accent-blue-strong); box-shadow:0 0 0 2px var(--accent-blue-soft);}
+  .rack-diagram-caption{text-align:center; font-weight:700; color:var(--accent-blue-strong); margin-top:14px; font-size:var(--text-sm);}
+
   /* ---- bottom sheet picker ---- */
   .sheet-overlay{position:absolute; inset:0; background:rgba(15,23,42,.45); z-index:80; display:flex; align-items:flex-end; opacity:0; pointer-events:none; transition:opacity .2s ease;}
   .sheet-overlay.open{opacity:1; pointer-events:auto;}
@@ -761,13 +781,22 @@ const AUDITS = [
   { audit_id:'AUD-0225', audit_name:'Zone C Damaged Recheck', audit_type:'Cycle Count', count_method:'Blind (Enforced)',
     scope_type:'Rack', scope_values:['Rack C-04'], team_members:['Arjun Sharma','Sanjay Patil'],
     start_date:'2026-06-24', end_date:'2026-06-30', status:'Submitted' },
-  { audit_id:'AUD-0219', audit_name:'Bay Recount — B-02', audit_type:'Spot Check', count_method:'Blind (Enforced)',
-    scope_type:'Bay', scope_values:['Bay B-02-03'], team_members:['Arjun Sharma'],
+  { audit_id:'AUD-0219', audit_name:'Bay Recount — 01', audit_type:'Spot Check', count_method:'Blind (Enforced)',
+    scope_type:'Bay', scope_values:['Bay 01-03'], team_members:['Arjun Sharma'],
     start_date:'2026-06-28', end_date:'2026-07-05', status:'In Progress' },
   { audit_id:'AUD-0240', audit_name:'Full Count — Layouts A & B', audit_type:'Full', count_method:'Blind (Enforced)',
     scope_type:'Layout', scope_values:['Layout A','Layout B'], team_members:['Arjun Sharma','Meera Kulkarni'],
     start_date:'2026-07-08', end_date:'2026-07-22', status:'Scheduled' },
 ];
+
+// Physical rack shape used to lay out the Rack View diagram (see
+// buildBayDiagram below) — independent of how many Pallet LPNs a given
+// audit's scope actually has in a bay, so the bay still reads as a real
+// multi-level rack rather than a data-sized box. Declared up here (ahead of
+// AUDITS/LOCATIONS) because AUD-0219's fixture below generates its Pallet
+// LPNs directly against this shape.
+const RACK_DIAGRAM_LEVELS = 13;
+const RACK_DIAGRAM_SLOTS_PER_LEVEL = 3;
 
 function makeLoc(code, status){ return { code, status, pallets:[] }; }
 function makeBay(code, locs){ return { code, locations:locs }; }
@@ -823,7 +852,20 @@ const LOCATIONS = {
   ]},
   'AUD-0234': { layouts: [ makeLayout('Layout B', genRacks(['B-01','B-02','B-03','B-04'], 3, 3, 1, 1)) ]},
   'AUD-0225': { layouts: [ makeLayout('Layout A', [ makeRack('C-04', [ makeBay('C-04-01', [makeLoc('C-04-01-01','Completed'), makeLoc('C-04-01-02','Completed')]) ]) ]) ]},
-  'AUD-0219': { layouts: [ makeLayout('Layout A', [ makeRack('B-02', [ makeBay('B-02-03', [makeLoc('B-02-03-01','In Progress'), makeLoc('B-02-03-02','Not Started')]) ]) ]) ]},
+  // Bay 01-03 is sized to fill the Rack View diagram (13 levels x 3 Pallet
+  // LPNs per level = 39) rather than the sparse 2-location fixtures other
+  // audits use. Pallet LPN code = {bay}-{level}-{pallet within that level},
+  // e.g. "01-03-05-02" is Bay 01-03, Level 5, the 2nd pallet on that level —
+  // so the level is always readable straight off the code, not just its
+  // position in the diagram. L1P1 opens In Progress, every 7th LPN (in level-
+  // major order) reads Completed, the rest Not Started.
+  'AUD-0219': { layouts: [ makeLayout('Layout A', [ makeRack('01', [ makeBay('01-03',
+    Array.from({ length: RACK_DIAGRAM_LEVELS }, (_, li) => Array.from({ length: RACK_DIAGRAM_SLOTS_PER_LEVEL }, (_, pi) => {
+      const level = li + 1, pallet = pi + 1, n = li * RACK_DIAGRAM_SLOTS_PER_LEVEL + pi + 1;
+      const status = n === 1 ? 'In Progress' : n % 7 === 0 ? 'Completed' : 'Not Started';
+      return makeLoc(`01-03-${String(level).padStart(2,'0')}-${String(pallet).padStart(2,'0')}`, status);
+    })).flat()
+  ) ]) ]) ]},
   // Multi-layout demo: scope = Layout, assigned to BOTH Layout A and Layout B —
   // this is the case that makes the Layout field a real open dropdown, not a
   // fixed "only option" pill, and each layout has its own many-rack/bay/location tree.
@@ -1813,10 +1855,13 @@ function renderAuditDetails(){
     </div>
   `;
 
+  // Tablet routes into the new Rack View diagram first (see renderRackView) so
+  // an inspector sees where the bay's Pallet LPNs physically sit before
+  // counting; mobile has no diagram and keeps jumping straight to Count Sheet.
   function bayPill(b){
-    return isSubmitted
-      ? `<span class="bay-pill ${b.done?'done':'pending'}">${b.code}</span>`
-      : `<button class="bay-pill ${b.done?'done':'pending'}" onclick="push('countSheet', {auditId:'${a.audit_id}', layout:'${b.layout}', rack:'${b.rack}', bay:'${b.code}', loc:'${b.openLoc}'})">${b.code}</button>`;
+    if (isSubmitted) return `<span class="bay-pill ${b.done?'done':'pending'}">${b.code}</span>`;
+    const target = isTablet ? 'rackView' : 'countSheet';
+    return `<button class="bay-pill ${b.done?'done':'pending'}" onclick="push('${target}', {auditId:'${a.audit_id}', layout:'${b.layout}', rack:'${b.rack}', bay:'${b.code}', loc:'${b.openLoc}'})">${b.code}</button>`;
   }
 
   // Below one rack in scope, an accordion is just extra chrome around a
@@ -2164,6 +2209,113 @@ function skuCardFooter(saveOnclick, deleteOnclick, deleteLabel){
     </div>
   `;
 }
+/* ================= RACK VIEW (tablet-only) =================
+   Reached from a bay pill on Audit Details — shows a schematic elevation of
+   the tapped bay (levels stacked bottom-up, a fixed count of slots per
+   level) so an inspector can see where a Pallet LPN physically sits
+   before jumping into the actual count. Not a picker: Layout/Rack/Bay are
+   fixed to the bay that was tapped; only the Pallet LPN — via a
+   diagram cell or the scan icon — can change within it. */
+
+function buildBayDiagram(bayObj, selectedLocCode){
+  const locs = bayObj ? bayObj.locations : [];
+  const perLevel = RACK_DIAGRAM_SLOTS_PER_LEVEL;
+  const levels = Math.max(RACK_DIAGRAM_LEVELS, Math.ceil(locs.length / perLevel));
+  const rows = [];
+  for (let level = levels; level >= 1; level--) {
+    const startIdx = (level - 1) * perLevel;
+    const cells = [];
+    for (let slot = 0; slot < perLevel; slot++) {
+      const loc = locs[startIdx + slot];
+      if (!loc) { cells.push(`<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`); continue; }
+      const isSelected = loc.code === selectedLocCode;
+      const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : ''].filter(Boolean).join(' ');
+      cells.push(`<button type="button" class="${cls}" title="${loc.code} · ${loc.status}" aria-label="${loc.code}" onclick="selectRackViewLoc('${loc.code}')"></button>`);
+    }
+    rows.push(`<div class="rack-diagram-row"><span class="rack-diagram-row-label">L${level}</span><div class="rack-diagram-row-cells">${cells.join('')}</div></div>`);
+  }
+  return `
+    <div class="rack-diagram-card">
+      <div class="rack-diagram">${rows.join('')}</div>
+    </div>
+    <div class="rack-diagram-caption">Bay ${bayObj.code}</div>
+  `;
+}
+
+function selectRackViewLoc(code){ STATE.params.loc = code; render(); }
+
+// Desktop/web preview has no camera — cycles through this bay's real
+// locations, same fallback pattern as scanStorageLocationFieldSimulated.
+function scanRackViewLoc(auditId){
+  const { layout, rack, bay } = STATE.params;
+  const rackObj = findRackIn(auditId, layout, rack);
+  const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
+  if (!bayObj || !bayObj.locations.length) return;
+  if (!IS_REAL_MOBILE) {
+    STATE._rackViewScanCount = (STATE._rackViewScanCount || 0) + 1;
+    const loc = bayObj.locations[(STATE._rackViewScanCount - 1) % bayObj.locations.length];
+    STATE.params.loc = loc.code;
+    toast('Pallet LPN scanned');
+    render();
+    return;
+  }
+  openCameraScan('Point at the Pallet LPN QR code', (text) => {
+    const code = text.trim();
+    const match = bayObj.locations.find(l => l.code === code);
+    if (!match) { toast(`"${code}" isn't a Pallet LPN in this bay`, 'error'); return; }
+    STATE.params.loc = code;
+    toast('Pallet LPN scanned');
+    render();
+  });
+}
+
+function renderRackView(){
+  const { auditId, layout, rack, bay } = STATE.params;
+  const a = AUDITS.find(x => x.audit_id === auditId);
+  if (!a) return renderTasks();
+  const layoutObj = findLayoutIn(auditId, layout);
+  const rackObj = findRackIn(auditId, layout, rack);
+  const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
+  if (!layoutObj || !rackObj || !bayObj) return renderAuditDetails();
+
+  const selectedCode = bayObj.locations.find(l => l.code === STATE.params.loc)
+    ? STATE.params.loc
+    : (bayObj.locations.find(l => l.status !== 'Completed') || bayObj.locations[0] || {}).code;
+  const selectedLoc = bayObj.locations.find(l => l.code === selectedCode);
+
+  const topFields = `
+    <div class="loc-picker-toprow">
+      <div class="field"><label>Layout</label><div class="picker-btn fixed"><span class="mono">${layoutObj.name}</span></div></div>
+      <div class="field"><label>Rack</label><div class="picker-btn fixed"><span class="mono">Rack ${rackObj.code}</span></div></div>
+      <div class="field"><label>Bay</label><div class="picker-btn fixed"><span class="mono">Bay ${bayObj.code}</span></div></div>
+      <div class="field"><label>Pallet LPN</label>
+        <div class="picker-btn fixed">
+          <span class="mono">${selectedLoc ? selectedLoc.code : '—'}</span>
+          ${selectedLoc ? `<span class="pill ${locStatusPillClass(selectedLoc.status)}">${selectedLoc.status}</span>` : ''}
+        </div>
+      </div>
+      <div class="field" style="flex:0 0 auto;"><label style="visibility:hidden;">Scan</label>
+        <button type="button" class="card-icon-btn" title="Scan Pallet LPN" aria-label="Scan Pallet LPN" onclick="scanRackViewLoc('${auditId}')">${ICON.camera}</button>
+      </div>
+    </div>
+  `;
+
+  return `
+    ${headerBlock({ title: a.audit_name, sub: a.audit_id, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    <div class="body-pad">
+      <div class="card">${topFields}</div>
+      <div class="card">
+        <div class="insp-section-label">LOCATION</div>
+        ${buildBayDiagram(bayObj, selectedCode)}
+      </div>
+    </div>
+    <div class="footer-bar">
+      <button class="btn outline" onclick="back()">Cancel</button>
+      <button class="btn primary" onclick="push('countSheet', {auditId:'${auditId}', layout:'${layoutObj.name}', rack:'${rackObj.code}', bay:'${bayObj.code}', loc:'${selectedCode}'})">Continue to Count Sheet ${ICON.chevron}</button>
+    </div>
+  `;
+}
+
 function renderCountSheet(){
   const { auditId, layout, rack, bay, loc } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
@@ -2729,7 +2881,7 @@ function render(){
   if (screen === 'login') {
     document.getElementById('screen').innerHTML = wrap(renderLogin());
   } else {
-    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary };
+    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
   if (screenEl) screenEl.scrollTop = prevScrollTop;
