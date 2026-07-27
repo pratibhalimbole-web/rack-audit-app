@@ -360,6 +360,17 @@
   .device.tablet .todo-board{display:grid; grid-template-columns:repeat(4, 1fr); overflow-x:visible; align-items:start;}
   .device.tablet .todo-col{flex:none;}
 
+  /* ---- Reported Issues (tablet-only Progress tab) — search + sort toolbar
+     over a 4-col grid of flagged (non-"Good") SKU lines. ---- */
+  .issue-toolbar{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .issue-sort-panel{left:auto; right:0; width:200px;}
+  .issue-filter-active{border-color:var(--primary); color:var(--primary);}
+  .issue-sort-title{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); padding:6px 10px 8px;}
+  .issue-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px;}
+  .issue-card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden;}
+  .issue-card-head{display:flex; align-items:center; gap:8px; padding:10px 12px; font-weight:700; font-size:12.5px; color:var(--foreground); background:var(--muted);}
+  .issue-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; padding:12px;}
+
   /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
   .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--accent-blue-strong); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
   .audit-banner-field{display:flex; flex-direction:column; gap:8px; flex:1; min-width:140px;}
@@ -1410,7 +1421,7 @@ function summaryStats(auditId){
         qtyTotal += line.qty;
         byCondition[line.condition] = (byCondition[line.condition] || 0) + line.qty;
         if (line.condition !== 'Good') {
-          flagged.push({ layout, rack, bay, locCode:loc.code, pallet:p.pallet, sku:line.sku, name:line.name, qty:line.qty, condition:line.condition });
+          flagged.push({ layout, rack, bay, locCode:loc.code, pallet:p.pallet, sku:line.sku, name:line.name, qty:line.qty, condition:line.condition, skuCount:(p.lines||[]).length });
         }
       });
     });
@@ -1427,6 +1438,8 @@ function currentOngoing(){ return mine().find(a => a.status === 'In Progress' &&
 let STATE = {
   device: 'phone', stack: ['login'], params: {}, previewMode: 'normal',
   tasksSearch: '', scan: null, menuOpen: false,
+  issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false,
+  issuesFilterOpen: false, issuesFilterRack: null, issuesFilterBay: null, issuesFilterCondition: null,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
@@ -1511,6 +1524,8 @@ setTheme('light');
 /* ================= ICONS ================= */
 const ICON = {
   chevron: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  sort: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 3v10M4 13l-2.2-2.2M4 13l2.2-2.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 13V3M12 3l2.2 2.2M12 3l-2.2 2.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  filter: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12L9.5 8v4.5l-3 1.5V8L2 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
   // Figma's "circle-arrow-right" — the decorative trailing icon on the Audit
   // Details primary CTA (see the reference screenshot), distinct from the
   // small plain ICON.chevron used as a row-disclosure arrow elsewhere.
@@ -3614,10 +3629,111 @@ function renderQuickScan(){
 }
 
 /* ================= PROGRESS ================= */
+function toggleIssuesSort(){ STATE.issuesSortOpen = !STATE.issuesSortOpen; STATE.issuesFilterOpen = false; render(); }
+function setIssuesSortDir(dir){ STATE.issuesSortDir = dir; STATE.issuesSortOpen = false; render(); }
+function toggleIssuesFilter(){ STATE.issuesFilterOpen = !STATE.issuesFilterOpen; STATE.issuesSortOpen = false; render(); }
+function setIssuesFilter(kind, value){
+  const key = 'issuesFilter' + kind;
+  STATE[key] = STATE[key] === value ? null : value;
+  render();
+}
+function clearIssuesFilters(){ STATE.issuesFilterRack = null; STATE.issuesFilterBay = null; STATE.issuesFilterCondition = null; render(); }
+// One card per flagged (non-"Good") SKU line — summaryStats().flagged is the
+// same real, already-computed list Audit Summary's "Flagged Items" uses, so
+// this isn't a separate/fabricated issue log, just this data shown as the
+// reference's card grid instead of a flat kv-list. There's no per-line
+// timestamp in the data model (no "reported date" the app actually tracks),
+// so sort is by Qty — a real field — rather than inventing a fake date to
+// match the reference's "Oldest/Newest" control.
+function reportedIssueCard(f){
+  return `
+    <div class="issue-card">
+      <div class="issue-card-head"><div class="todo-field"><span class="k">Pallet</span><span class="sku-code">${f.pallet}</span></div></div>
+      <div class="issue-card-grid">
+        <div class="todo-field"><span class="k">Scanned SKU</span><span class="v mono">${f.sku}</span></div>
+        <div class="todo-field"><span class="k">SKU Name</span><span class="v">${f.name}</span></div>
+        <div class="todo-field"><span class="k">Rack</span><span class="v mono">${f.rack}</span></div>
+        <div class="todo-field"><span class="k">Bay</span><span class="v mono">${f.bay}</span></div>
+        <div class="todo-field"><span class="k">No. of SKUs</span><span class="todo-num-chip">${f.skuCount}</span></div>
+        <div class="todo-field"><span class="k">Quantity</span><span class="todo-num-chip">${f.qty}</span></div>
+        <div class="todo-field" style="grid-column:1 / -1;"><span class="k">Condition</span>${severityPillHtml(f.condition)}</div>
+      </div>
+    </div>
+  `;
+}
+// Tablet-only redesign of the Progress tab — matches the "Reported Issues"
+// reference's search/sort toolbar + card-grid layout. Mobile keeps the
+// original rack/bay progress breakdown below; device-gated rather than
+// shared since the two are different content, not a responsive reflow of
+// the same page.
+function renderProgressIssuesBoard(auditId, a){
+  const s = summaryStats(auditId);
+  // Filter option lists come from this audit's own flagged items (not every
+  // rack/bay/condition in the whole app) — so a filter never shows a choice
+  // that would empty the list into nothing.
+  const racks = [...new Set(s.flagged.map(f => f.rack))].sort();
+  const bays = [...new Set(s.flagged.map(f => f.bay))].sort();
+  const conditions = CONDITIONS.filter(c => c !== 'Good' && s.flagged.some(f => f.condition === c));
+
+  const q = STATE.issuesSearch.trim().toLowerCase();
+  let issues = s.flagged.filter(f => {
+    if (STATE.issuesFilterRack && f.rack !== STATE.issuesFilterRack) return false;
+    if (STATE.issuesFilterBay && f.bay !== STATE.issuesFilterBay) return false;
+    if (STATE.issuesFilterCondition && f.condition !== STATE.issuesFilterCondition) return false;
+    return !q || [f.sku, f.name, f.rack, f.locCode, f.pallet].join(' ').toLowerCase().includes(q);
+  });
+  issues = issues.slice().sort((x, y) => STATE.issuesSortDir === 'asc' ? x.qty - y.qty : y.qty - x.qty);
+
+  const sortDropdown = STATE.issuesSortOpen ? `
+    <button type="button" class="rvpick-backdrop" onclick="toggleIssuesSort()" aria-label="Close"></button>
+    <div class="rvpick-panel issue-sort-panel" onclick="event.stopPropagation()">
+      <div class="issue-sort-title">Sort by Qty</div>
+      <button type="button" class="rvpick-item ${STATE.issuesSortDir==='asc'?'selected':''}" onclick="setIssuesSortDir('asc')"><span>Low to High</span>${STATE.issuesSortDir==='asc'?ICON.checkSm:''}</button>
+      <button type="button" class="rvpick-item ${STATE.issuesSortDir==='desc'?'selected':''}" onclick="setIssuesSortDir('desc')"><span>High to Low</span>${STATE.issuesSortDir==='desc'?ICON.checkSm:''}</button>
+    </div>
+  ` : '';
+
+  const filterGroup = (title, options, current, kind) => options.length ? `
+    <div class="issue-sort-title">${title}</div>
+    ${options.map(opt => `<button type="button" class="rvpick-item ${current===opt?'selected':''}" onclick="setIssuesFilter('${kind}', '${opt}')"><span>${opt}</span>${current===opt?ICON.checkSm:''}</button>`).join('')}
+  ` : '';
+  const activeFilterCount = [STATE.issuesFilterRack, STATE.issuesFilterBay, STATE.issuesFilterCondition].filter(Boolean).length;
+  const filterDropdown = STATE.issuesFilterOpen ? `
+    <button type="button" class="rvpick-backdrop" onclick="toggleIssuesFilter()" aria-label="Close"></button>
+    <div class="rvpick-panel issue-sort-panel" onclick="event.stopPropagation()">
+      ${filterGroup('Rack', racks, STATE.issuesFilterRack, 'Rack')}
+      ${filterGroup('Bay', bays, STATE.issuesFilterBay, 'Bay')}
+      ${filterGroup('Condition', conditions, STATE.issuesFilterCondition, 'Condition')}
+      ${activeFilterCount ? `<button type="button" class="rvpick-item" onclick="clearIssuesFilters()"><span>Clear filters</span></button>` : ''}
+    </div>
+  ` : '';
+
+  return `
+    ${headerBlock({ title:'Reported Issues', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    <div class="body-pad">
+      <div class="issue-toolbar">
+        <div class="search-wrap" style="flex:1;">${ICON.search}<input placeholder="Search SKU, rack, location..." value="${STATE.issuesSearch}" oninput="STATE.issuesSearch=this.value; render()" /></div>
+        <div class="rvpick-wrap">
+          <button type="button" class="card-icon-btn ${activeFilterCount ? 'issue-filter-active' : ''}" title="Filter" aria-label="Filter" onclick="toggleIssuesFilter()">${ICON.filter}</button>
+          ${filterDropdown}
+        </div>
+        <div class="rvpick-wrap">
+          <button type="button" class="card-icon-btn" title="Sort" aria-label="Sort" onclick="toggleIssuesSort()">${ICON.sort}</button>
+          ${sortDropdown}
+        </div>
+      </div>
+      <div class="acc-badge" style="margin-bottom:14px; width:fit-content;">Total : ${issues.length}</div>
+      ${issues.length ? `<div class="issue-grid">${issues.map(reportedIssueCard).join('')}</div>` : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No reported issues</div><div>Nothing matches these filters.</div></div>`}
+    </div>
+    ${renderTabBar('progress')}
+  `;
+}
+
 function renderProgress(){
   const { auditId } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
   if (!a) return renderTasks();
+  if (STATE.device === 'tablet') return renderProgressIssuesBoard(auditId, a);
   const r = rollup(auditId);
   const layouts = layoutsOf(auditId);
   const np = nextPending(auditId);
