@@ -329,6 +329,37 @@
   .ongoing-action .btn{width:100%;}
   .chev{color:var(--slate-400); flex-shrink:0;}
 
+  /* ---- To Do Task board: 4 due-date columns (Delayed/Today/This Week/
+     This Month) instead of the old status tabs — a completed audit isn't
+     filtered into a column here at all, it's dropped before bucketing
+     (see renderTasks), matching this being a to-do list, not a full log.
+     Horizontal scroll on phone (columns are too narrow to ever stack
+     usefully); a real 4-col grid on tablet, where there's room. ---- */
+  .todo-board{display:flex; gap:14px; overflow-x:auto; padding-bottom:6px; align-items:flex-start;}
+  .todo-col{flex:0 0 260px; display:flex; flex-direction:column; gap:12px;}
+  .todo-col-head{display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:var(--radius-xl); font-weight:700; font-size:12.5px;}
+  .todo-col-count{display:inline-flex; align-items:center; justify-content:center; min-width:22px; padding:1px 9px; border-radius:999px; font-weight:700; font-size:11px; color:#fff;}
+  .todo-col-red{background:var(--rag-red-soft); color:var(--rag-red-strong);}
+  .todo-col-red .todo-col-count{background:var(--rag-red-strong);}
+  .todo-col-green{background:var(--rag-green-soft); color:var(--rag-green-strong);}
+  .todo-col-green .todo-col-count{background:var(--rag-green-strong);}
+  .todo-col-blue{background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
+  .todo-col-blue .todo-col-count{background:var(--accent-blue-strong);}
+  .todo-col-amber{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
+  .todo-col-amber .todo-col-count{background:var(--rag-amber-strong);}
+  .todo-col-body{display:flex; flex-direction:column; gap:12px;}
+  .todo-col-empty{padding:22px 10px; text-align:center; color:var(--muted-foreground); font-size:11.5px; border:1px dashed var(--border); border-radius:var(--radius-lg);}
+  .todo-card{width:100%; text-align:left; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow-card); transition:transform .1s ease;}
+  .todo-card:active{transform:scale(.98);}
+  .todo-card-title{font-weight:700; font-size:12.5px; color:var(--foreground);}
+  .todo-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 14px;}
+  .todo-field{display:flex; flex-direction:column; align-items:flex-start; gap:5px; min-width:0;}
+  .todo-field .k{font-size:10px; font-weight:500; color:var(--muted-foreground);}
+  .todo-field .v{font-weight:600; font-size:11.5px; color:var(--foreground);}
+  .todo-num-chip{display:inline-flex; align-items:center; justify-content:center; width:fit-content; min-width:26px; padding:2px 8px; background:var(--muted); border-radius:var(--radius); font-weight:600; font-size:11.5px; color:var(--foreground);}
+  .device.tablet .todo-board{display:grid; grid-template-columns:repeat(4, 1fr); overflow-x:visible; align-items:start;}
+  .device.tablet .todo-col{flex:none;}
+
   /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
   .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--accent-blue-strong); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
   .audit-banner-field{display:flex; flex-direction:column; gap:8px; flex:1; min-width:140px;}
@@ -1318,6 +1349,24 @@ function uiStatus(a){
   return 'To Do';
 }
 function pillClass(uis){ return { 'To Do':'s-scheduled', 'In Progress':'s-inprogress', 'Completed':'s-completed', 'Overdue':'s-overdue' }[uis]; }
+// To Do Task board groups by due date rather than status — a completed audit
+// isn't "to do" anymore regardless of when it was due, so those are filtered
+// out entirely before bucketing (see renderTasks) rather than getting a
+// column of their own the way the old status tabs gave them one.
+const DUE_BUCKETS = [
+  { key:'Delayed', color:'red' },
+  { key:'Today', color:'green' },
+  { key:'This Week', color:'blue' },
+  { key:'This Month', color:'amber' },
+];
+function dueBucket(a){
+  if (isOverdue(a)) return 'Delayed';
+  const end = new Date(a.end_date+'T00:00:00');
+  const diffDays = Math.round((end - TODAY) / 86400000);
+  if (diffDays <= 0) return 'Today';
+  if (diffDays <= 7) return 'This Week';
+  return 'This Month';
+}
 function priorityFor(a){ if (a.priority) return a.priority; const n = a.audit_id.replace(/\D/g,''); const m = Number(n) % 3; return ['High','Medium','Low'][m]; }
 function allLocations(auditId){
   const layouts = layoutsOf(auditId); const out = [];
@@ -1377,7 +1426,7 @@ function currentOngoing(){ return mine().find(a => a.status === 'In Progress' &&
 /* ================= STATE ================= */
 let STATE = {
   device: 'phone', stack: ['login'], params: {}, previewMode: 'normal',
-  tasksTab: 'To Do', tasksSearch: '', scan: null, menuOpen: false,
+  tasksSearch: '', scan: null, menuOpen: false,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
@@ -1846,27 +1895,61 @@ function taskCard(a){
   `;
 }
 
+// Card for the To Do Task board — distinct from taskCard (used by the
+// Dashboard's task preview). Fields mirror exactly what Audit Details itself
+// shows for this audit (its "Inspection Schedule Details" card uses
+// start_date as "Inspection Date" and r.bayTotal as "Total Bay"; its bay
+// summary row uses r.bayDone/pending) — so a number seen here matches the
+// same number on the page this card opens into, rather than a different
+// rack-based rollup invented just for this board.
+function todoCard(a){
+  const uis = uiStatus(a);
+  const r = rollup(a.audit_id);
+  const bayPending = r.bayTotal - r.bayDone;
+  return `
+    <button type="button" class="todo-card" onclick="push('auditDetails', {auditId:'${a.audit_id}'})">
+      <div class="todo-card-title">${a.audit_type}</div>
+      <div class="todo-card-grid">
+        <div class="todo-field"><span class="k">Task Status</span><span class="pill ${pillClass(uis)}">${uis}</span></div>
+        <div class="todo-field"><span class="k">Inspection Date</span><span class="v mono">${fmtDate(a.start_date)}</span></div>
+        <div class="todo-field"><span class="k">Total Bay</span><span class="todo-num-chip">${r.bayTotal}</span></div>
+        <div class="todo-field"><span class="k">Priority</span><span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span></div>
+        <div class="todo-field"><span class="k">Completed Bay</span><span class="todo-num-chip">${r.bayDone}</span></div>
+        <div class="todo-field"><span class="k">Pending Bay</span><span class="todo-num-chip">${bayPending}</span></div>
+      </div>
+    </button>
+  `;
+}
+
 /* ================= TASKS ================= */
 function renderTasks(){
-  const myTasks = mine();
-  const counts = { 'To Do':0, 'In Progress':0, 'Completed':0, 'Overdue':0 };
-  myTasks.forEach(a => counts[uiStatus(a)]++);
+  // Completed/closed audits aren't "to do" anymore regardless of when they
+  // were due — dropped before bucketing rather than given a column, matching
+  // the board having no Completed column of its own.
+  const myTasks = mine().filter(a => !['Submitted','Reconciled','Closed'].includes(a.status));
   const q = STATE.tasksSearch.trim().toLowerCase();
-  const filtered = myTasks.filter(a => {
-    if (uiStatus(a) !== STATE.tasksTab) return false;
-    if (!q) return true;
-    return [a.audit_id, a.audit_name, ...a.scope_values].join(' ').toLowerCase().includes(q);
-  });
+  const searched = myTasks.filter(a => !q || [a.audit_id, a.audit_name, ...a.scope_values].join(' ').toLowerCase().includes(q));
+  const byBucket = { 'Delayed':[], 'Today':[], 'This Week':[], 'This Month':[] };
+  searched.forEach(a => byBucket[dueBucket(a)].push(a));
+
+  const columns = DUE_BUCKETS.map(({ key, color }) => `
+    <div class="todo-col">
+      <div class="todo-col-head todo-col-${color}">
+        <span>${key}</span>
+        <span class="todo-col-count">${String(byBucket[key].length).padStart(2, '0')}</span>
+      </div>
+      <div class="todo-col-body">
+        ${byBucket[key].length ? byBucket[key].map(todoCard).join('') : `<div class="todo-col-empty">Nothing here</div>`}
+      </div>
+    </div>
+  `).join('');
 
   return `
     ${headerBlock({ title:'My Audit Tasks', sub:`${myTasks.length} Assigned · ${INSPECTOR.warehouse}`, showBack: true,
       menuItems:[{label:'Sync Now', action:"toast('Synced')"},{label:'Settings', action:"toast('Settings')"}] })}
     <div class="body-pad">
       <div class="search-wrap">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
-      <div class="tabs">${['To Do','In Progress','Completed','Overdue'].map(t => `<button class="tab ${STATE.tasksTab===t?'active':''}" onclick="STATE.tasksTab='${t}'; render()">${t} (${counts[t]})</button>`).join('')}</div>
-      <div class="task-list" style="${filtered.length ? '' : 'flex:1; justify-content:center;'}">
-        ${filtered.length ? filtered.map(taskCard).join('') : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No audits here</div><div>Nothing in "${STATE.tasksTab}" right now.</div></div>`}
-      </div>
+      <div class="todo-board">${columns}</div>
     </div>
     ${renderTabBar('tasks')}
   `;
