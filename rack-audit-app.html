@@ -39,7 +39,19 @@
     --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#1b59f8; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
 
     --font-body: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    /* Kept as a separate token (rather than deleting it and rewriting every
+       var(--font-mono) call site) so the numeric/code styling elsewhere —
+       tabular-nums, letter-spacing — still reads as intentionally distinct,
+       but the actual typeface is Inter everywhere, not a system monospace. */
+    --font-mono: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* Shared icon size for the Reconciliation Form (scan/note/mic/photo/video/
+       trash/attachment icons) — was a grab-bag of one-off px sizes (12-20px)
+       baked into each icon's own SVG markup. Consolidated to one token so
+       resizing them all is a single edit instead of hunting every ICON.*
+       definition. Icons used elsewhere in the app keep their own sizes;
+       this token is scoped to the icons that actually render in that form. */
+    --icon-size: 16px;
 
     /* Type scale — adapted from theme.css's --text-xs/sm/base/lg/xl/2xl/4xl (12/14/16/20/24/30/48px),
        compacted for a dense mobile-web density (still above the very first ad-hoc pass). Change
@@ -382,9 +394,9 @@
   /* Mobile: a fixed grid column forced every bay code into an equal-width
      cell, and the 999px radius on that fixed box turned it into a circle
      rather than a pill — long codes like "E-01-01" wrapped to two lines
-     inside a circle. Flex-wrap + content-sized padding (same pattern as
-     .cond-chip-row) lets each capsule size to its own text on one line, at
-     any code length. Tablet keeps its original circle grid via the
+     inside a circle. Flex-wrap + content-sized padding lets each capsule
+     size to its own text on one line, at any code length. Tablet keeps
+     its original circle grid via the
      .device.tablet override below — mobile and tablet stay independent. */
   .bay-pill-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:20px;}
   .bay-pill{display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; padding:7px 12px; border-radius:999px; font-weight:700; font-size:12.5px; font-family:var(--font-mono); border:1px solid transparent; cursor:pointer; transition:transform .12s ease;}
@@ -493,6 +505,46 @@
      of a full-bleed sticky footer bar. */
   .rv-actions-row{display:flex; justify-content:flex-end; gap:10px; padding:10px 16px; border-top:1px solid var(--border); flex-shrink:0; border-radius:0 0 var(--radius-lg) var(--radius-lg);}
   .rv-scan-qr{display:flex; align-items:center; gap:10px; flex-shrink:0; color:var(--muted-foreground); font-size:var(--text-sm); font-weight:600;}
+
+  /* Right-side SKU panel — slides in over the Rack View screen after a scan.
+     Anchored to .screen (position:relative, the device frame's own scroll
+     container) rather than the viewport, so it stays inside the simulated
+     device on both phone and tablet widths instead of a fixed overlay that
+     would ignore the frame. Full-width on phone, fixed column on tablet. */
+  .rv-sku-panel-backdrop{position:absolute; inset:0; z-index:60; background:rgba(10,14,15,.4);}
+  .rv-sku-panel{position:absolute; top:0; right:0; bottom:0; z-index:61; width:100%; max-width:530px; background:var(--card); box-shadow:-8px 0 24px rgba(15,23,42,.18); display:flex; flex-direction:column; transform:translateX(0); animation:rv-sku-panel-in .18s ease;}
+  @keyframes rv-sku-panel-in{from{transform:translateX(100%);} to{transform:translateX(0);}}
+  .rv-sku-panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); flex-shrink:0; position:sticky; top:0; z-index:2; background:var(--card);}
+  .rv-sku-panel-head h3{font-size:var(--text-lg); font-weight:800; margin:0 0 4px;}
+  .rv-sku-panel-sub{font-size:var(--text-xs); font-weight:600; color:var(--muted-foreground);}
+  .rv-sku-panel-body{flex:1; min-height:0; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:14px;}
+  /* Single column always — the panel is a fixed narrow column even on
+     tablet, so it must not pick up .sku-grid's 2-column tablet override
+     (that's sized for the full-width Count Sheet page, not this drawer). */
+  .rv-sku-list{display:flex; flex-direction:column; gap:10px;}
+  .rv-sku-panel-footer{display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--border); flex-shrink:0;}
+  .rv-sku-panel-footer .btn{flex:1;}
+  @media (max-width:480px){ .rv-sku-panel{max-width:100%;} }
+
+  /* Evidence capture — note/audio/photo/video for the SKU being scanned,
+     matching the minimalist reference: icon-only capture buttons next to a
+     plain-text label, a waveform playback bar once audio exists, and a
+     thumbnail grid with a count badge per media type. */
+  .rv-evidence{display:flex; flex-direction:column; gap:10px;}
+  .rv-evidence-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .rv-evidence-label{font-size:var(--text-sm); font-weight:500; color:var(--foreground);}
+  .rv-evidence-btns{display:flex; gap:8px; flex-shrink:0;}
+  .rv-evidence-note{width:100%; min-height:64px; resize:vertical; border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 12px; font:inherit; font-size:var(--text-sm); color:var(--foreground); background:var(--card);}
+  .rv-evidence-audio{display:flex; align-items:center; gap:10px; border:1px solid var(--border); border-radius:999px; padding:8px 12px;}
+  .rv-evidence-waveform{flex:1; display:flex; align-items:center; gap:2px; height:20px; overflow:hidden;}
+  .rv-evidence-waveform span{width:2px; flex-shrink:0; background:var(--accent-blue-border); border-radius:1px;}
+  .rv-evidence-duration{font-size:var(--text-2xs); color:var(--muted-foreground); font-weight:700; flex-shrink:0;}
+  .rv-evidence-group-head{display:flex; align-items:center; gap:6px; font-size:var(--text-xs); font-weight:700; color:var(--foreground);}
+  .rv-evidence-group-head svg{width:var(--icon-size); height:var(--icon-size);}
+  .rv-evidence-thumbs{display:flex; flex-wrap:wrap; gap:8px;}
+  .rv-evidence-thumb{width:64px; height:64px; border-radius:var(--radius-lg); border:1px solid var(--border); background:var(--muted); display:flex; align-items:center; justify-content:center; color:var(--muted-foreground); position:relative; flex-shrink:0; padding:0;}
+  .rv-evidence-thumb svg{width:var(--icon-size); height:var(--icon-size);}
+  .rv-evidence-thumb .dur{position:absolute; bottom:3px; right:3px; font-size:9px; font-weight:700; background:rgba(10,14,15,.65); color:#fff; padding:1px 4px; border-radius:4px;}
 
   /* ---- Audit Schedule (calendar) — matches the Figma reference:
      month grid, Mon-Sun columns, color-coded audit chips per day, and a
@@ -612,34 +664,64 @@
   .sku-row-collapsed{width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 12px; display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-card); text-align:left; transition:transform .1s ease;}
   .sku-row-collapsed:active{transform:scale(.98);}
   .sku-row-right{display:flex; align-items:center; gap:12px; flex-shrink:0; margin-left:auto;}
-  .sku-row-qty{font:700 13px var(--font-mono); color:var(--muted-foreground);}
   .sku-row-edit{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--accent-blue-strong); background:var(--accent-blue-soft); padding:6px 10px; border-radius:999px;}
+  .sku-row-edit svg{width:var(--icon-size); height:var(--icon-size);}
+  /* Redesigned collapsed SKU row — a labeled-column card (SKU / Quantity /
+     Condition / Action) matching the reference "Previous reported tests"
+     list, replacing the old single-button "Qty N · Edit" row. */
+  .sku-row-card{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; width:100%; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px 16px;}
+  .sku-row-col{display:flex; flex-direction:column; gap:6px; min-width:0;}
+  .sku-row-col .col-label{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.03em;}
+  .sku-row-col .col-val{font-size:var(--text-sm); font-weight:700; color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sku-row-col.actions{flex-shrink:0;}
+  .sku-row-actions{display:flex; align-items:center; gap:10px;}
+  /* Borderless — the reference's Action column icons are plain glyphs, not
+     bordered/backed buttons like .card-icon-btn used elsewhere in the form. */
+  .icon-action-btn{width:var(--icon-size); height:var(--icon-size); border:none; background:none; padding:0; color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
+  .icon-action-btn svg{width:var(--icon-size); height:var(--icon-size);}
+  .icon-action-btn:active{transform:scale(.85);}
+  .icon-action-btn.danger{color:var(--rag-red-strong);}
+  .severity-pill{display:inline-flex; align-items:center; width:fit-content; padding:4px 12px; border-radius:999px; font-size:var(--text-sm); font-weight:700;}
+  .severity-pill.sev-green{background:var(--rag-green-soft); color:var(--rag-green-strong);}
+  .severity-pill.sev-amber{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
+  .severity-pill.sev-red{background:var(--rag-red-soft); color:var(--rag-red-strong);}
   .sku-card-head{display:flex; align-items:center; gap:12px;}
   .sku-avatar{width:40px; height:40px; border-radius:var(--radius-xl); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .sku-avatar.sm{width:34px; height:34px; border-radius:var(--radius-lg);}
   .sku-id{min-width:0; flex-shrink:1; display:flex; flex-direction:column; gap:5px;}
-  .sku-code{font:800 15.5px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
-  .lot-badge{display:inline-flex; align-items:center; gap:5px; width:fit-content; font:700 11.5px var(--font-mono); color:var(--muted-foreground); background:var(--muted); padding:3px 9px 3px 7px; border-radius:999px;}
+  /* The expanded edit-card's header (SKU code + LOT badge) sits on one line —
+     unlike the collapsed row/saved-pallet header below, which stacks a plain
+     sku-lot caption under the code and shares this same .sku-id class. */
+  .sku-card-head .sku-id{flex-direction:row; align-items:center; gap:8px;}
+  .sku-code{font:800 13.5px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sku-lot{display:block; margin-top:3px; font-size:10.5px; font-weight:600; color:var(--muted-foreground);}
+  .lot-badge{display:inline-flex; align-items:center; gap:5px; width:fit-content; font:700 10px var(--font-mono); color:var(--muted-foreground); background:var(--muted); padding:3px 9px 3px 7px; border-radius:999px;}
   .lot-badge .dot{width:5px; height:5px; border-radius:999px; background:var(--rag-amber-strong, var(--muted-foreground));}
-  .sec-label{font-size:10.5px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
-  .sku-section{background:var(--muted); border-radius:var(--radius-xl); padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
-  .qty-stepper-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
-  .qty-stepper{display:flex; align-items:center; gap:8px;}
-  .qty-stepper button{width:32px; height:32px; border-radius:999px; border:none; background:var(--card); color:var(--foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:var(--shadow-card); transition:transform .1s ease, background .1s ease;}
-  .qty-stepper button:active{transform:scale(.88); background:var(--accent-blue-soft);}
-  .qty-stepper button:disabled{opacity:.4;}
-  .qty-input{font:800 17px var(--font-body); width:56px; height:36px; text-align:center; color:var(--foreground); border:1.5px solid var(--border); background:var(--card); border-radius:var(--radius-lg); outline:none; padding:0; -moz-appearance:textfield; transition:border-color .12s ease;}
-  .qty-input:focus{border-color:var(--brand-navy);}
+  .sec-label{font-size:9px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
+  .sku-section{display:flex; flex-direction:column; gap:10px;}
+  /* Bordered, not shaded — same flat-field language as the note textarea and
+     evidence audio bar elsewhere in this panel. */
+  .qty-stepper-row{display:flex; align-items:center;}
+  .qty-input{font:700 14px var(--font-body); width:100%; height:40px; text-align:left; color:var(--foreground); border:1px solid var(--border); background:var(--card); border-radius:var(--radius-lg); outline:none; padding:0 12px; -moz-appearance:textfield; transition:border-color .12s ease;}
+  .qty-input:focus{border-color:var(--primary);}
   .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
-  .cond-chip-row{display:flex; flex-wrap:wrap; gap:8px;}
-  .cond-chip{display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; border:none; background:var(--card); font-size:12.5px; font-weight:700; color:var(--muted-foreground); box-shadow:var(--shadow-card); transition:transform .1s ease, background .12s ease, color .12s ease;}
-  .cond-chip:active{transform:scale(.95);}
-  .cond-chip.selected{background:var(--brand-navy); color:#fff;}
-  .cond-chip:disabled{opacity:.6;}
+  /* Radio grid — matches the reference right-panel's Observations/Severity
+     style (plain label + native radio) rather than the app's usual pill
+     chips, since this field reads as a single required choice there. */
+  .cond-radio-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:11px 14px;}
+  .cond-radio{display:flex; align-items:center; gap:8px; font-size:var(--text-sm); font-weight:500; color:var(--foreground); cursor:pointer;}
+  .cond-radio input{width:16px; height:16px; accent-color:var(--primary); flex-shrink:0; cursor:pointer;}
+  .cond-radio input:disabled{cursor:default;}
+  .cond-radio:has(input:disabled){opacity:.6; cursor:default;}
   .sku-card-footer{display:flex; gap:8px; align-items:center;}
   .sku-card-footer .btn{flex:1;}
   .card-icon-btn{width:40px; height:40px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
+  /* Forces every icon-only button to the shared --icon-size, overriding
+     whatever width/height each ICON.* svg happens to carry — the glyphs
+     themselves (12-20px baked in) are reused elsewhere at their own
+     intentional sizes (avatars, empty-state art), so this is scoped to the
+     button/label contexts rather than edited into the shared icon strings. */
+  .card-icon-btn svg{width:var(--icon-size); height:var(--icon-size);}
   .card-icon-btn:active{transform:scale(.9);}
   .card-icon-btn.danger{border-color:var(--rag-red-border); background:var(--rag-red-soft); color:var(--rag-red-strong);}
 
@@ -687,7 +769,7 @@
   .tabbar-item .icon-slot{width:34px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; transition:background .15s ease;}
   .tabbar-item.active .icon-slot{background:var(--accent-blue-soft);}
   .tabbar-item svg{width:19px; height:19px; flex-shrink:0;}
-  .tabbar-item .lbl{font-size:var(--text-2xs); font-weight:600;}
+  .tabbar-item .lbl{font-size:var(--text-2xs); font-weight:600; align-self:stretch; text-align:center;}
   .tabbar-item.active .lbl{font-weight:800;}
   .tabbar-item.active .lbl{font-weight:800;}
 
@@ -712,6 +794,13 @@
   .device.tablet .task-due{flex-shrink:0;}
   .device.tablet .pill{flex-shrink:0;}
   .device.tablet .sku-grid{grid-template-columns:1fr 1fr;}
+  /* Icon-only buttons (evidence note/mic/camera/video, panel scan/delete,
+     etc.) match the Figma "Button" component spec on tablet: hug-width
+     rounded-rect (not a circle), Gray/300 (#D0D5DD) 1px border, instead of
+     the mobile app's circular pill. Left as :not(.danger) so the red
+     delete-button border it already has isn't overridden. */
+  .device.tablet .card-icon-btn{width:44px; height:40px; border-radius:var(--radius-lg); border-width:1px;}
+  .device.tablet .card-icon-btn:not(.danger){border-color:#d0d5dd;}
   .two-col{display:flex; flex-direction:column; gap:16px;}
   .device.tablet .two-col{display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:start;}
   .device.tablet .detail-grid{grid-template-columns:repeat(3,1fr);}
@@ -734,7 +823,7 @@
   .device.tablet .bay-pill{display:block; text-align:center; padding:14px 16px; white-space:normal; font-family:var(--font-body);}
   .device.tablet .footer-bar .btn{flex:1; height:56px; border-radius:0; font-weight:700;}
   .device.tablet .footer-bar .btn.outline{border:none; border-right:1px solid var(--border);}
-  .device.tablet .tabbar{position:sticky; bottom:0; max-width:none; margin:0; width:100%; border-radius:0; border:none; border-top:1px solid var(--border); background:var(--card); backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none; padding:10px 12px; gap:0;}
+  .device.tablet .tabbar{position:static; max-width:none; margin:0; width:100%; border-radius:0; border:none; border-top:1px solid var(--border); background:var(--card); backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none; padding:10px 12px; gap:0;}
   .device.tablet .tabbar-item{flex:1 1 0; gap:4px;}
   .device.tablet .tabbar-item .icon-slot{width:auto; height:auto; background:none !important;}
   .device.tablet .tabbar-item svg{width:21px; height:21px;}
@@ -915,6 +1004,19 @@ const INVENTORY_POOL = [
   { sku:'SKU-1180', name:'Fastener Pack M10', lot:'L-2322' },
 ];
 const CONDITIONS = ['Good','Damaged','Broken','Wet','Open Package','Other'];
+// Same "Good" = unflagged split summaryStats() already uses for the Audit
+// Summary's flagged-items list — Damaged/Broken read as an outright defect
+// (red), Wet/Open Package/Other as needing a look but not necessarily bad
+// (amber), so the collapsed SKU row's severity pill agrees with what
+// Audit Summary would call out for the same line.
+function conditionSeverity(condition){
+  if (condition === 'Good') return 'green';
+  if (condition === 'Damaged' || condition === 'Broken') return 'red';
+  return 'amber';
+}
+function severityPillHtml(condition){
+  return `<span class="severity-pill sev-${conditionSeverity(condition)}">${condition}</span>`;
+}
 
 const AUDITS = [
   { audit_id:'AUD-0231', audit_name:'Zone A Full Count', audit_type:'Full', count_method:'Blind (Enforced)',
@@ -946,9 +1048,54 @@ const AUDITS = [
 const RACK_DIAGRAM_LEVELS = 13;
 const RACK_DIAGRAM_SLOTS_PER_LEVEL = 3;
 
-function makeLoc(code, status){ return { code, status, pallets:[] }; }
+// level/slot are optional — only set by fillBayLevels below (for a bay whose
+// levels don't all carry the same pallet count) so buildBayDiagram can place
+// a location by explicit position instead of assuming every level holds
+// exactly RACK_DIAGRAM_SLOTS_PER_LEVEL entries. Plain makeLoc calls (the
+// common sparse 2-3 location bay) leave them undefined and buildBayDiagram
+// falls back to its original fixed-width index math for those.
+function makeLoc(code, status, level, slot){ return { code, status, pallets:[], level, slot }; }
 function makeBay(code, locs){ return { code, locations:locs }; }
 function makeRack(code, bays){ return { code, bays }; }
+// Every pallet in a Rack View-diagrammed bay is expected to already carry a
+// SKU (an inspector browsing levels should find something to review, not an
+// empty shell) — but never overwrite a location that already has real
+// pallets (from count_records via the DB path), only fill in the ones that
+// genuinely have none yet. Left unsaved (no `saved` flag) so ensureScanState
+// still picks it up as the in-progress pallet to resume, same as any other
+// partially-counted location.
+function seedDemoPalletIfEmpty(loc, seedIdx){
+  if (loc.pallets.length) return loc;
+  const item = INVENTORY_POOL[seedIdx % INVENTORY_POOL.length];
+  const condition = CONDITIONS[seedIdx % CONDITIONS.length];
+  loc.pallets.push({ pallet:`P-${loc.code.replace(/[^A-Za-z0-9]/g,'')}`, lines:[{ sku:item.sku, name:item.name, lot:item.lot, qty:10 + (seedIdx % 30), condition }] });
+  return loc;
+}
+// A bay whose fixture only has RACK_DIAGRAM_SLOTS_PER_LEVEL locations (the
+// common case — most bays are a sparse single-level demo) still renders as
+// RACK_DIAGRAM_LEVELS rows in the Rack View diagram, since buildBayDiagram
+// always draws at least that many — the levels above the real data render as
+// disabled empty cells, so only level 1 is ever actually selectable. This
+// pads a bay's given locations (kept first/unchanged in place, so any code
+// already referenced elsewhere — e.g. a "last saved location" pointer —
+// stays valid) out to RACK_DIAGRAM_LEVELS rows, alternating 3 and 2 real
+// pallets per level (odd levels get 3, even levels get 2) rather than a
+// uniform 3 everywhere — a real bay's levels don't all hold the same count.
+function fillBayLevels(codePrefix, existingLocs){
+  const startLevel = Math.floor(existingLocs.length / RACK_DIAGRAM_SLOTS_PER_LEVEL) + 1;
+  existingLocs.forEach((l, i) => { l.level = 1; l.slot = i + 1; seedDemoPalletIfEmpty(l, i); });
+  const rest = [];
+  let seedIdx = existingLocs.length;
+  for (let level = startLevel; level <= RACK_DIAGRAM_LEVELS; level++) {
+    const palletsThisLevel = level % 2 === 0 ? 2 : 3;
+    for (let slot = 1; slot <= palletsThisLevel; slot++) {
+      const loc = makeLoc(`${codePrefix}-${String(level).padStart(2,'0')}${String(slot).padStart(2,'0')}`, 'Not Started', level, slot);
+      seedDemoPalletIfEmpty(loc, seedIdx++);
+      rest.push(loc);
+    }
+  }
+  return [...existingLocs, ...rest];
+}
 function makeLayout(name, racks){ return { name, racks }; }
 
 // Generates a rack/bay/location tree — used for Layout-scoped audits, which
@@ -975,13 +1122,13 @@ const LOCATIONS = {
     makeRack('A-05', [
       makeBay('B-01', [makeLoc('A-05-B01-01','Completed'), makeLoc('A-05-B01-02','Completed'), makeLoc('A-05-B01-03','Completed')]),
       makeBay('B-02', [makeLoc('A-05-B02-01','Completed'), makeLoc('A-05-B02-02','Completed'), makeLoc('A-05-B02-03','In Progress')]),
-      makeBay('B-03', [makeLoc('A-05-B03-01','Not Started'), makeLoc('A-05-B03-02','Not Started'), makeLoc('A-05-B03-03','Not Started')]),
+      makeBay('B-03', fillBayLevels('A-05-B03', [makeLoc('A-05-B03-01','Not Started'), makeLoc('A-05-B03-02','Not Started'), makeLoc('A-05-B03-03','Not Started')])),
       makeBay('B-04', [makeLoc('A-05-B04-01','Not Started'), makeLoc('A-05-B04-02','Not Started'), makeLoc('A-05-B04-03','Not Started')]),
     ]),
     makeRack('A-06', [
       makeBay('B-01', [makeLoc('A-06-B01-01','Completed'), makeLoc('A-06-B01-02','Completed'), makeLoc('A-06-B01-03','Completed')]),
       makeBay('B-02', [makeLoc('A-06-B02-01','Completed'), makeLoc('A-06-B02-02','Completed'), makeLoc('A-06-B02-03','Not Started')]),
-      makeBay('B-03', [makeLoc('A-06-B03-01','Not Started'), makeLoc('A-06-B03-02','Not Started'), makeLoc('A-06-B03-03','Not Started')]),
+      makeBay('B-03', fillBayLevels('A-06-B03', [makeLoc('A-06-B03-01','Not Started'), makeLoc('A-06-B03-02','Not Started'), makeLoc('A-06-B03-03','Not Started')])),
       makeBay('B-04', [makeLoc('A-06-B04-01','Not Started'), makeLoc('A-06-B04-02','Not Started'), makeLoc('A-06-B04-03','Not Started')]),
     ]),
   ]) ]},
@@ -998,7 +1145,19 @@ const LOCATIONS = {
       makeBay('E-01-02', [makeLoc('E-01-02-01','Not Started'), makeLoc('E-01-02-02','Not Started')]),
     ]) ]),
   ]},
-  'AUD-0234': { layouts: [ makeLayout('Layout B', genRacks(['B-01','B-02','B-03','B-04'], 3, 3, 1, 1)) ]},
+  // genRacks names each rack's 3rd bay 'B-03' too (rack codes and bay codes
+  // share the B-0X pattern here) — every one of those, like AUD-0231's,
+  // otherwise only has 3 flat locations (all on L1). Filled out the same way
+  // post-generation so Rack View's Bay B-03 has real, selectable pallets on
+  // every level no matter which of this audit's racks it's reached from.
+  'AUD-0234': { layouts: [ makeLayout('Layout B', (() => {
+    const racks = genRacks(['B-01','B-02','B-03','B-04'], 3, 3, 1, 1);
+    racks.forEach(r => {
+      const b03 = r.bays.find(b => b.code === 'B-03');
+      if (b03) b03.locations = fillBayLevels(`${r.code}-B03`, b03.locations);
+    });
+    return racks;
+  })()) ]},
   'AUD-0225': { layouts: [ makeLayout('Layout A', [ makeRack('C-04', [ makeBay('C-04-01', [makeLoc('C-04-01-01','Completed'), makeLoc('C-04-01-02','Completed')]) ]) ]) ]},
   // Bay 03 is sized to fill the Rack View diagram (13 levels x 3 Pallet LPNs
   // per level = 39) rather than the sparse 2-location fixtures other audits
@@ -1093,6 +1252,16 @@ async function loadAllData(){
     // deleteRecord/submitAudit below to target the right row for their writes.
     bay.locations.push({ code: loc.location_code, status: loc.status, pallets: Object.values(palletsByPalletId), db_id: loc.id });
   });
+
+  // This function rebuilds LOCATIONS straight from the DB, which otherwise
+  // has no notion of "pad this bay's diagram out to every level" — apply the
+  // same Bay-03 fix here too, or it only ever holds once (until the next
+  // login/reload wipes and rebuilds LOCATIONS from Supabase again).
+  Object.values(LOCATIONS).forEach(tree => tree.layouts.forEach(layout => layout.racks.forEach(rack => rack.bays.forEach(bay => {
+    if (bay.code === 'B-03' && bay.locations.length < RACK_DIAGRAM_LEVELS * RACK_DIAGRAM_SLOTS_PER_LEVEL) {
+      bay.locations = fillBayLevels(`${rack.code}-${bay.code}`, bay.locations);
+    }
+  }))));
 }
 
 // QR pool for the "Scan Location QR" flow — some payloads are deliberately
@@ -1321,13 +1490,15 @@ const ICON = {
   playTri: '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l10-5.5z"/></svg>',
   calendar: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v2.5M10.5 2v2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
   trash: '<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M3 5h10M6.5 5V3.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V5M6 7.5v4M10 7.5v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M4 5l.6 8a1.5 1.5 0 0 0 1.5 1.4h3.8a1.5 1.5 0 0 0 1.5-1.4l.6-8" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-  plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-  minus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   clock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   dot: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6" fill="var(--accent-blue-border)"/><circle cx="8" cy="8" r="3.5"/></svg>',
   bell: '<svg width="16" height="18" viewBox="0 0 16 18" fill="none"><path d="M8 0.00351494C7.525 0.00351494 7.14286 0.379613 7.14286 0.8471V1.18805C4.23571 1.59578 2 4.05975 2 7.03339V7.54306C2 8.86819 1.64286 10.1687 0.964286 11.3146L0.182143 12.6292C0.0642857 12.833 0 13.0615 0 13.297C0 14.0316 0.603571 14.6257 1.35 14.6257H14.65C15.3964 14.6257 16 14.0316 16 13.297C16 13.0615 15.9357 12.8295 15.8179 12.6292L15.0357 11.3111C14.3571 10.1652 14 8.86468 14 7.53954V7.02988C14 4.05624 11.7643 1.59227 8.85714 1.18453V0.843585C8.85714 0.376098 8.475 0 8 0V0.00351494ZM14.0143 12.9385H1.98214L2.44286 12.1617C3.275 10.7592 3.71429 9.16345 3.71429 7.54306V7.03339C3.71429 4.70299 5.63214 2.81547 8 2.81547C10.3679 2.81547 12.2857 4.70299 12.2857 7.03339V7.54306C12.2857 9.16696 12.725 10.7592 13.5536 12.1617L14.0143 12.9385ZM5.575 16.3128C5.92857 17.297 6.88214 18 8 18C9.11786 18 10.0714 17.297 10.425 16.3128H5.575Z" fill="currentColor"/></svg>',
   layout: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="11" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.3h12M2 9.7h12" stroke="currentColor" stroke-width="1.2"/></svg>',
   rack: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3.5" width="12" height="9" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12" stroke="currentColor" stroke-width="1.4"/></svg>',
+  mic: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="6" y="1.5" width="4" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 8.5a4.5 4.5 0 0 0 9 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M8 13v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  video: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4.5" width="9" height="7" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 7l4-2.3v6.6l-4-2.3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  image: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.3" stroke="currentColor" stroke-width="1.4"/><circle cx="5.2" cy="6" r="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M2 12l4-4 3 3 2-2 3 3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+  pauseTri: '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>',
 };
 
 /* ================= BOTTOM TAB BAR ================= */
@@ -1335,7 +1506,7 @@ function renderTabBar(active){
   const ongoing = currentOngoing();
   const items = [
     { key:'dashboard', label:'Home', icon:ICON.home, onclick:"railTo('dashboard')" },
-    { key:'schedule', label:'Schedule', icon:ICON.calendar, onclick:"railTo('schedule')" },
+    { key:'schedule', label:'Audit Schedule', icon:ICON.calendar, onclick:"railTo('schedule')" },
     { key:'tasks', label:'Tasks', icon:ICON.tasks, onclick:"railTo('tasks')" },
     { key:'scan', label:'Scan', icon:ICON.scan, onclick:"openQuickScan()" },
   ];
@@ -2327,6 +2498,16 @@ function findLoc(auditId, layout, rack, bay, locCode){
   const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
   return bayObj ? bayObj.locations.find(l => l.code === locCode) : null;
 }
+// Seeds/reuses STATE.scan for a given location — same in-progress-pallet-or-fresh-start
+// logic used whether the location is entered via the Count Sheet page directly or
+// via a Rack View scan. Keyed off auditId+loc so re-entering the same location (from
+// either entry point) resumes the same in-flight lines instead of resetting them.
+function ensureScanState(auditId, layout, rack, bay, locCode, locObj){
+  if (STATE.scan && STATE.scan.auditId === auditId && STATE.scan.loc === locCode) return;
+  const existing = locObj.pallets.find(p => !p.saved) || null;
+  STATE.scan = { auditId, layout, rack, bay, loc:locCode, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
+  STATE.expandedSavedPallet = null;
+}
 function resumeAudit(auditId){
   const ls = lastSaved(auditId);
   if (ls) push('countSheet', { auditId, layout: ls.layout, rack: ls.rack, bay: ls.bay, loc: ls.loc.code });
@@ -2341,25 +2522,25 @@ function resumeAudit(auditId){
 function skuEditCardBody(line, { qtySetter, condSetter, disabled }){
   return `
     <div class="sku-card-head">
-      <div class="sku-avatar">${ICON.box}</div>
       <div class="sku-id">
         <div class="sku-code">${line.sku}</div>
         <span class="lot-badge"><span class="dot"></span>LOT ${line.lot}</span>
       </div>
     </div>
     <div class="sku-section">
+      <span class="sec-label">Quantity <span style="color:var(--rag-red-strong);">*</span></span>
       <div class="qty-stepper-row">
-        <span class="sec-label">Quantity</span>
-        <div class="qty-stepper">
-          <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(Math.max(0, line.qty - 1))}">${ICON.minus}</button>
-          <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
-          <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(line.qty + 1)}">${ICON.plus}</button>
-        </div>
+        <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
       </div>
     </div>
     <div class="sku-section">
-      <span class="sec-label">Condition</span>
-      <div class="cond-chip-row">${CONDITIONS.map(c => `<button type="button" class="cond-chip ${line.condition===c?'selected':''}" ${disabled?'disabled':''} onclick="${condSetter(c)}">${line.condition===c?ICON.checkSm:''}${c}</button>`).join('')}</div>
+      <span class="sec-label">Condition <span style="color:var(--rag-red-strong);">*</span></span>
+      <div class="cond-radio-grid">${CONDITIONS.map(c => `
+        <label class="cond-radio">
+          <input type="radio" name="cond-${line.sku}" ${line.condition===c?'checked':''} ${disabled?'disabled':''} onchange="${condSetter(c)}">
+          <span>${c}</span>
+        </label>
+      `).join('')}</div>
     </div>
   `;
 }
@@ -2371,6 +2552,46 @@ function skuCardFooter(saveOnclick, deleteOnclick, deleteLabel){
     </div>
   `;
 }
+// One pallet can carry several SKU lines (scan.lines) — this collapsed-row /
+// expanded-edit-card accordion is shared by the Count Sheet page and the
+// Rack View SKU panel so a pallet with multiple SKUs edits identically in
+// both places. withEvidence adds the note/audio/photo/video block (Rack
+// View only, for now) to whichever line is currently expanded.
+function renderScanLinesAccordion(scan, { withEvidence } = {}){
+  // expandedIdx === -1 is an explicit "collapsed" state (via Save); null/undefined
+  // means "not yet set" and defaults to the most recently scanned line.
+  const activeIdx = scan.expandedIdx === -1 ? -1
+    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
+  return scan.lines.map((line, idx) => idx === activeIdx ? `
+    <div class="sku-card active">
+      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
+      ${withEvidence ? renderEvidenceBlock(idx, line) : ''}
+      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
+    </div>
+  ` : `
+    <div class="sku-row-card">
+      <div class="sku-row-col">
+        <span class="col-label">SKU</span>
+        <div class="col-val mono">${line.sku}</div>
+      </div>
+      <div class="sku-row-col">
+        <span class="col-label">Quantity</span>
+        <div class="col-val">${line.qty}</div>
+      </div>
+      <div class="sku-row-col">
+        <span class="col-label">Condition</span>
+        ${severityPillHtml(line.condition)}
+      </div>
+      <div class="sku-row-col actions">
+        <span class="col-label">Action</span>
+        <div class="sku-row-actions">
+          <button type="button" class="icon-action-btn" onclick="editLine(${idx})" aria-label="Edit ${line.sku}">${ICON.pencil}</button>
+          <button type="button" class="icon-action-btn danger" onclick="removeLine(${idx})" aria-label="Delete ${line.sku}">${ICON.trash}</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
 /* ================= RACK VIEW (tablet-only) =================
    Reached from a bay pill on Audit Details — shows a schematic elevation of
    the tapped bay (levels stacked bottom-up, a fixed count of slots per
@@ -2379,16 +2600,30 @@ function skuCardFooter(saveOnclick, deleteOnclick, deleteLabel){
    fixed to the bay that was tapped; only the Pallet LPN — via a
    diagram cell or the scan icon — can change within it. */
 
+// Most bays are a flat, uniform list (every level holds the same
+// RACK_DIAGRAM_SLOTS_PER_LEVEL count) and are placed by straight index math.
+// A bay generated by fillBayLevels carries explicit level/slot on each
+// location instead (its levels don't all hold the same count — a real bay's
+// levels don't), so this groups by that metadata when present rather than
+// assuming uniform width.
 function buildBayDiagram(bayObj, selectedLocCode){
   const locs = bayObj ? bayObj.locations : [];
   const perLevel = RACK_DIAGRAM_SLOTS_PER_LEVEL;
-  const levels = Math.max(RACK_DIAGRAM_LEVELS, Math.ceil(locs.length / perLevel));
+  const hasLevelMeta = locs.length > 0 && locs[0].level != null;
+  const byLevel = hasLevelMeta ? new Map() : null;
+  if (hasLevelMeta) locs.forEach(loc => {
+    if (!byLevel.has(loc.level)) byLevel.set(loc.level, []);
+    byLevel.get(loc.level)[loc.slot - 1] = loc;
+  });
+  const levels = hasLevelMeta
+    ? Math.max(RACK_DIAGRAM_LEVELS, ...byLevel.keys())
+    : Math.max(RACK_DIAGRAM_LEVELS, Math.ceil(locs.length / perLevel));
   const rows = [];
   for (let level = levels; level >= 1; level--) {
     const startIdx = (level - 1) * perLevel;
     const cells = [];
     for (let slot = 0; slot < perLevel; slot++) {
-      const loc = locs[startIdx + slot];
+      const loc = hasLevelMeta ? (byLevel.get(level) || [])[slot] : locs[startIdx + slot];
       if (!loc) { cells.push(`<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`); continue; }
       const isSelected = loc.code === selectedLocCode;
       const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : ''].filter(Boolean).join(' ');
@@ -2405,11 +2640,29 @@ function buildBayDiagram(bayObj, selectedLocCode){
 }
 
 function selectRackViewLoc(code){ STATE.rackViewClickedLoc = code; STATE.params.loc = code; render(); }
-// Structural issue reporting isn't a built-out feature yet (no data model for
-// it) — these are honest stubs matching the Figma reference's buttons, not a
-// fake fully-wired flow.
-function reportRackViewNoIssues(){ toast('Marked as no issues'); }
-function reportRackViewNewIssue(){ toast('Issue reporting coming soon'); }
+function cancelRackViewSelection(){ STATE.rackViewClickedLoc = null; STATE.params.loc = null; render(); }
+
+// Scanning a SKU straight from Rack View (rather than only from the full Count
+// Sheet page) seeds the same STATE.scan used there via ensureScanState, so
+// whatever gets scanned here is exactly what the Count Sheet would show if
+// reached later for this location. scanSku() itself picks real-camera vs the
+// desktop-preview cycling fallback and calls applySkuResult, which is what
+// actually opens/updates the right-side panel via the render() it triggers.
+function scanSkuFromRackView(auditId, layout, rack, bay, locCode){
+  const locObj = findLoc(auditId, layout, rack, bay, locCode);
+  if (!locObj) return;
+  ensureScanState(auditId, layout, rack, bay, locCode, locObj);
+  STATE.rackViewSkuPanelOpen = true;
+  scanSku();
+}
+// The panel can hold a whole pallet's worth of SKUs, so Cancel just closes
+// it — undoing one SKU is the accordion card's own delete button
+// (removeLine, with its confirm dialog), not an all-or-nothing panel action.
+function cancelRackViewSkuScan(){
+  STATE.rackViewSkuPanelOpen = false;
+  render();
+}
+function saveRackViewSkuScan(){ STATE.rackViewSkuPanelOpen = false; render(); }
 
 // Desktop/web preview has no camera — cycles through this bay's real
 // locations, same fallback pattern as scanStorageLocationFieldSimulated.
@@ -2496,6 +2749,123 @@ function chooseRackViewBay(bayCode){
   render();
 }
 
+// Right-side panel shown after a Rack View SKU scan — same skuEditCardBody
+// used by the Count Sheet page, so qty/condition edits here land in the same
+// STATE.scan.lines a later Count Sheet visit for this location would show.
+// Evidence (note/audio/photo/video) captured for the SKU currently open in
+// the Rack View panel — kept on the line itself (not a separate STATE tree)
+// so it travels with that scan line the same way qty/condition do. No real
+// mic/camera capture is wired up (this is a desktop-preview UI pass); each
+// button simulates its capture the same way the rest of this app's scan
+// flows fall back to fixture data when there's no real device to read from.
+function ensureEvidence(line){
+  if (!line.evidence) line.evidence = { note:'', noteOpen:false, audio:null, images:[], videos:[] };
+  return line.evidence;
+}
+function setEvidenceNote(idx, val){ ensureEvidence(STATE.scan.lines[idx]).note = val; }
+// The note field itself only appears once opened (matching the reference's
+// clean default state — just the label + icon row until acted on); reveal
+// it on the same click that focuses it, rather than rendering an empty
+// textarea up front for every SKU line whether or not it has a note.
+function focusEvidenceNote(idx){
+  ensureEvidence(STATE.scan.lines[idx]).noteOpen = true;
+  render();
+  const el = document.getElementById(`rv-evidence-note-${idx}`);
+  if (el) el.focus();
+}
+function recordEvidenceAudio(idx){
+  const ev = ensureEvidence(STATE.scan.lines[idx]);
+  const bars = Array.from({ length: 40 }, (_, i) => 6 + Math.round(10 * Math.abs(Math.sin(i * 0.7))));
+  ev.audio = { durationSec: 20, playing: false, bars };
+  render();
+}
+function toggleEvidenceAudioPlay(idx){
+  const ev = ensureEvidence(STATE.scan.lines[idx]);
+  if (!ev.audio) return;
+  ev.audio.playing = !ev.audio.playing;
+  render();
+}
+function removeEvidenceAudio(idx){ ensureEvidence(STATE.scan.lines[idx]).audio = null; render(); }
+function addEvidenceImage(idx){ ensureEvidence(STATE.scan.lines[idx]).images.push({}); render(); }
+function removeEvidenceImage(idx, i){ ensureEvidence(STATE.scan.lines[idx]).images.splice(i, 1); render(); }
+function addEvidenceVideo(idx){ ensureEvidence(STATE.scan.lines[idx]).videos.push({ durationSec: 20 }); render(); }
+function removeEvidenceVideo(idx, i){ ensureEvidence(STATE.scan.lines[idx]).videos.splice(i, 1); render(); }
+
+function renderEvidenceBlock(idx, line){
+  const ev = ensureEvidence(line);
+  return `
+    <div class="rv-evidence">
+      <div class="rv-evidence-row">
+        <span class="rv-evidence-label">Write a note or record an audio for the issue</span>
+        <div class="rv-evidence-btns">
+          <button type="button" class="card-icon-btn" title="Add note" aria-label="Add note" onclick="focusEvidenceNote(${idx})">${ICON.pencil}</button>
+          <button type="button" class="card-icon-btn" title="Record audio" aria-label="Record audio" onclick="recordEvidenceAudio(${idx})">${ICON.mic}</button>
+        </div>
+      </div>
+      ${(ev.noteOpen || ev.note) ? `<textarea class="rv-evidence-note" id="rv-evidence-note-${idx}" placeholder="Add a note..." onchange="setEvidenceNote(${idx}, this.value)">${ev.note}</textarea>` : ''}
+      ${ev.audio ? `
+        <div class="rv-evidence-audio">
+          <button type="button" class="card-icon-btn" onclick="toggleEvidenceAudioPlay(${idx})" aria-label="${ev.audio.playing ? 'Pause' : 'Play'}">${ev.audio.playing ? ICON.pauseTri : ICON.playTri}</button>
+          <div class="rv-evidence-waveform">${ev.audio.bars.map(h => `<span style="height:${h}px;"></span>`).join('')}</div>
+          <span class="rv-evidence-duration">${ev.audio.durationSec}s</span>
+          <button type="button" class="card-icon-btn danger" onclick="removeEvidenceAudio(${idx})" aria-label="Delete audio">${ICON.trash}</button>
+        </div>
+      ` : ''}
+      <div class="rv-evidence-row">
+        <span class="rv-evidence-label">Click on upload image or capture video for the issue</span>
+        <div class="rv-evidence-btns">
+          <button type="button" class="card-icon-btn" title="Add photo" aria-label="Add photo" onclick="addEvidenceImage(${idx})">${ICON.camera}</button>
+          <button type="button" class="card-icon-btn" title="Add video" aria-label="Add video" onclick="addEvidenceVideo(${idx})">${ICON.video}</button>
+        </div>
+      </div>
+      ${ev.images.length ? `
+        <div class="rv-evidence-group">
+          <div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(ev.images.length).padStart(2, '0')}</span></div>
+          <div class="rv-evidence-thumbs">${ev.images.map((img, i) => `<button type="button" class="rv-evidence-thumb" onclick="removeEvidenceImage(${idx}, ${i})" aria-label="Remove image">${ICON.image}</button>`).join('')}</div>
+        </div>
+      ` : ''}
+      ${ev.videos.length ? `
+        <div class="rv-evidence-group">
+          <div class="rv-evidence-group-head">${ICON.video} Video Attachments <span class="acc-badge">${String(ev.videos.length).padStart(2, '0')}</span></div>
+          <div class="rv-evidence-thumbs">${ev.videos.map((v, i) => `<button type="button" class="rv-evidence-thumb" onclick="removeEvidenceVideo(${idx}, ${i})" aria-label="Remove video"><span class="dur">00:${v.durationSec}sec</span>${ICON.playTri}</button>`).join('')}</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// A single location can hold several pallets (P1, P2, P3 stacked at the same
+// level), and a single pallet can carry several SKUs — this panel is the
+// reconciliation record for whichever pallet is currently being scanned:
+// scan.pallet identifies it, scan.lines holds every SKU counted on it so far.
+// The scan icon in the header (not a close/X) re-runs scanSku() without
+// closing the panel, so a whole pallet's worth of SKUs can be counted in one
+// sitting without hunting for a scan action buried below a scrolling list of
+// already-counted SKU cards. Cancel/Save in the fixed footer close it.
+function renderRackViewSkuPanel(){
+  if (!STATE.rackViewSkuPanelOpen || !STATE.scan || !STATE.scan.lines.length) return '';
+  const scan = STATE.scan;
+  return `
+    <button type="button" class="rv-sku-panel-backdrop" onclick="cancelRackViewSkuScan()" aria-label="Close"></button>
+    <div class="rv-sku-panel" onclick="event.stopPropagation()">
+      <div class="rv-sku-panel-head">
+        <div>
+          <h3>Reconciliation Form</h3>
+          <div class="rv-sku-panel-sub mono">${scan.loc} · ${scan.pallet || 'New Pallet'}</div>
+        </div>
+        <button type="button" class="card-icon-btn" onclick="scanSku()" title="Scan another SKU" aria-label="Scan another SKU">${ICON.qr}</button>
+      </div>
+      <div class="rv-sku-panel-body">
+        <div class="rv-sku-list">${renderScanLinesAccordion(scan, { withEvidence: true })}</div>
+      </div>
+      <div class="rv-sku-panel-footer">
+        <button type="button" class="btn outline" onclick="cancelRackViewSkuScan()">Cancel</button>
+        <button type="button" class="btn primary" onclick="saveRackViewSkuScan()">Save</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderRackView(){
   const { auditId, layout, rack, bay } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
@@ -2573,12 +2943,12 @@ function renderRackView(){
           ${buildBayDiagram(bayObj, selectedCode)}
         </div>
         <div class="rv-actions-row">
-          <button class="btn outline auto" onclick="reportRackViewNoIssues()">No Issues</button>
-          <button class="btn outline auto" onclick="reportRackViewNewIssue()">Report New Issue</button>
-          <button class="btn primary auto" ${selectedCode ? '' : 'disabled'} onclick="push('countSheet', {auditId:'${auditId}', layout:'${layoutObj.name}', rack:'${rackObj.code}', bay:'${bayObj.code}', loc:'${selectedCode}'})">Continue to Count Sheet ${ICON.chevron}</button>
+          <button class="btn outline auto" onclick="cancelRackViewSelection()">Cancel</button>
+          <button class="btn primary auto" ${selectedCode ? '' : 'disabled'} onclick="scanSkuFromRackView('${auditId}', '${layoutObj.name}', '${rackObj.code}', '${bayObj.code}', '${selectedCode}')">Start Audit ${ICON.chevron}</button>
         </div>
       </div>
     </div>
+    ${renderRackViewSkuPanel()}
   `;
 }
 
@@ -2872,35 +3242,12 @@ function renderCountSheet(){
     `;
   }
 
-  if (!STATE.scan || STATE.scan.auditId !== auditId || STATE.scan.loc !== aloc) {
-    const existing = locObj.pallets.find(p => !p.saved) || null;
-    STATE.scan = { auditId, layout:al, rack:ar, bay:ab, loc:aloc, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
-    STATE.expandedSavedPallet = null;
-  }
+  ensureScanState(auditId, al, ar, ab, aloc, locObj);
   const scan = STATE.scan;
   const readOnly = locObj.status === 'Completed';
   const savedPallets = locObj.pallets.filter(p => p.saved);
 
-  // expandedIdx === -1 is an explicit "collapsed" state (via Save); null/undefined
-  // means "not yet set" and defaults to the most recently scanned line.
-  const activeIdx = scan.expandedIdx === -1 ? -1
-    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
-
-  const skuCards = scan.lines.map((line, idx) => idx === activeIdx ? `
-    <div class="sku-card active">
-      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
-      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
-    </div>
-  ` : `
-    <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
-      <span class="sku-avatar sm">${ICON.box}</span>
-      <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
-      <div class="sku-row-right">
-        <span class="sku-row-qty">Qty ${line.qty}</span>
-        <span class="sku-row-edit">${ICON.pencil} Edit</span>
-      </div>
-    </button>
-  `).join('');
+  const skuCards = renderScanLinesAccordion(scan);
 
   // Same collapsed-row / edit-card accordion pattern as the in-progress SKU
   // lines above (.sku-row-collapsed <-> .sku-card), so a saved record edits
