@@ -3648,7 +3648,7 @@ function clearIssuesFilters(){ STATE.issuesFilterRack = null; STATE.issuesFilter
 function reportedIssueCard(f){
   return `
     <div class="issue-card">
-      <div class="issue-card-head"><div class="todo-field"><span class="k">Pallet</span><span class="sku-code">${f.pallet}</span></div></div>
+      <div class="issue-card-head">${ICON.box}<div class="todo-field"><span class="k">Pallet</span><span class="sku-code">${f.pallet}</span></div></div>
       <div class="issue-card-grid">
         <div class="todo-field"><span class="k">Scanned SKU</span><span class="v mono">${f.sku}</span></div>
         <div class="todo-field"><span class="k">SKU Name</span><span class="v">${f.name}</span></div>
@@ -3722,7 +3722,7 @@ function renderProgressIssuesBoard(auditId, a){
           ${sortDropdown}
         </div>
       </div>
-      <div class="acc-badge" style="margin-bottom:14px; width:fit-content;">Total : ${issues.length}</div>
+      <div class="acc-badge" style="margin-bottom:14px; width:fit-content; font-size:10px; padding:3px 9px;">Total : ${issues.length}</div>
       ${issues.length ? `<div class="issue-grid">${issues.map(reportedIssueCard).join('')}</div>` : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No reported issues</div><div>Nothing matches these filters.</div></div>`}
     </div>
     ${renderTabBar('progress')}
