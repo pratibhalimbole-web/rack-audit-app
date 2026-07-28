@@ -11,47 +11,33 @@
     --background:#ffffff; --foreground:#0f172a;
     --card:#ffffff; --card-foreground:#0f172a;
     --popover:#ffffff; --popover-foreground:#000000;
-    --primary:#1b59f8; --primary-foreground:#ffffff;
+    --primary:#2563eb; --primary-foreground:#ffffff;
     --secondary:#f1f5f9; --secondary-foreground:#0f172a;
-    --muted:#f8fafc; --muted-foreground:#64748b;
+    --muted:#f1f5f9; --muted-foreground:#64748b;
     --accent:#f1f5f9; --accent-foreground:#0f172a;
     --destructive:#ef4444; --destructive-foreground:#ffffff;
-    --border:#e2e8f0; --input-background:#ffffff; --ring:#1b59f8;
+    --border:#e2e8f0; --input-background:#ffffff; --ring:#2563eb;
 
-    --rag-red:#ef4444; --rag-red-strong:#b91c1c; --rag-red-soft:#fef2f2; --rag-red-border:#fecaca;
-    --rag-amber:#d97706; --rag-amber-strong:#b45309; --rag-amber-soft:#fef9c3; --rag-amber-border:#fde68a;
-    --rag-green:#22c55e; --rag-green-strong:#15803d; --rag-green-soft:#dcfce7; --rag-green-border:#bbf7d0;
-    --accent-blue:#1b59f8; --accent-blue-strong:#133eb7; --accent-blue-soft:#dbeafe; --accent-blue-border:#bfdbfe;
+    --rag-red:#dc2626; --rag-red-strong:#b91c1c; --rag-red-soft:#fee2e2; --rag-red-border:#fecaca;
+    --rag-amber:#d97706; --rag-amber-strong:#b45309; --rag-amber-soft:#fef3c7; --rag-amber-border:#fde68a;
+    --rag-green:#16a34a; --rag-green-strong:#15803d; --rag-green-soft:#dcfce7; --rag-green-border:#bbf7d0;
+    --accent-blue:#2563eb; --accent-blue-strong:#1d4ed8; --accent-blue-soft:#dbeafe; --accent-blue-border:#bfdbfe;
     --accent-purple:#7c3aed; --accent-purple-strong:#6d28d9; --accent-purple-soft:#ede9fe; --accent-purple-border:#ddd6fe;
 
     --slate-400:#94a3b8; --slate-300:#cbd5e1;
     --table-surface:var(--card); --table-row-hover:rgba(15,23,42,0.04);
 
-    /* Radius/Radius 4 -> --radius, Radius/Radius 8 -> --radius-lg (Figma tokens);
-       xl/2xl have no Figma equivalent yet, left as-is. */
-    --radius:4px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:20px;
+    --radius:6px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:20px;
     --shadow: 0px 2px 4px 0px rgba(30,41,59,.14), 0 8px 22px rgba(15,23,42,.08);
     --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 24px -8px rgba(37,99,235,.16);
     --shadow-press: 0 1px 2px rgba(15,23,42,.06);
     --scrim: rgba(255,255,255,.82);
     --tabbar-bg: rgba(255,255,255,.4);
     --tabbar-highlight: rgba(255,255,255,.7);
-    --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#1b59f8; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
+    --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#2563eb; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
 
     --font-body: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    /* Kept as a separate token (rather than deleting it and rewriting every
-       var(--font-mono) call site) so the numeric/code styling elsewhere —
-       tabular-nums, letter-spacing — still reads as intentionally distinct,
-       but the actual typeface is Inter everywhere, not a system monospace. */
-    --font-mono: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-
-    /* Shared icon size for the Reconciliation Form (scan/note/mic/photo/video/
-       trash/attachment icons) — was a grab-bag of one-off px sizes (12-20px)
-       baked into each icon's own SVG markup. Consolidated to one token so
-       resizing them all is a single edit instead of hunting every ICON.*
-       definition. Icons used elsewhere in the app keep their own sizes;
-       this token is scoped to the icons that actually render in that form. */
-    --icon-size: 16px;
+    --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
 
     /* Type scale — adapted from theme.css's --text-xs/sm/base/lg/xl/2xl/4xl (12/14/16/20/24/30/48px),
        compacted for a dense mobile-web density (still above the very first ad-hoc pass). Change
@@ -121,13 +107,13 @@
   }
   :root[data-theme="light"]{
     --background:#ffffff; --foreground:#0f172a; --card:#ffffff; --card-foreground:#0f172a;
-    --popover:#ffffff; --popover-foreground:#000000; --primary:#1b59f8; --primary-foreground:#ffffff;
-    --secondary:#f1f5f9; --secondary-foreground:#0f172a; --muted:#f8fafc; --muted-foreground:#64748b;
-    --accent:#f1f5f9; --accent-foreground:#0f172a; --border:#e2e8f0; --input-background:#ffffff; --ring:#1b59f8;
-    --rag-red:#ef4444; --rag-red-strong:#b91c1c; --rag-red-soft:#fef2f2; --rag-red-border:#fecaca;
-    --rag-amber:#d97706; --rag-amber-strong:#b45309; --rag-amber-soft:#fef9c3; --rag-amber-border:#fde68a;
-    --rag-green:#22c55e; --rag-green-strong:#15803d; --rag-green-soft:#dcfce7; --rag-green-border:#bbf7d0;
-    --accent-blue:#1b59f8; --accent-blue-strong:#133eb7; --accent-blue-soft:#dbeafe; --accent-blue-border:#bfdbfe;
+    --popover:#ffffff; --popover-foreground:#000000; --primary:#2563eb; --primary-foreground:#ffffff;
+    --secondary:#f1f5f9; --secondary-foreground:#0f172a; --muted:#f1f5f9; --muted-foreground:#64748b;
+    --accent:#f1f5f9; --accent-foreground:#0f172a; --border:#e2e8f0; --input-background:#ffffff; --ring:#2563eb;
+    --rag-red:#dc2626; --rag-red-strong:#b91c1c; --rag-red-soft:#fee2e2; --rag-red-border:#fecaca;
+    --rag-amber:#d97706; --rag-amber-strong:#b45309; --rag-amber-soft:#fef3c7; --rag-amber-border:#fde68a;
+    --rag-green:#16a34a; --rag-green-strong:#15803d; --rag-green-soft:#dcfce7; --rag-green-border:#bbf7d0;
+    --accent-blue:#2563eb; --accent-blue-strong:#1d4ed8; --accent-blue-soft:#dbeafe; --accent-blue-border:#bfdbfe;
     --accent-purple:#7c3aed; --accent-purple-strong:#6d28d9; --accent-purple-soft:#ede9fe; --accent-purple-border:#ddd6fe;
     --slate-400:#94a3b8; --slate-300:#cbd5e1; --table-surface:var(--card); --table-row-hover:rgba(15,23,42,.04);
     --shadow: 0px 2px 4px 0px rgba(30,41,59,.14), 0 8px 22px rgba(15,23,42,.08);
@@ -136,14 +122,12 @@
     --scrim: rgba(255,255,255,.82);
     --tabbar-bg: rgba(255,255,255,.4);
     --tabbar-highlight: rgba(255,255,255,.7);
-    --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#1b59f8; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
+    --sidebar:#ffffff; --sidebar-foreground:#0f172a; --sidebar-primary:#2563eb; --sidebar-accent:#f1f5f9; --sidebar-border:#e2e8f0;
   }
 
-  /* Brand color — fixed header/primary-button color, constant across light & dark
-     (a branded app header doesn't flip with theme; only page content does).
-     Matches the Inspection Tool Figma design system's Primary CTA/Button token
-     (Default #1b59f8, Pressed #133eb7) — see euYhDkBzMYcoYPEhhBIsvQ. */
-  :root{ --brand-navy:#1b59f8; --brand-navy-dark:#133eb7; --brand-navy-ink:#ffffff; }
+  /* Brand navy — fixed header/primary-button color, constant across light & dark
+     (a branded app header doesn't flip with theme; only page content does). */
+  :root{ --brand-navy:#1F3864; --brand-navy-dark:#14233F; --brand-navy-ink:#ffffff; }
 
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -191,22 +175,18 @@
   .rail-item.logout{color:var(--rag-red);}
 
   /* ============ STATUS BAR + HEADER (navy, matches the RAMS reference) ============ */
-  .statusbar{display:flex; align-items:center; justify-content:space-between; padding:8px 18px 0; font-family:var(--font-mono); font-weight:600; font-size:var(--text-2xs); color:var(--muted-foreground); flex-shrink:0;}
+  .statusbar{display:flex; align-items:center; justify-content:space-between; padding:8px 18px 0; font-family:var(--font-mono); font-weight:600; font-size:var(--text-2xs); color:rgba(255,255,255,.7); flex-shrink:0;}
   .statusbar .icons{display:flex; align-items:center; gap:5px;}
   .sb-dot{width:6px; height:6px; border-radius:999px; background:#4ade80; display:inline-block;}
 
-  /* Header chrome — matches the Figma reference's light screens: white/card
-     background with dark heading text and a hairline border, not a solid
-     brand-color bar. Blue is reserved for buttons, links and small accents
-     (see .btn.primary, .avatar-badge) rather than large chrome surfaces. */
-  .navtop{background:var(--card); border-bottom:1px solid var(--border); flex-shrink:0; position:sticky; top:0; z-index:30;}
-  .back-btn{display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:999px; border:1px solid var(--border); background:var(--secondary); color:var(--foreground); flex-shrink:0; transition:transform .1s ease, background .15s ease;}
-  .back-btn:active{transform:scale(.88); background:var(--accent);}
+  .navtop{background:var(--brand-navy); border-bottom:none; flex-shrink:0; position:sticky; top:0; z-index:30;}
+  .back-btn{display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:999px; border:none; background:rgba(255,255,255,.14); color:#fff; flex-shrink:0; transition:transform .1s ease, background .15s ease;}
+  .back-btn:active{transform:scale(.88); background:rgba(255,255,255,.22);}
   .app-header{padding:12px 18px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
-  .app-header h1{font-size:var(--text-xl); font-weight:800; letter-spacing:-.01em; margin:0 0 2px; color:var(--foreground); line-height:1.25;}
-  .app-header .sub{font-size:var(--text-xs); color:var(--muted-foreground); line-height:1.3;}
+  .app-header h1{font-size:var(--text-xl); font-weight:800; letter-spacing:-.01em; margin:0 0 2px; color:var(--brand-navy-ink); line-height:1.25;}
+  .app-header .sub{font-size:var(--text-xs); color:rgba(255,255,255,.66); line-height:1.3;}
   .header-actions{display:flex; align-items:center; gap:8px; flex-shrink:0; position:relative;}
-  .icon-btn{width:34px; height:34px; border-radius:999px; border:1px solid var(--border); background:var(--secondary); color:var(--foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
+  .icon-btn{width:34px; height:34px; border-radius:999px; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.1); color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
   .icon-btn:active{transform:scale(.9);}
   .icon-btn[aria-label="Sync now"]{background:none; border:none;}
   .icon-btn[aria-label="Sync now"] svg{width:18px; height:18px;}
@@ -220,7 +200,7 @@
   .menu-pop button:hover{background:var(--accent);}
 
   /* ============ SHARED BLOCKS ============ */
-  .body-pad{padding:14px 18px 18px; flex:1; min-height:0; display:flex; flex-direction:column; gap:14px;}
+  .body-pad{padding:14px 18px 18px; flex:1; display:flex; flex-direction:column; gap:14px;}
   .banner{display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:var(--radius); font-size:var(--text-base); font-weight:600; border:1px solid transparent;}
   .banner.good{background:var(--rag-green-soft); color:var(--rag-green-strong);}
   .banner.info{background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
@@ -274,9 +254,8 @@
   .progress-track{height:6px; border-radius:999px; background:var(--muted); overflow:hidden;}
   .progress-fill{height:100%; background:var(--primary); border-radius:999px; transition:width .3s ease;}
 
-  /* Button — matches the Inspection Tool Figma CTA component: rectangular,
-     Radius/Radius 8 corners (var(--radius-lg)), brand-color primary. */
-  .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:46px; padding:0 18px; border-radius:var(--radius-lg); border:none; font-size:var(--text-base); font-weight:600; font-family:var(--font-body); transition:transform .1s ease, background .15s ease; -webkit-tap-highlight-color:transparent;}
+  /* Button — rectangular, navy primary (matches the RAMS reference "Start audit" button) */
+  .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:46px; padding:0 18px; border-radius:999px; border:none; font-size:var(--text-base); font-weight:600; font-family:var(--font-body); transition:transform .1s ease, background .15s ease; -webkit-tap-highlight-color:transparent;}
   .btn.primary{background:var(--brand-navy); color:var(--brand-navy-ink);}
   .btn.primary:hover{background:var(--brand-navy-dark);}
   .btn.primary:active{transform:scale(.98);}
@@ -286,14 +265,11 @@
   .btn.outline:active{transform:scale(.98);}
   .btn.ghost-disabled{background:var(--secondary); color:var(--slate-400); border:1px dashed var(--border); cursor:not-allowed;}
   .btn.small{height:38px; padding:0 14px; font-size:var(--text-sm); width:auto;}
-  /* Width-fits-content variant — for buttons that sit inline (e.g. bottom-
-     right of a card) instead of stretching to fill a full-width footer bar. */
-  .btn.auto{width:auto; height:42px;}
 
   .sticky-actions{position:sticky; bottom:0; background:linear-gradient(to top, var(--muted) 70%, transparent); padding:16px 0 4px; margin-top:auto; display:flex; flex-direction:column; gap:8px;}
-  /* Mobile: stacked floating buttons (primary on top, outline below), same
-     language as .sticky-actions and the dashboard's Resume/Start Audit buttons —
-     .btn's own border-radius is left alone instead of being flattened.
+  /* Mobile: stacked floating pills (primary on top, outline below), same
+     language as .sticky-actions and the dashboard's Resume/Start Audit pills —
+     .btn's own border-radius:999px is left alone instead of being flattened.
      Sits in normal flow (not pinned to the viewport bottom) with no filled
      background, so it reads as part of the page rather than a fixed toolbar.
      Tablet keeps its own look via the .device.tablet override below, since
@@ -328,67 +304,6 @@
   .ongoing-meta{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:14px;}
   .ongoing-action .btn{width:100%;}
   .chev{color:var(--slate-400); flex-shrink:0;}
-
-  /* ---- To Do Task board: 4 due-date columns (Delayed/Today/This Week/
-     This Month) instead of the old status tabs — a completed audit isn't
-     filtered into a column here at all, it's dropped before bucketing
-     (see renderTasks), matching this being a to-do list, not a full log.
-     Horizontal scroll on phone (columns are too narrow to ever stack
-     usefully); a real 4-col grid on tablet, where there's room. ---- */
-  .todo-board{display:flex; gap:14px; overflow-x:auto; padding-bottom:6px; align-items:flex-start;}
-  .todo-col{flex:0 0 260px; display:flex; flex-direction:column; gap:12px;}
-  .todo-col-head{display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:var(--radius-xl); font-weight:700; font-size:12.5px;}
-  .todo-col-count{display:inline-flex; align-items:center; justify-content:center; min-width:22px; padding:1px 9px; border-radius:999px; font-weight:700; font-size:11px; color:#fff;}
-  .todo-col-red{background:var(--rag-red-soft); color:var(--rag-red-strong);}
-  .todo-col-red .todo-col-count{background:var(--rag-red-strong);}
-  .todo-col-green{background:var(--rag-green-soft); color:var(--rag-green-strong);}
-  .todo-col-green .todo-col-count{background:var(--rag-green-strong);}
-  .todo-col-blue{background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
-  .todo-col-blue .todo-col-count{background:var(--accent-blue-strong);}
-  .todo-col-amber{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
-  .todo-col-amber .todo-col-count{background:var(--rag-amber-strong);}
-  .todo-col-body{display:flex; flex-direction:column; gap:12px;}
-  .todo-col-empty{padding:22px 10px; text-align:center; color:var(--muted-foreground); font-size:11.5px; border:1px dashed var(--border); border-radius:var(--radius-lg);}
-  .todo-card{width:100%; text-align:left; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow-card); transition:transform .1s ease;}
-  .todo-card:active{transform:scale(.98);}
-  .todo-card-title{font-weight:700; font-size:12.5px; color:var(--foreground);}
-  .todo-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 14px;}
-  .todo-field{display:flex; flex-direction:column; align-items:flex-start; gap:5px; min-width:0;}
-  .todo-field .k{font-size:10px; font-weight:500; color:var(--muted-foreground);}
-  .todo-field .v{font-weight:600; font-size:11.5px; color:var(--foreground);}
-  .todo-num-chip{display:inline-flex; align-items:center; justify-content:center; width:fit-content; min-width:26px; padding:2px 8px; background:var(--muted); border-radius:var(--radius); font-weight:600; font-size:11.5px; color:var(--foreground);}
-  .device.tablet .todo-board{display:grid; grid-template-columns:repeat(4, 1fr); overflow-x:visible; align-items:start;}
-  .device.tablet .todo-col{flex:none;}
-
-  /* ---- Reported Audits (tablet-only Progress tab) — search + sort toolbar
-     over a 4-col grid of flagged (non-"Good") SKU lines. Styled after the
-     reference "Reported Issues" screen: a soft blue-tinted header strip per
-     card, plain (non-caps) gray labels over bold dark values, and an
-     always-visible chip showing the active sort so it doesn't hide inside
-     the dropdown. ---- */
-  .issue-toolbar{display:flex; align-items:center; gap:10px; margin-bottom:16px;}
-  .issue-sort-chip{display:inline-flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 8px 8px 14px; border-radius:999px; background:var(--accent-blue-soft); font-size:var(--text-sm); font-weight:700; color:var(--foreground); white-space:nowrap;}
-  .issue-sort-chip .dot{width:6px; height:6px; border-radius:999px; background:var(--accent-blue-strong); flex-shrink:0;}
-  .issue-sort-chip .val{color:var(--accent-blue-strong); background:var(--card); padding:4px 10px; border-radius:999px;}
-  .issue-sort-chip .clear{display:flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:999px; color:var(--muted-foreground); flex-shrink:0;}
-  .issue-sort-chip .clear svg{width:11px; height:11px;}
-  .issue-toolbar-spacer{flex:1;}
-  .issue-sort-panel{left:auto; right:0; width:200px;}
-  .issue-filter-active{border-color:var(--primary); color:var(--primary);}
-  .issue-sort-title{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); padding:6px 10px 8px;}
-  .issue-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:16px;}
-  /* padding/margin:0 reset — this is a <button>, and the browser's default
-     button padding was insetting the header strip from the card's own
-     border instead of it running edge-to-edge. */
-  .issue-card{display:block; width:100%; margin:0; padding:0; text-align:left; font:inherit; cursor:pointer; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-xl); overflow:hidden; box-shadow:var(--shadow-card); transition:transform .1s ease;}
-  .issue-card:active{transform:scale(.98);}
-  .issue-card-head{display:flex; align-items:center; width:100%; gap:7px; padding:11px 14px; font-weight:700; font-size:12.5px; color:var(--foreground); background:var(--accent-blue-soft);}
-  .issue-card-head .k{font-size:12.5px; font-weight:600; color:var(--foreground); text-transform:none;}
-  .issue-head-icon{display:flex; flex-shrink:0; color:var(--accent-blue-strong);}
-  .issue-head-icon svg{width:14px; height:14px;}
-  .issue-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; padding:14px;}
-  .issue-card-grid .todo-field .k{font-size:12px; font-weight:500; color:var(--muted-foreground); text-transform:none; letter-spacing:normal;}
-  .issue-card-grid .todo-field .v{font-size:13.5px; font-weight:700; color:var(--foreground);}
 
   /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
   .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--accent-blue-strong); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
@@ -455,9 +370,9 @@
   /* Mobile: a fixed grid column forced every bay code into an equal-width
      cell, and the 999px radius on that fixed box turned it into a circle
      rather than a pill — long codes like "E-01-01" wrapped to two lines
-     inside a circle. Flex-wrap + content-sized padding lets each capsule
-     size to its own text on one line, at any code length. Tablet keeps
-     its original circle grid via the
+     inside a circle. Flex-wrap + content-sized padding (same pattern as
+     .cond-chip-row) lets each capsule size to its own text on one line, at
+     any code length. Tablet keeps its original circle grid via the
      .device.tablet override below — mobile and tablet stay independent. */
   .bay-pill-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:20px;}
   .bay-pill{display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; padding:7px 12px; border-radius:999px; font-weight:700; font-size:12.5px; font-family:var(--font-mono); border:1px solid transparent; cursor:pointer; transition:transform .12s ease;}
@@ -483,12 +398,7 @@
   select{width:100%; appearance:none; background:var(--input-background); border:1px solid var(--border); border-radius:12px; padding:11px 34px 11px 12px; font-size:var(--text-base); font-weight:600; color:var(--foreground);}
   .select-wrap .chev{position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--slate-400);}
   /* ---- picker button (mobile-native alternative to <select>) ---- */
-  /* font-family/line-height set explicitly (not just inherited) because the
-     Rack/Bay dropdown triggers are real <button> elements while Layout/Pallet
-     LPN are plain <div>s showing the same class — browsers give buttons a
-     different default font stack/line-height than a div, which otherwise
-     makes the two look like different heights even with identical padding. */
-  .picker-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--input-background); border:1px solid var(--border); border-radius:12px; padding:11px 12px; font-size:var(--text-base); font-weight:600; font-family:var(--font-body); line-height:1.4; color:var(--foreground); text-align:left; transition:transform .1s ease, border-color .15s ease;}
+  .picker-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--input-background); border:1px solid var(--border); border-radius:12px; padding:11px 12px; font-size:var(--text-base); font-weight:600; color:var(--foreground); text-align:left; transition:transform .1s ease, border-color .15s ease;}
   .picker-btn:active{transform:scale(.99); border-color:var(--accent-blue-border);}
   .picker-btn .chevronDown{color:var(--slate-400); flex-shrink:0; display:flex;}
   /* Fixed ("only option") level — same shape/size as a real picker so the whole
@@ -496,208 +406,6 @@
      there's nothing to tap: no border contrast, no chevron, dimmed text. */
   .picker-btn.fixed{background:var(--muted); color:var(--muted-foreground); cursor:default;}
   .picker-btn.fixed:active{transform:none;}
-
-  /* Rack View (tablet-only) — schematic elevation of a single bay: levels
-     stacked bottom-up (L1 at the floor), a fixed number of slots per level,
-     drawn as a bordered rack outline. Only the slots that map to a real
-     Storage Location in this bay are interactive/colored; the rest are
-     structural filler so the bay still reads as a physical rack even when
-     the audit's location count doesn't fill every level. */
-  /* Sized so the whole Rack View screen (header + toolbar + this diagram +
-     footer) fits within the tablet frame without the page scrolling — cell
-     height/padding are deliberately compact (was 28px cells, now 16px). */
-  .rack-diagram-card{display:flex; justify-content:center; padding:6px 0 2px;}
-  .rack-diagram{display:flex; flex-direction:column;}
-  .rack-diagram-row{display:flex; align-items:center; gap:8px;}
-  .rack-diagram-row-label{width:24px; text-align:right; font-size:10.5px; font-weight:700; color:var(--muted-foreground); font-family:var(--font-mono); flex-shrink:0;}
-  .rack-diagram-row-cells{display:flex; gap:3px; padding:2px 5px; border-left:1.5px solid var(--foreground); border-right:1.5px solid var(--foreground); border-top:1px solid var(--border);}
-  .rack-diagram-row:first-child .rack-diagram-row-cells{border-top:1.5px solid var(--foreground);}
-  .rack-diagram-row:last-child .rack-diagram-row-cells{border-bottom:1.5px solid var(--foreground);}
-  .rack-diagram-cell{width:70px; height:20px; border-radius:2px; background:var(--muted); border:1px solid var(--border); flex-shrink:0; padding:0; transition:transform .1s ease, background .1s ease;}
-  .rack-diagram-cell.empty{border:1px dashed var(--border); opacity:.5;}
-  .rack-diagram-cell.filled{cursor:pointer;}
-  .rack-diagram-cell.filled:active{transform:scale(.9);}
-  .rack-diagram-cell.selected{background:var(--accent-blue); border-color:var(--accent-blue-strong); box-shadow:0 0 0 2px var(--accent-blue-soft);}
-  .rack-diagram-caption{text-align:center; font-weight:700; color:var(--accent-blue-strong); margin-top:8px; font-size:var(--text-sm);}
-
-  /* Rack View's Rack/Bay picker — a richer combobox (search + grouped
-     sections + a Total badge + checkmark on the selected row) than the
-     plain single-list bottom-sheet used elsewhere, matching the Figma
-     reference. Racks are grouped by Layout (real data on this audit),
-     not a fabricated "today vs cycle" schedule split we don't track. */
-  .rvpick-wrap{position:relative;}
-  .rvpick-backdrop{position:fixed; inset:0; z-index:40; background:none; border:none; cursor:default;}
-  .rvpick-panel{position:absolute; top:calc(100% + 6px); left:0; width:280px; max-height:360px; overflow-y:auto; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow); z-index:50; padding:10px;}
-  .rvpick-search{display:flex; align-items:center; gap:8px; background:var(--muted); border:1px solid var(--border); border-radius:var(--radius-lg); padding:8px 10px; margin-bottom:6px;}
-  .rvpick-search input{flex:1; border:none; background:none; outline:none; font-size:var(--text-sm); color:var(--foreground); font-family:var(--font-body);}
-  .rvpick-group{display:flex; align-items:center; justify-content:space-between; padding:8px 6px 4px;}
-  .rvpick-group .lbl{font-size:var(--text-sm); font-weight:700; color:var(--foreground);}
-  .rvpick-group .count{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); background:var(--muted); padding:2px 9px; border-radius:999px;}
-  .rvpick-item{width:100%; display:flex; align-items:center; justify-content:space-between; padding:9px 10px; border-radius:var(--radius); border:none; background:none; font-size:var(--text-sm); color:var(--foreground); text-align:left; cursor:pointer; font-family:var(--font-body);}
-  .rvpick-item:hover{background:var(--secondary);}
-  .rvpick-item.selected{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-weight:700;}
-  .rvpick-item .check{color:var(--accent-blue); display:flex; flex-shrink:0;}
-  .rvpick-empty{padding:14px 6px; text-align:center; color:var(--muted-foreground); font-size:var(--text-sm);}
-
-  /* Rack View — visually distinct toolbar/diagram sections, matching the
-     Figma reference's layout structure. */
-  .rv-toolbar-row{padding:10px 20px; border-bottom:1px solid var(--border); background:var(--card);}
-  /* flex:1 so this card fills all remaining vertical space in body-pad
-     instead of shrink-wrapping to content and leaving dead space around a
-     small centered diagram. */
-  /* min-height:0 on every link of this flex chain (card -> body) is required
-     for flex:1 to actually CONSTRAIN height instead of growing to content —
-     without it, rows past what fits were getting silently clipped by
-     overflow:hidden (invisible AND unclickable) rather than properly sized
-     or scrolled. */
-  /* No overflow:hidden here — it was clipping (and making unclickable) any
-     diagram rows that ran even slightly past the card's estimated height.
-     Rounded-corner clipping is done per-corner on the header/body children
-     below instead, so content can never be silently cut off. */
-  .rv-diagram-card{padding:0; flex:1; min-height:0; display:flex; flex-direction:column; border-radius:var(--radius-lg);}
-  .rv-diagram-header{padding:9px 18px; background:var(--muted); border-bottom:1px solid var(--border); font-weight:700; font-size:var(--text-base); color:var(--foreground); flex-shrink:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
-  /* flex-direction:column — buildBayDiagram returns the diagram and its "Bay
-     X" caption as two sibling elements meant to stack vertically; without
-     this they sit side-by-side in a row, pushing the caption to the right
-     of the diagram instead of centered underneath it. */
-  .rv-diagram-body{flex:1; min-height:0; padding:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto;}
-  /* Bottom-right, width-fit action buttons inside the diagram card — matches
-     the Figma reference's "No Issues" / "Report New Issue" placement, instead
-     of a full-bleed sticky footer bar. */
-  .rv-actions-row{display:flex; justify-content:flex-end; gap:10px; padding:10px 16px; border-top:1px solid var(--border); flex-shrink:0; border-radius:0 0 var(--radius-lg) var(--radius-lg);}
-  .rv-scan-qr{display:flex; align-items:center; gap:10px; flex-shrink:0; color:var(--muted-foreground); font-size:var(--text-sm); font-weight:600;}
-
-  /* Right-side SKU panel — slides in over the Rack View screen after a scan.
-     Anchored to .screen (position:relative, the device frame's own scroll
-     container) rather than the viewport, so it stays inside the simulated
-     device on both phone and tablet widths instead of a fixed overlay that
-     would ignore the frame. Full-width on phone, fixed column on tablet. */
-  .rv-sku-panel-backdrop{position:absolute; inset:0; z-index:60; background:rgba(10,14,15,.4);}
-  .rv-sku-panel{position:absolute; top:0; right:0; bottom:0; z-index:61; width:100%; max-width:530px; background:var(--card); box-shadow:-8px 0 24px rgba(15,23,42,.18); display:flex; flex-direction:column; transform:translateX(0); animation:rv-sku-panel-in .18s ease;}
-  @keyframes rv-sku-panel-in{from{transform:translateX(100%);} to{transform:translateX(0);}}
-  .rv-sku-panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); flex-shrink:0; position:sticky; top:0; z-index:2; background:var(--card);}
-  .rv-sku-panel-head h3{font-size:var(--text-lg); font-weight:800; margin:0 0 4px;}
-  .rv-sku-panel-sub{font-size:var(--text-xs); font-weight:600; color:var(--muted-foreground);}
-  .rv-sku-panel-body{flex:1; min-height:0; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:14px;}
-  /* Single column always — the panel is a fixed narrow column even on
-     tablet, so it must not pick up .sku-grid's 2-column tablet override
-     (that's sized for the full-width Count Sheet page, not this drawer). */
-  .rv-sku-list{display:flex; flex-direction:column; gap:10px;}
-  .rv-sku-panel-footer{display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--border); flex-shrink:0;}
-  .rv-sku-panel-footer .btn{flex:1;}
-  @media (max-width:480px){ .rv-sku-panel{max-width:100%;} }
-
-  /* Evidence capture — note/audio/photo/video for the SKU being scanned,
-     matching the minimalist reference: icon-only capture buttons next to a
-     plain-text label, a waveform playback bar once audio exists, and a
-     thumbnail grid with a count badge per media type. */
-  .rv-evidence{display:flex; flex-direction:column; gap:10px;}
-  .rv-evidence-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
-  .rv-evidence-label{font-size:var(--text-sm); font-weight:500; color:var(--foreground);}
-  .rv-evidence-btns{display:flex; gap:8px; flex-shrink:0;}
-  .rv-evidence-note{width:100%; min-height:64px; resize:vertical; border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 12px; font:inherit; font-size:var(--text-sm); color:var(--foreground); background:var(--card);}
-  .rv-evidence-audio{display:flex; align-items:center; gap:10px; border:1px solid var(--border); border-radius:999px; padding:8px 12px;}
-  .rv-evidence-waveform{flex:1; display:flex; align-items:center; gap:2px; height:20px; overflow:hidden;}
-  .rv-evidence-waveform span{width:2px; flex-shrink:0; background:var(--accent-blue-border); border-radius:1px;}
-  .rv-evidence-duration{font-size:var(--text-2xs); color:var(--muted-foreground); font-weight:700; flex-shrink:0;}
-  .rv-evidence-group-head{display:flex; align-items:center; gap:6px; font-size:var(--text-xs); font-weight:700; color:var(--foreground);}
-  .issue-evidence-empty{margin-top:10px; font-size:var(--text-sm); color:var(--muted-foreground);}
-
-  /* ---- New Attachment (image mark-up) modal — reached from the evidence
-     row's "Add photo" button on the Rack View SKU panel. No real camera
-     capture behind the placeholder graphic (same honest-stub reasoning as
-     the rest of this evidence flow) — what IS real is the annotation:
-     actual freehand canvas drawing, actual undo/redo/color state. ---- */
-  .img-modal-hint{color:var(--muted-foreground); font-size:var(--text-sm); margin:2px 0 14px;}
-  .img-modal-photo{position:relative; width:100%; aspect-ratio:2.2 / 1; border-radius:var(--radius-lg); overflow:hidden; background:linear-gradient(135deg, var(--slate-300), var(--muted));}
-  .img-modal-photo-placeholder{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--card); opacity:.5;}
-  .img-modal-photo-placeholder svg{width:64px; height:64px;}
-  .img-modal-photo canvas{position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair;}
-  .img-modal-toolrow{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:16px; flex-wrap:wrap;}
-  .img-color-row{display:flex; gap:8px; flex-wrap:wrap;}
-  .img-color-swatch{width:34px; height:34px; border-radius:9px; border:none; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; transition:transform .1s ease;}
-  .img-color-swatch:active{transform:scale(.9);}
-  .img-tool-btns{display:flex; gap:8px; flex-shrink:0;}
-  .img-modal-footer{display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border);}
-  .rv-evidence-group-head svg{width:var(--icon-size); height:var(--icon-size);}
-  .rv-evidence-thumbs{display:flex; flex-wrap:wrap; gap:8px;}
-  .rv-evidence-thumb{width:64px; height:64px; border-radius:var(--radius-lg); border:1px solid var(--border); background:var(--muted); display:flex; align-items:center; justify-content:center; color:var(--muted-foreground); position:relative; flex-shrink:0; padding:0;}
-  .rv-evidence-thumb svg{width:var(--icon-size); height:var(--icon-size);}
-  .rv-evidence-thumb .dur{position:absolute; bottom:3px; right:3px; font-size:9px; font-weight:700; background:rgba(10,14,15,.65); color:#fff; padding:1px 4px; border-radius:4px;}
-
-  /* ---- Audit Schedule (calendar) — matches the Figma reference:
-     month grid, Mon-Sun columns, color-coded audit chips per day, and a
-     "Schedule Details" modal grouped by audit type on day click. ---- */
-  .cal-toolbar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
-  .cal-nav{display:flex; align-items:center; gap:8px;}
-  .cal-nav-btn{width:36px; height:36px; border-radius:var(--radius-lg); border:1px solid var(--border); background:var(--card); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
-  .cal-nav-btn:active{transform:scale(.92); background:var(--secondary);}
-  /* Previous/Next now share the same ICON.chevron glyph (were two different
-     icons — ICON.back for previous, ICON.chevron for next — mismatched
-     stroke weight and shape) — mirrored via CSS instead of a second icon. */
-  .cal-nav-prev svg{transform:scaleX(-1);}
-  .cal-month-label{border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); padding:8px 16px; font-weight:700; color:var(--foreground); font-size:var(--text-base); white-space:nowrap;}
-  .cal-view-select{border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); padding:8px 14px; display:flex; align-items:center; gap:8px; color:var(--foreground); font-weight:600; font-size:var(--text-sm);}
-  /* Card-grid layout — matches the Figma reference: each cell is its own
-     light-bordered rounded box with a visible gutter between cells (a CSS
-     grid `gap`), not a shared-border table where adjacent cells' borders
-     stack into a heavier, darker line. --cal-gap is shared by the weekday
-     header, each week's day-cell grid AND the event-bar overlay grid below,
-     so a bar's grid-column placement lines up with the day cells under it
-     even though there's a gap between columns. */
-  .cal-grid{--cal-gap: 8px;}
-  .cal-weekday-row{display:grid; grid-template-columns:repeat(7,1fr); gap:var(--cal-gap); margin-bottom:var(--cal-gap);}
-  .cal-weekday{padding:10px 8px; text-align:center; font-weight:700; font-size:var(--text-sm); color:var(--foreground); background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg);}
-  /* Each week is its own position:relative row: a 7-col grid of day cells
-     (borders/background/click-target/today/sunday styling) underneath, plus
-     an absolutely-positioned overlay of lane-assigned event bars on top that
-     can visually span multiple day columns — matches the Figma reference,
-     where a multi-day audit draws as one continuous tinted bar across the
-     days it runs, not a separate chip repeated in each day cell. */
-  .cal-week{position:relative; margin-bottom:var(--cal-gap);}
-  .cal-week-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:var(--cal-gap);}
-  .cal-day-cell{min-height:108px; border:1px solid var(--border); border-radius:var(--radius-lg); padding:6px 6px 8px; display:flex; text-align:left; background:var(--card); cursor:pointer; transition:background .1s ease;}
-  .cal-day-cell:active{background:var(--secondary);}
-  .cal-day-cell.other-month{background:var(--muted); opacity:.55;}
-  .cal-day-num{margin-left:auto; font-size:var(--text-sm); font-weight:700; color:var(--foreground);}
-  .cal-day-cell.is-sunday .cal-day-num{color:var(--rag-red);}
-  .cal-day-cell.is-today{border-color:var(--accent-blue); border-width:1.5px;}
-  .cal-day-cell.is-today .cal-day-num{color:var(--accent-blue);}
-  .cal-week-bars{position:absolute; top:28px; left:0; right:0; bottom:4px; pointer-events:none; overflow:hidden; display:flex; flex-direction:column; gap:3px;}
-  /* Bars/more-indicators are placed with grid-column (not left/width percent
-     math) so they land in exactly the same columns as the gapped day-cell
-     grid above, regardless of gap size. */
-  .cal-bar-row, .cal-more-row{display:grid; grid-template-columns:repeat(7,1fr); gap:var(--cal-gap); height:16px;}
-  .cal-bar{height:16px; display:flex; align-items:center; padding:0 7px; border:none; border-radius:4px; font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:auto; cursor:pointer; font-family:var(--font-body);}
-  .cal-bar.type-spot{background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
-  .cal-bar.type-full{background:var(--accent-purple-soft); color:var(--accent-purple-strong);}
-  .cal-bar.type-cycle{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
-  .cal-more{font-size:10.5px; font-weight:700; color:var(--muted-foreground); padding:0 7px;}
-  .cal-legend{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:12px 2px 0; font-size:var(--text-xs); color:var(--muted-foreground);}
-  .cal-legend .sw{display:inline-flex; align-items:center; gap:6px;}
-  .cal-legend .sw::before{content:""; width:9px; height:9px; border-radius:2px; background:currentColor;}
-  .cal-legend .sw.type-spot{color:var(--accent-blue);}
-  .cal-legend .sw.type-full{color:var(--accent-purple);}
-  .cal-legend .sw.type-cycle{color:var(--rag-amber);}
-
-  /* Floating popover, not a full dark-scrim dialog — the calendar grid stays
-     fully visible behind it, matching the Figma reference where the card
-     overlaps the grid rather than blocking out the whole screen. */
-  .sched-overlay{background:transparent; align-items:flex-start; justify-content:center; padding-top:104px;}
-  .sched-popover{box-shadow:0 12px 32px rgba(15,23,42,.18), 0 2px 8px rgba(15,23,42,.1);}
-  .sched-modal-head{display:flex; align-items:center; gap:8px;}
-  .sched-modal-head .count-badge{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-xs); font-weight:800; padding:2px 10px; border-radius:999px;}
-  .sched-modal-date{color:var(--muted-foreground); font-size:var(--text-sm); padding:8px 22px 16px; border-bottom:1px solid var(--border);}
-  .sched-group-label{font-size:var(--text-sm); font-weight:700; color:var(--muted-foreground); margin:16px 0 8px;}
-  .sched-group-label:first-child{margin-top:0;}
-  .sched-card{display:block; width:100%; text-align:left; font-family:var(--font-body); border:1px solid var(--border); border-left:4px solid; border-radius:var(--radius-lg); padding:12px 14px; margin-bottom:10px; background:var(--card); cursor:pointer; transition:transform .1s ease, background .1s ease;}
-  .sched-card:active{transform:scale(.98); background:var(--secondary);}
-  .sched-card.type-spot{border-left-color:var(--accent-blue);}
-  .sched-card.type-full{border-left-color:var(--accent-purple);}
-  .sched-card.type-cycle{border-left-color:var(--rag-amber);}
-  .sched-card .name{font-weight:700; color:var(--foreground); font-size:var(--text-base); margin-bottom:3px;}
-  .sched-card .scope{color:var(--muted-foreground); font-size:var(--text-sm); margin-bottom:8px;}
-  .sched-card .meta{display:flex; align-items:center; gap:6px; color:var(--muted-foreground); font-size:var(--text-xs); font-weight:600;}
 
   /* ---- bottom sheet picker ---- */
   .sheet-overlay{position:absolute; inset:0; background:rgba(15,23,42,.45); z-index:80; display:flex; align-items:flex-end; opacity:0; pointer-events:none; transition:opacity .2s ease;}
@@ -747,64 +455,34 @@
   .sku-row-collapsed{width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 12px; display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-card); text-align:left; transition:transform .1s ease;}
   .sku-row-collapsed:active{transform:scale(.98);}
   .sku-row-right{display:flex; align-items:center; gap:12px; flex-shrink:0; margin-left:auto;}
+  .sku-row-qty{font:700 13px var(--font-mono); color:var(--muted-foreground);}
   .sku-row-edit{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--accent-blue-strong); background:var(--accent-blue-soft); padding:6px 10px; border-radius:999px;}
-  .sku-row-edit svg{width:var(--icon-size); height:var(--icon-size);}
-  /* Redesigned collapsed SKU row — a labeled-column card (SKU / Quantity /
-     Condition / Action) matching the reference "Previous reported tests"
-     list, replacing the old single-button "Qty N · Edit" row. */
-  .sku-row-card{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; width:100%; background:var(--table-surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px 16px;}
-  .sku-row-col{display:flex; flex-direction:column; gap:6px; min-width:0;}
-  .sku-row-col .col-label{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.03em;}
-  .sku-row-col .col-val{font-size:var(--text-sm); font-weight:700; color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .sku-row-col.actions{flex-shrink:0;}
-  .sku-row-actions{display:flex; align-items:center; gap:10px;}
-  /* Borderless — the reference's Action column icons are plain glyphs, not
-     bordered/backed buttons like .card-icon-btn used elsewhere in the form. */
-  .icon-action-btn{width:var(--icon-size); height:var(--icon-size); border:none; background:none; padding:0; color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
-  .icon-action-btn svg{width:var(--icon-size); height:var(--icon-size);}
-  .icon-action-btn:active{transform:scale(.85);}
-  .icon-action-btn.danger{color:var(--rag-red-strong);}
-  .severity-pill{display:inline-flex; align-items:center; width:fit-content; padding:4px 12px; border-radius:999px; font-size:var(--text-sm); font-weight:700;}
-  .severity-pill.sev-green{background:var(--rag-green-soft); color:var(--rag-green-strong);}
-  .severity-pill.sev-amber{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
-  .severity-pill.sev-red{background:var(--rag-red-soft); color:var(--rag-red-strong);}
   .sku-card-head{display:flex; align-items:center; gap:12px;}
   .sku-avatar{width:40px; height:40px; border-radius:var(--radius-xl); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .sku-avatar.sm{width:34px; height:34px; border-radius:var(--radius-lg);}
   .sku-id{min-width:0; flex-shrink:1; display:flex; flex-direction:column; gap:5px;}
-  /* The expanded edit-card's header (SKU code + LOT badge) sits on one line —
-     unlike the collapsed row/saved-pallet header below, which stacks a plain
-     sku-lot caption under the code and shares this same .sku-id class. */
-  .sku-card-head .sku-id{flex-direction:row; align-items:center; gap:8px;}
-  .sku-code{font:800 13.5px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .sku-lot{display:block; margin-top:3px; font-size:10.5px; font-weight:600; color:var(--muted-foreground);}
-  .lot-badge{display:inline-flex; align-items:center; gap:5px; width:fit-content; font:700 10px var(--font-mono); color:var(--muted-foreground); background:var(--muted); padding:3px 9px 3px 7px; border-radius:999px;}
+  .sku-code{font:800 15.5px var(--font-body); color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sku-lot{display:block; margin-top:3px; font-size:12px; font-weight:600; color:var(--muted-foreground);}
+  .lot-badge{display:inline-flex; align-items:center; gap:5px; width:fit-content; font:700 11.5px var(--font-mono); color:var(--muted-foreground); background:var(--muted); padding:3px 9px 3px 7px; border-radius:999px;}
   .lot-badge .dot{width:5px; height:5px; border-radius:999px; background:var(--rag-amber-strong, var(--muted-foreground));}
-  .sec-label{font-size:9px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
-  .sku-section{display:flex; flex-direction:column; gap:10px;}
-  /* Bordered, not shaded — same flat-field language as the note textarea and
-     evidence audio bar elsewhere in this panel. */
-  .qty-stepper-row{display:flex; align-items:center;}
-  .qty-input{font:700 14px var(--font-body); width:100%; height:40px; text-align:left; color:var(--foreground); border:1px solid var(--border); background:var(--card); border-radius:var(--radius-lg); outline:none; padding:0 12px; -moz-appearance:textfield; transition:border-color .12s ease;}
-  .qty-input:focus{border-color:var(--primary);}
+  .sec-label{font-size:10.5px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;}
+  .sku-section{background:var(--muted); border-radius:var(--radius-xl); padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
+  .qty-stepper-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .qty-stepper{display:flex; align-items:center; gap:8px;}
+  .qty-stepper button{width:32px; height:32px; border-radius:999px; border:none; background:var(--card); color:var(--foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:var(--shadow-card); transition:transform .1s ease, background .1s ease;}
+  .qty-stepper button:active{transform:scale(.88); background:var(--accent-blue-soft);}
+  .qty-stepper button:disabled{opacity:.4;}
+  .qty-input{font:800 17px var(--font-body); width:56px; height:36px; text-align:center; color:var(--foreground); border:1.5px solid var(--border); background:var(--card); border-radius:var(--radius-lg); outline:none; padding:0; -moz-appearance:textfield; transition:border-color .12s ease;}
+  .qty-input:focus{border-color:var(--brand-navy);}
   .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
-  /* Radio grid — matches the reference right-panel's Observations/Severity
-     style (plain label + native radio) rather than the app's usual pill
-     chips, since this field reads as a single required choice there. */
-  .cond-radio-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:11px 14px;}
-  .cond-radio{display:flex; align-items:center; gap:8px; font-size:var(--text-sm); font-weight:500; color:var(--foreground); cursor:pointer;}
-  .cond-radio input{width:16px; height:16px; accent-color:var(--primary); flex-shrink:0; cursor:pointer;}
-  .cond-radio input:disabled{cursor:default;}
-  .cond-radio:has(input:disabled){opacity:.6; cursor:default;}
+  .cond-chip-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .cond-chip{display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; border:none; background:var(--card); font-size:12.5px; font-weight:700; color:var(--muted-foreground); box-shadow:var(--shadow-card); transition:transform .1s ease, background .12s ease, color .12s ease;}
+  .cond-chip:active{transform:scale(.95);}
+  .cond-chip.selected{background:var(--brand-navy); color:#fff;}
+  .cond-chip:disabled{opacity:.6;}
   .sku-card-footer{display:flex; gap:8px; align-items:center;}
   .sku-card-footer .btn{flex:1;}
   .card-icon-btn{width:40px; height:40px; border-radius:999px; border:1.5px solid var(--border); background:var(--card); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .1s ease;}
-  /* Forces every icon-only button to the shared --icon-size, overriding
-     whatever width/height each ICON.* svg happens to carry — the glyphs
-     themselves (12-20px baked in) are reused elsewhere at their own
-     intentional sizes (avatars, empty-state art), so this is scoped to the
-     button/label contexts rather than edited into the shared icon strings. */
-  .card-icon-btn svg{width:var(--icon-size); height:var(--icon-size);}
   .card-icon-btn:active{transform:scale(.9);}
   .card-icon-btn.danger{border-color:var(--rag-red-border); background:var(--rag-red-soft); color:var(--rag-red-strong);}
 
@@ -819,25 +497,22 @@
   .empty-state{display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px; padding:40px 20px; color:var(--muted-foreground);}
   .empty-state .glyph{font-size:30px; opacity:.5; margin-bottom:4px; color:var(--slate-400);}
 
-  /* ---- login: light page + white centered card, matching the Figma
-     Inspection Tool login/OTP reference screens — dark heading text, blue
-     reserved for the logo mark and the Continue button only. ---- */
-  .login-screen{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 26px 30px; background:var(--muted); color:var(--foreground);}
-  .login-card{width:100%; background:var(--card); border-radius:var(--radius-xl); box-shadow:var(--shadow); padding:28px 22px; display:flex; flex-direction:column; align-items:center;}
-  .login-mark{width:56px; height:56px; border-radius:var(--radius-lg); background:var(--brand-navy); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; margin-bottom:16px;}
-  .login-screen h2{margin:0 0 4px; font-size:var(--text-xl); font-weight:800; color:var(--foreground);}
-  .login-screen p{margin:0 0 22px; font-size:var(--text-xs); color:var(--muted-foreground);}
-  .login-wh{display:inline-flex; align-items:center; gap:6px; color:var(--muted-foreground); font-size:var(--text-xs); background:var(--secondary); border-radius:20px; padding:6px 14px; margin-bottom:22px;}
+  /* ---- login (full navy, matches the RAMS reference login) ---- */
+  .login-screen{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 26px 30px; background:var(--brand-navy); color:#fff;}
+  .login-mark{width:56px; height:56px; border-radius:var(--radius-lg); background:rgba(255,255,255,.12); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; margin-bottom:16px;}
+  .login-screen h2{margin:0 0 4px; font-size:var(--text-xl); font-weight:800; color:#fff;}
+  .login-screen p{margin:0 0 22px; font-size:var(--text-xs); color:rgba(255,255,255,.62);}
+  .login-wh{display:inline-flex; align-items:center; gap:6px; color:rgba(255,255,255,.8); font-size:var(--text-xs); background:rgba(255,255,255,.09); border-radius:20px; padding:6px 14px; margin-bottom:22px;}
   .login-field{width:100%; text-align:left; margin-bottom:13px;}
-  .login-field label{display:block; font-size:var(--text-sm); font-weight:600; color:var(--muted-foreground); margin-bottom:6px;}
-  .login-input{display:flex; align-items:center; gap:9px; background:var(--input-background); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 13px; color:var(--foreground); font-size:var(--text-base);}
-  .login-input .ph{color:var(--muted-foreground);}
+  .login-field label{display:block; font-size:var(--text-sm); font-weight:600; color:rgba(255,255,255,.6); margin-bottom:6px;}
+  .login-input{display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:var(--radius-lg); padding:12px 13px; color:#fff; font-size:var(--text-base);}
+  .login-input .ph{color:rgba(255,255,255,.42);}
   .login-input input{outline:none;}
-  .login-input input::placeholder{color:var(--muted-foreground);}
-  .login-btn{width:100%; background:var(--brand-navy); color:#fff; text-align:center; font-weight:700; font-size:var(--text-base); border-radius:var(--radius-lg); padding:14px; margin-top:10px; border:none; transition:transform .1s ease;}
+  .login-input input::placeholder{color:rgba(255,255,255,.42);}
+  .login-btn{width:100%; background:#fff; color:var(--brand-navy); text-align:center; font-weight:700; font-size:var(--text-base); border-radius:999px; padding:14px; margin-top:10px; border:none; transition:transform .1s ease;}
   .login-btn:active{transform:scale(.98);}
   .login-btn:disabled{opacity:.6;}
-  .login-foot{color:var(--muted-foreground); font-size:var(--text-xs); margin-top:20px;}
+  .login-foot{color:rgba(255,255,255,.5); font-size:var(--text-xs); margin-top:20px;}
 
   .foot-note{text-align:center; color:var(--slate-400); font-size:var(--text-xs); margin-top:22px;}
 
@@ -852,7 +527,7 @@
   .tabbar-item .icon-slot{width:34px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; transition:background .15s ease;}
   .tabbar-item.active .icon-slot{background:var(--accent-blue-soft);}
   .tabbar-item svg{width:19px; height:19px; flex-shrink:0;}
-  .tabbar-item .lbl{font-size:var(--text-2xs); font-weight:600; align-self:stretch; text-align:center;}
+  .tabbar-item .lbl{font-size:var(--text-2xs); font-weight:600;}
   .tabbar-item.active .lbl{font-weight:800;}
   .tabbar-item.active .lbl{font-weight:800;}
 
@@ -863,13 +538,6 @@
 
   /* ============ TABLET REFLOW ============ */
   .device.tablet .app-header h1{font-size:21px;}
-  /* Tablet header icons — matches the Figma "Audit Details" reference: bare
-     back arrow and bell/sync icons with no circular border/fill chrome around
-     them, just the glyph in foreground color. Mobile keeps its own circular
-     icon-button chrome (separate hit-target convention on a touch phone UI),
-     per this app's mobile/tablet independence rule. */
-  .device.tablet .back-btn, .device.tablet .icon-btn{background:none; border:none; width:auto; height:auto; padding:4px;}
-  .device.tablet .back-btn:active, .device.tablet .icon-btn:active{background:var(--secondary); border-radius:999px;}
   .device.tablet .body-pad{padding:16px 26px 24px;}
   .device.tablet .kpi-grid{gap:12px;}
   .device.tablet .task-list{display:flex; flex-direction:column; gap:10px;}
@@ -877,13 +545,6 @@
   .device.tablet .task-due{flex-shrink:0;}
   .device.tablet .pill{flex-shrink:0;}
   .device.tablet .sku-grid{grid-template-columns:1fr 1fr;}
-  /* Icon-only buttons (evidence note/mic/camera/video, panel scan/delete,
-     etc.) match the Figma "Button" component spec on tablet: hug-width
-     rounded-rect (not a circle), Gray/300 (#D0D5DD) 1px border, instead of
-     the mobile app's circular pill. Left as :not(.danger) so the red
-     delete-button border it already has isn't overridden. */
-  .device.tablet .card-icon-btn{width:44px; height:40px; border-radius:var(--radius-lg); border-width:1px;}
-  .device.tablet .card-icon-btn:not(.danger){border-color:#d0d5dd;}
   .two-col{display:flex; flex-direction:column; gap:16px;}
   .device.tablet .two-col{display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:start;}
   .device.tablet .detail-grid{grid-template-columns:repeat(3,1fr);}
@@ -985,15 +646,12 @@
       <p class="studio-sub">Mobile &amp; tablet prototype for the auditor, styled with the exact tokens from rams-irds-main (theme.css / tokens.ts) — same colors, radius, and type scale as the web app, just resized for a handheld screen.</p>
     </div>
     <div class="toolbar">
-      <!-- Compares two points in the app's history rather than a live in-page
-           toggle — Version 1 (rack-audit-app-v1.html) is a frozen snapshot from
-           before the Rack View diagram existed, Version 2 is this file. Since
-           they're genuinely different app code (not a state flag), switching
-           is a real page navigation, same pattern as any other cross-file link
-           here, not a setX()-style STATE toggle like the other segmented controls. -->
+      <!-- This file is a frozen snapshot from before the Rack View diagram
+           existed (see rack-audit-app.html's matching toolbar comment) —
+           switching versions is a real page navigation, not a state toggle. -->
       <div class="segmented" role="group" aria-label="Version preview">
-        <button id="btn-version-1" onclick="location.href='rack-audit-app-v1.html'">Version 1</button>
-        <button id="btn-version-2" class="active" onclick="location.href='rack-audit-app.html'">Version 2</button>
+        <button id="btn-version-1" class="active" onclick="location.href='rack-audit-app-v1.html'">Version 1</button>
+        <button id="btn-version-2" onclick="location.href='rack-audit-app.html'">Version 2</button>
       </div>
       <div class="segmented" role="group" aria-label="Theme preview">
         <button id="btn-theme-light" class="active" onclick="setTheme('light')">Light</button>
@@ -1021,9 +679,7 @@
       </div>
       <div id="sheet-slot"></div>
       <div id="confirm-slot"></div>
-      <div id="schedule-modal-slot"></div>
       <div id="camera-slot"></div>
-      <div id="image-modal-slot"></div>
     </div>
   </div>
   <p class="foot-note">Log in → Resume/Start an audit → Scan a pallet, count SKUs, Save Record → check Progress. Every KPI updates from real state. On Tablet, the left rail gives direct navigation.</p>
@@ -1098,19 +754,6 @@ const INVENTORY_POOL = [
   { sku:'SKU-1180', name:'Fastener Pack M10', lot:'L-2322' },
 ];
 const CONDITIONS = ['Good','Damaged','Broken','Wet','Open Package','Other'];
-// Same "Good" = unflagged split summaryStats() already uses for the Audit
-// Summary's flagged-items list — Damaged/Broken read as an outright defect
-// (red), Wet/Open Package/Other as needing a look but not necessarily bad
-// (amber), so the collapsed SKU row's severity pill agrees with what
-// Audit Summary would call out for the same line.
-function conditionSeverity(condition){
-  if (condition === 'Good') return 'green';
-  if (condition === 'Damaged' || condition === 'Broken') return 'red';
-  return 'amber';
-}
-function severityPillHtml(condition){
-  return `<span class="severity-pill sev-${conditionSeverity(condition)}">${condition}</span>`;
-}
 
 const AUDITS = [
   { audit_id:'AUD-0231', audit_name:'Zone A Full Count', audit_type:'Full', count_method:'Blind (Enforced)',
@@ -1125,86 +768,17 @@ const AUDITS = [
   { audit_id:'AUD-0225', audit_name:'Zone C Damaged Recheck', audit_type:'Cycle Count', count_method:'Blind (Enforced)',
     scope_type:'Rack', scope_values:['Rack C-04'], team_members:['Arjun Sharma','Sanjay Patil'],
     start_date:'2026-06-24', end_date:'2026-06-30', status:'Submitted' },
-  { audit_id:'AUD-0219', audit_name:'Bay Recount — 01', audit_type:'Spot Check', count_method:'Blind (Enforced)',
-    scope_type:'Bay', scope_values:['Bay 03'], team_members:['Arjun Sharma'],
+  { audit_id:'AUD-0219', audit_name:'Bay Recount — B-02', audit_type:'Spot Check', count_method:'Blind (Enforced)',
+    scope_type:'Bay', scope_values:['Bay B-02-03'], team_members:['Arjun Sharma'],
     start_date:'2026-06-28', end_date:'2026-07-05', status:'In Progress' },
   { audit_id:'AUD-0240', audit_name:'Full Count — Layouts A & B', audit_type:'Full', count_method:'Blind (Enforced)',
     scope_type:'Layout', scope_values:['Layout A','Layout B'], team_members:['Arjun Sharma','Meera Kulkarni'],
     start_date:'2026-07-08', end_date:'2026-07-22', status:'Scheduled' },
 ];
 
-// Physical rack shape used to lay out the Rack View diagram (see
-// buildBayDiagram below) — independent of how many Pallet LPNs a given
-// audit's scope actually has in a bay, so the bay still reads as a real
-// multi-level rack rather than a data-sized box. Declared up here (ahead of
-// AUDITS/LOCATIONS) because AUD-0219's fixture below generates its Pallet
-// LPNs directly against this shape.
-const RACK_DIAGRAM_LEVELS = 13;
-const RACK_DIAGRAM_SLOTS_PER_LEVEL = 3;
-// fillBayLevels alternates 3/2 pallets per level (odd/even), not a flat
-// RACK_DIAGRAM_LEVELS * RACK_DIAGRAM_SLOTS_PER_LEVEL grid — this is the real
-// max a fully-padded bay reaches, used to detect "already padded" bays so
-// fillAllBaysToFullLevels doesn't re-run on (and corrupt) one twice.
-const RACK_DIAGRAM_FULL_COUNT = Array.from({ length: RACK_DIAGRAM_LEVELS }, (_, i) => i + 1)
-  .reduce((sum, level) => sum + (level % 2 === 0 ? 2 : 3), 0);
-
-// level/slot are optional — only set by fillBayLevels below (for a bay whose
-// levels don't all carry the same pallet count) so buildBayDiagram can place
-// a location by explicit position instead of assuming every level holds
-// exactly RACK_DIAGRAM_SLOTS_PER_LEVEL entries. Plain makeLoc calls (the
-// common sparse 2-3 location bay) leave them undefined and buildBayDiagram
-// falls back to its original fixed-width index math for those.
-function makeLoc(code, status, level, slot){ return { code, status, pallets:[], level, slot }; }
+function makeLoc(code, status){ return { code, status, pallets:[] }; }
 function makeBay(code, locs){ return { code, locations:locs }; }
 function makeRack(code, bays){ return { code, bays }; }
-// Every pallet in a Rack View-diagrammed bay is expected to already carry a
-// SKU (an inspector browsing levels should find something to review, not an
-// empty shell) — but never overwrite a location that already has real
-// pallets (from count_records via the DB path), only fill in the ones that
-// genuinely have none yet. Left unsaved (no `saved` flag) so ensureScanState
-// still picks it up as the in-progress pallet to resume, same as any other
-// partially-counted location.
-function seedDemoPalletIfEmpty(loc, seedIdx){
-  if (loc.pallets.length) return loc;
-  const item = INVENTORY_POOL[seedIdx % INVENTORY_POOL.length];
-  const condition = CONDITIONS[seedIdx % CONDITIONS.length];
-  // level/slot give a short, readable "P-{level}{slot}" id (e.g. "P-0902") —
-  // stripping the whole location code instead (rack+bay+level+slot all
-  // concatenated) produced garbled, duplicated-looking ids for bays whose
-  // rack and bay codes share the same "B-0X" pattern (e.g. "P-B02B020303").
-  // Falls back to the stripped-code form only for locations without that
-  // metadata (bays fillBayLevels never touched).
-  const pallet = loc.level != null
-    ? `P-${String(loc.level).padStart(2,'0')}${String(loc.slot).padStart(2,'0')}`
-    : `P-${loc.code.replace(/[^A-Za-z0-9]/g,'')}`;
-  loc.pallets.push({ pallet, lines:[{ sku:item.sku, name:item.name, lot:item.lot, qty:10 + (seedIdx % 30), condition }] });
-  return loc;
-}
-// A bay whose fixture only has RACK_DIAGRAM_SLOTS_PER_LEVEL locations (the
-// common case — most bays are a sparse single-level demo) still renders as
-// RACK_DIAGRAM_LEVELS rows in the Rack View diagram, since buildBayDiagram
-// always draws at least that many — the levels above the real data render as
-// disabled empty cells, so only level 1 is ever actually selectable. This
-// pads a bay's given locations (kept first/unchanged in place, so any code
-// already referenced elsewhere — e.g. a "last saved location" pointer —
-// stays valid) out to RACK_DIAGRAM_LEVELS rows, alternating 3 and 2 real
-// pallets per level (odd levels get 3, even levels get 2) rather than a
-// uniform 3 everywhere — a real bay's levels don't all hold the same count.
-function fillBayLevels(codePrefix, existingLocs){
-  const startLevel = Math.floor(existingLocs.length / RACK_DIAGRAM_SLOTS_PER_LEVEL) + 1;
-  existingLocs.forEach((l, i) => { l.level = 1; l.slot = i + 1; seedDemoPalletIfEmpty(l, i); });
-  const rest = [];
-  let seedIdx = existingLocs.length;
-  for (let level = startLevel; level <= RACK_DIAGRAM_LEVELS; level++) {
-    const palletsThisLevel = level % 2 === 0 ? 2 : 3;
-    for (let slot = 1; slot <= palletsThisLevel; slot++) {
-      const loc = makeLoc(`${codePrefix}-${String(level).padStart(2,'0')}${String(slot).padStart(2,'0')}`, 'Not Started', level, slot);
-      seedDemoPalletIfEmpty(loc, seedIdx++);
-      rest.push(loc);
-    }
-  }
-  return [...existingLocs, ...rest];
-}
 function makeLayout(name, racks){ return { name, racks }; }
 
 // Generates a rack/bay/location tree — used for Layout-scoped audits, which
@@ -1256,20 +830,7 @@ const LOCATIONS = {
   ]},
   'AUD-0234': { layouts: [ makeLayout('Layout B', genRacks(['B-01','B-02','B-03','B-04'], 3, 3, 1, 1)) ]},
   'AUD-0225': { layouts: [ makeLayout('Layout A', [ makeRack('C-04', [ makeBay('C-04-01', [makeLoc('C-04-01-01','Completed'), makeLoc('C-04-01-02','Completed')]) ]) ]) ]},
-  // Bay 03 is sized to fill the Rack View diagram (13 levels x 3 Pallet LPNs
-  // per level = 39) rather than the sparse 2-location fixtures other audits
-  // use. Pallet LPN code = {level}-{pallet within that level}, e.g. "05-02"
-  // is Level 5, the 2nd pallet on that level — level is always readable
-  // straight off the code, not just its position in the diagram. L1P1 opens
-  // In Progress, every 7th LPN (in level-major order) reads Completed, the
-  // rest Not Started.
-  'AUD-0219': { layouts: [ makeLayout('Layout A', [ makeRack('01', [ makeBay('03',
-    Array.from({ length: RACK_DIAGRAM_LEVELS }, (_, li) => Array.from({ length: RACK_DIAGRAM_SLOTS_PER_LEVEL }, (_, pi) => {
-      const level = li + 1, pallet = pi + 1, n = li * RACK_DIAGRAM_SLOTS_PER_LEVEL + pi + 1;
-      const status = n === 1 ? 'In Progress' : n % 7 === 0 ? 'Completed' : 'Not Started';
-      return makeLoc(`${String(level).padStart(2,'0')}-${String(pallet).padStart(2,'0')}`, status);
-    })).flat()
-  ) ]) ]) ]},
+  'AUD-0219': { layouts: [ makeLayout('Layout A', [ makeRack('B-02', [ makeBay('B-02-03', [makeLoc('B-02-03-01','In Progress'), makeLoc('B-02-03-02','Not Started')]) ]) ]) ]},
   // Multi-layout demo: scope = Layout, assigned to BOTH Layout A and Layout B —
   // this is the case that makes the Layout field a real open dropdown, not a
   // fixed "only option" pill, and each layout has its own many-rack/bay/location tree.
@@ -1278,15 +839,9 @@ const LOCATIONS = {
     makeLayout('Layout B', genRacks(['B-20','B-21'], 2, 2, 0, 1)),
   ]},
 };
-// Reassigns rather than appends so this location ends up with exactly this
-// intentionally-curated pallet — the fillAllBaysToFullLevels() pass below
-// (which runs after this) only auto-seeds a generic demo pallet onto
-// locations that are still empty when it reaches them, so this pre-existing
-// one is left alone either way, but reassignment keeps that guarantee
-// explicit rather than relying on pass ordering.
-LOCATIONS['AUD-0231'].layouts[0].racks[0].bays[1].locations[2].pallets = [
+LOCATIONS['AUD-0231'].layouts[0].racks[0].bays[1].locations[2].pallets.push(
   { pallet:'P-10481', lines:[{ sku:'SKU-1042', name:'Steel Bracket 90', lot:'L-2291', qty:46, condition:'Good' }], saved:true }
-];
+);
 // AUD-0225 ("Zone C Damaged Recheck") is the one audit that's already Submitted in
 // seed data — give it real counted history so its read-only summary isn't empty,
 // including the damaged/broken lines the recheck was actually looking for.
@@ -1302,67 +857,6 @@ LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[1].pallets.push(
     { sku:'SKU-1180', name:'Fastener Pack M10', lot:'L-2322', qty:3, condition:'Broken' },
   ], saved:true }
 );
-
-// Universal, not per-audit-picked: EVERY bay in EVERY audit gets padded out
-// to the full 13-level diagram (see fillBayLevels above), rather than only
-// whichever specific bay someone happened to test and report as stuck on
-// Level 1. Runs last, after every fixture and every manual pallet.push()
-// above, so those hand-curated pallets are already in place by the time
-// fillBayLevels checks each location's "is this already real data?" gate.
-// The Supabase-backed loadAllData() below does the identical pass over
-// whatever it fetches from the DB, so this holds true whether the app is
-// running off these static fixtures or a live login.
-function fillAllBaysToFullLevels(){
-  Object.values(LOCATIONS).forEach(tree => tree.layouts.forEach(layout => layout.racks.forEach(rack => rack.bays.forEach(bay => {
-    if (bay.locations.length < RACK_DIAGRAM_FULL_COUNT) bay.locations = fillBayLevels(`${rack.code}-${bay.code}`, bay.locations);
-  }))));
-}
-fillAllBaysToFullLevels();
-
-// Same sine-wave bar shape recordEvidenceAudio uses for a freshly-recorded
-// clip — shared so a seeded demo note and a live in-app recording look the
-// same, not two different fake waveforms.
-function generateWaveformBars(){
-  return Array.from({ length: 40 }, (_, i) => 6 + Math.round(10 * Math.abs(Math.sin(i * 0.7))));
-}
-const DEFECT_NOTES = [
-  'Lack of safety locking pin.',
-  'Visible surface corrosion near the weld joint.',
-  'Component shows early signs of bending under load.',
-  'Packaging torn, contents partially exposed.',
-  'Missing labels on second unit in the pallet.',
-  'Anchor bolt sheared, needs replacement.',
-];
-// Annotation colors offered on the "New Attachment" image marker modal —
-// first one selected by default, matching the reference's pre-checked blue.
-const ANNOTATION_COLORS = ['#1b59f8','#8b5cf6','#22d3ee','#16a34a','#db2777','#be123c','#f97316'];
-// A reported issue (any flagged, non-"Good" line) reads as hollow without
-// evidence backing it up — an inspector who flagged something in real usage
-// would have photographed/noted it. Seeds a plausible note + audio + photo +
-// video bundle onto every flagged line that doesn't already have real
-// evidence (from an actual in-app scan), so Reported Audit Details always
-// has something to show rather than empty "No X attached" states everywhere.
-function seedEvidenceForFlaggedLines(){
-  let seedIdx = 0;
-  Object.keys(LOCATIONS).forEach(auditId => {
-    allLocations(auditId).forEach(({ loc }) => {
-      (loc.pallets || []).forEach(p => {
-        (p.lines || []).forEach(line => {
-          if (line.condition === 'Good' || line.evidence) return;
-          line.evidence = {
-            note: DEFECT_NOTES[seedIdx % DEFECT_NOTES.length],
-            noteOpen: true,
-            audio: { durationSec: 20, playing: false, bars: generateWaveformBars() },
-            images: Array.from({ length: 1 + (seedIdx % 3) }, () => ({})),
-            videos: Array.from({ length: 1 + (seedIdx % 2) }, () => ({ durationSec: 20 })),
-          };
-          seedIdx++;
-        });
-      });
-    });
-  });
-}
-seedEvidenceForFlaggedLines();
 
 function findLayoutIn(auditId, layoutName){ return ((LOCATIONS[auditId]||{}).layouts||[]).find(l => l.name === layoutName); }
 function layoutsOf(auditId){ return (LOCATIONS[auditId]||{}).layouts || []; }
@@ -1416,14 +910,6 @@ async function loadAllData(){
     // deleteRecord/submitAudit below to target the right row for their writes.
     bay.locations.push({ code: loc.location_code, status: loc.status, pallets: Object.values(palletsByPalletId), db_id: loc.id });
   });
-
-  // This function rebuilds LOCATIONS straight from the DB, which otherwise
-  // has no notion of "pad every bay's diagram out to every level" — the same
-  // universal pass applied to the static fixtures runs here too, or it only
-  // ever holds once (until the next login/reload wipes and rebuilds
-  // LOCATIONS from Supabase again).
-  fillAllBaysToFullLevels();
-  seedEvidenceForFlaggedLines();
 }
 
 // QR pool for the "Scan Location QR" flow — some payloads are deliberately
@@ -1480,24 +966,6 @@ function uiStatus(a){
   return 'To Do';
 }
 function pillClass(uis){ return { 'To Do':'s-scheduled', 'In Progress':'s-inprogress', 'Completed':'s-completed', 'Overdue':'s-overdue' }[uis]; }
-// To Do Task board groups by due date rather than status — a completed audit
-// isn't "to do" anymore regardless of when it was due, so those are filtered
-// out entirely before bucketing (see renderTasks) rather than getting a
-// column of their own the way the old status tabs gave them one.
-const DUE_BUCKETS = [
-  { key:'Delayed', color:'red' },
-  { key:'Today', color:'green' },
-  { key:'This Week', color:'blue' },
-  { key:'This Month', color:'amber' },
-];
-function dueBucket(a){
-  if (isOverdue(a)) return 'Delayed';
-  const end = new Date(a.end_date+'T00:00:00');
-  const diffDays = Math.round((end - TODAY) / 86400000);
-  if (diffDays <= 0) return 'Today';
-  if (diffDays <= 7) return 'This Week';
-  return 'This Month';
-}
 function priorityFor(a){ if (a.priority) return a.priority; const n = a.audit_id.replace(/\D/g,''); const m = Number(n) % 3; return ['High','Medium','Low'][m]; }
 function allLocations(auditId){
   const layouts = layoutsOf(auditId); const out = [];
@@ -1541,7 +1009,7 @@ function summaryStats(auditId){
         qtyTotal += line.qty;
         byCondition[line.condition] = (byCondition[line.condition] || 0) + line.qty;
         if (line.condition !== 'Good') {
-          flagged.push({ layout, rack, bay, locCode:loc.code, pallet:p.pallet, sku:line.sku, name:line.name, qty:line.qty, condition:line.condition, skuCount:(p.lines||[]).length, lot:line.lot, evidence:line.evidence });
+          flagged.push({ layout, rack, bay, locCode:loc.code, pallet:p.pallet, sku:line.sku, name:line.name, qty:line.qty, condition:line.condition });
         }
       });
     });
@@ -1557,16 +1025,11 @@ function currentOngoing(){ return mine().find(a => a.status === 'In Progress' &&
 /* ================= STATE ================= */
 let STATE = {
   device: 'phone', stack: ['login'], params: {}, previewMode: 'normal',
-  tasksSearch: '', scan: null, menuOpen: false,
-  issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false,
-  issuesFilterOpen: false, issuesFilterRack: null, issuesFilterBay: null, issuesFilterCondition: null,
-  imageAttachmentModal: null,
+  tasksTab: 'To Do', tasksSearch: '', scan: null, menuOpen: false,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
   auditDetailsClosed: {},
-  scheduleCal: null, scheduleModal: null,
-  rackViewPicker: null, rackViewClickedLoc: null, _rackViewSeedKey: null,
 };
 // Accordion sections on Audit Details default open — this just tracks the
 // ones a user has explicitly collapsed, keyed by a layout/rack path so state
@@ -1645,29 +1108,19 @@ setTheme('light');
 /* ================= ICONS ================= */
 const ICON = {
   chevron: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  sort: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 3v10M4 13l-2.2-2.2M4 13l2.2-2.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 13V3M12 3l2.2 2.2M12 3l-2.2 2.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  filter: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12L9.5 8v4.5l-3 1.5V8L2 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
-  undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 6h6.5a3.5 3.5 0 1 1 0 7H7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 3.5L3 6l2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  redo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 6H6.5a3.5 3.5 0 1 0 0 7H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 3.5L13 6l-2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  draw: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12l3-1 6.5-6.5a1.5 1.5 0 0 0-2-2L3 9l-1 3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-  // Figma's "circle-arrow-right" — the decorative trailing icon on the Audit
-  // Details primary CTA (see the reference screenshot), distinct from the
-  // small plain ICON.chevron used as a row-disclosure arrow elsewhere.
-  circleArrowRight: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2.25C14.5859 2.25 17.0658 3.27723 18.8943 5.10571C20.7228 6.93419 21.75 9.41414 21.75 12C21.75 14.5859 20.7228 17.0658 18.8943 18.8943C17.0658 20.7228 14.5859 21.75 12 21.75C9.41414 21.75 6.93419 20.7228 5.10571 18.8943C3.27723 17.0658 2.25 14.5859 2.25 12C2.25 9.41414 3.27723 6.93419 5.10571 5.10571C6.93419 3.27723 9.41414 2.25 12 2.25ZM12 24C15.1826 24 18.2348 22.7357 20.4853 20.4853C22.7357 18.2348 24 15.1826 24 12C24 8.8174 22.7357 5.76516 20.4853 3.51472C18.2348 1.26428 15.1826 0 12 0C8.8174 0 5.76516 1.26428 3.51472 3.51472C1.26428 5.76516 0 8.8174 0 12C0 15.1826 1.26428 18.2348 3.51472 20.4853C5.76516 22.7357 8.8174 24 12 24ZM13.1719 16.1719L16.5469 12.7969C16.9875 12.3563 16.9875 11.6438 16.5469 11.2078L13.1719 7.83281C12.7313 7.39219 12.0188 7.39219 11.5828 7.83281C11.1469 8.27344 11.1422 8.98594 11.5828 9.42188L13.0359 10.875H8.25C7.62656 10.875 7.125 11.3766 7.125 12C7.125 12.6234 7.62656 13.125 8.25 13.125H13.0359L11.5828 14.5781C11.1422 15.0187 11.1422 15.7312 11.5828 16.1672C12.0234 16.6031 12.7359 16.6078 13.1719 16.1672V16.1719Z" fill="currentColor"/></svg>',
-  back: '<svg width="16" height="12" viewBox="0 0 20.002 14.9985" fill="none"><path d="M0.275391 6.83252C-0.0917969 7.19971 -0.0917969 7.79346 0.275391 8.15674L6.83789 14.7231C7.20508 15.0903 7.79883 15.0903 8.16211 14.7231C8.52539 14.356 8.5293 13.7622 8.16211 13.3989L3.20117 8.43408H19.0645C19.584 8.43408 20.002 8.01612 20.002 7.49658C20.002 6.97705 19.584 6.55908 19.0645 6.55908H3.20117L8.16602 1.59815C8.5332 1.23096 8.5332 0.637209 8.16602 0.273928C7.79883 -0.0893535 7.20508 -0.0932597 6.8418 0.273928L0.275391 6.83252Z" fill="currentColor"/></svg>',
+  back: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M10 3L6 8l4 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="13" cy="8" r="1.3" fill="currentColor"/></svg>',
-  search: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11.4989 6.50111C11.4989 5.1748 10.9721 3.90281 10.0346 2.96497C9.09696 2.02713 7.82532 1.50026 6.49937 1.50026C5.17341 1.50026 3.90177 2.02713 2.96418 2.96497C2.02659 3.90281 1.49985 5.1748 1.49985 6.50111C1.49985 7.82742 2.02659 9.09941 2.96418 10.0372C3.90177 10.9751 5.17341 11.502 6.49937 11.502C7.82532 11.502 9.09696 10.9751 10.0346 10.0372C10.9721 9.09941 11.4989 7.82742 11.4989 6.50111ZM10.5333 11.5989C9.4272 12.4771 8.02422 13.0022 6.49937 13.0022C2.90909 13.0022 0 10.0923 0 6.50111C0 2.90987 2.90909 0 6.49937 0C10.0896 0 12.9987 2.90987 12.9987 6.50111C12.9987 8.02637 12.4738 9.42974 11.5957 10.5362L15.7797 14.7213C16.0734 15.0151 16.0734 15.4901 15.7797 15.7808C15.486 16.0715 15.011 16.0746 14.7204 15.7808L10.5333 11.5989Z" fill="currentColor"/></svg>',
+  search: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M13 13l-2.4-2.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   pin: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 15s5-4.5 5-8.5A5 5 0 0 0 3 6.5C3 10.5 8 15 8 15z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="6.5" r="1.6" stroke="currentColor" stroke-width="1.5"/></svg>',
   camera: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M6 5l1-1.5h2L10 5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="8" cy="9.2" r="2.1" stroke="currentColor" stroke-width="1.5"/></svg>',
-  qr: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.8"/><rect x="14.5" y="14.5" width="2.5" height="2.5" fill="currentColor"/><rect x="18.5" y="14.5" width="2.5" height="2.5" fill="currentColor"/><rect x="14.5" y="18.5" width="2.5" height="2.5" fill="currentColor"/><rect x="18.5" y="18.5" width="2.5" height="2.5" fill="currentColor"/></svg>',
   pencil: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11 2.5l2.5 2.5-8 8L3 13.5l.5-2.5 8-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
   scan: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10.2" width="3.6" height="3.6" rx=".6" fill="currentColor"/></svg>',
   check: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   checkSm: '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevronDown: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-  sync: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3.40492 3.40313C5.94143 0.865625 10.0554 0.865625 12.5951 3.40313L13.4416 4.25H10.9988C10.5834 4.25 10.2491 4.58437 10.2491 5C10.2491 5.41563 10.5834 5.75 10.9988 5.75H15.2503C15.6658 5.75 16 5.41563 16 5V0.75C16 0.334375 15.6658 0 15.2503 0C14.8348 0 14.5006 0.334375 14.5006 0.75V3.19062L13.654 2.34375C10.5303 -0.78125 5.46661 -0.78125 2.34596 2.34375C0.996486 3.69375 0.228036 5.40937 0.0468567 7.17188C0.00312378 7.58437 0.303007 7.95313 0.715346 7.99375C1.12768 8.03438 1.49629 7.7375 1.5369 7.325C1.68684 5.89375 2.30847 4.50313 3.40492 3.40313ZM15.9531 8.82812C15.9969 8.41563 15.697 8.04688 15.2847 8.00625C14.8723 7.96563 14.5037 8.2625 14.4631 8.675C14.3163 10.1063 13.6915 11.5 12.5951 12.5969C10.0586 15.1344 5.94455 15.1344 3.40492 12.5969L2.55838 11.75H5.00117C5.41663 11.75 5.75088 11.4156 5.75088 11C5.75088 10.5844 5.41663 10.25 5.00117 10.25H0.749707C0.334244 10.25 0 10.5844 0 11V15.25C0 15.6656 0.334244 16 0.749707 16C1.16517 16 1.49941 15.6656 1.49941 15.25V12.8094L2.34596 13.6562C5.46974 16.7812 10.5334 16.7812 13.654 13.6562C15.0035 12.3062 15.772 10.5906 15.9531 8.82812Z" fill="currentColor"/></svg>',
-  box: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1.125 0C1.74844 0 2.25 0.501562 2.25 1.125V7.875H21.75V1.125C21.75 0.501562 22.2516 0 22.875 0C23.4984 0 24 0.501562 24 1.125V22.875C24 23.4984 23.4984 24 22.875 24C22.2516 24 21.75 23.4984 21.75 22.875V22.125H2.25V22.875C2.25 23.4984 1.74844 24 1.125 24C0.501562 24 0 23.4984 0 22.875V1.125C0 0.501562 0.501562 0 1.125 0ZM2.25 19.875H21.75V10.125H2.25V19.875ZM7.125 12H9.375C10.4109 12 11.25 12.8391 11.25 13.875V16.125C11.25 17.1609 10.4109 18 9.375 18H7.125C6.08906 18 5.25 17.1609 5.25 16.125V13.875C5.25 12.8391 6.08906 12 7.125 12ZM12.75 13.875C12.75 12.8391 13.5891 12 14.625 12H16.875C17.9109 12 18.75 12.8391 18.75 13.875V16.125C18.75 17.1609 17.9109 18 16.875 18H14.625C13.5891 18 12.75 17.1609 12.75 16.125V13.875ZM14.625 0H16.875C17.9109 0 18.75 0.839062 18.75 1.875V4.125C18.75 5.16094 17.9109 6 16.875 6H14.625C13.5891 6 12.75 5.16094 12.75 4.125V1.875C12.75 0.839062 13.5891 0 14.625 0Z" fill="currentColor"/></svg>',
+  sync: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13 4.5A5.5 5.5 0 1 0 14 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13 2v3h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  box: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 5.2L8 2l6 3.2v6L8 14 2 11.2V5.2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M2 5.2L8 8l6-2.8M8 8v6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
   user: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.4" r="2.6" stroke="currentColor" stroke-width="1.5"/><path d="M3.2 13.5c1.2-2.6 3.6-3.9 4.8-3.9s3.6 1.3 4.8 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   lock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7.2" width="9" height="6.3" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 5 0v2.2" stroke="currentColor" stroke-width="1.4"/></svg>',
   wh: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 14.5s4.5-3.9 4.5-7.4A4.5 4.5 0 0 0 3.5 7.1c0 3.5 4.5 7.4 4.5 7.4z" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="6.8" r="1.5" stroke="currentColor" stroke-width="1.4"/></svg>',
@@ -1678,15 +1131,12 @@ const ICON = {
   playTri: '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l10-5.5z"/></svg>',
   calendar: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v2.5M10.5 2v2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
   trash: '<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M3 5h10M6.5 5V3.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V5M6 7.5v4M10 7.5v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M4 5l.6 8a1.5 1.5 0 0 0 1.5 1.4h3.8a1.5 1.5 0 0 0 1.5-1.4l.6-8" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  minus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   clock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   dot: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6" fill="var(--accent-blue-border)"/><circle cx="8" cy="8" r="3.5"/></svg>',
-  bell: '<svg width="16" height="18" viewBox="0 0 16 18" fill="none"><path d="M8 0.00351494C7.525 0.00351494 7.14286 0.379613 7.14286 0.8471V1.18805C4.23571 1.59578 2 4.05975 2 7.03339V7.54306C2 8.86819 1.64286 10.1687 0.964286 11.3146L0.182143 12.6292C0.0642857 12.833 0 13.0615 0 13.297C0 14.0316 0.603571 14.6257 1.35 14.6257H14.65C15.3964 14.6257 16 14.0316 16 13.297C16 13.0615 15.9357 12.8295 15.8179 12.6292L15.0357 11.3111C14.3571 10.1652 14 8.86468 14 7.53954V7.02988C14 4.05624 11.7643 1.59227 8.85714 1.18453V0.843585C8.85714 0.376098 8.475 0 8 0V0.00351494ZM14.0143 12.9385H1.98214L2.44286 12.1617C3.275 10.7592 3.71429 9.16345 3.71429 7.54306V7.03339C3.71429 4.70299 5.63214 2.81547 8 2.81547C10.3679 2.81547 12.2857 4.70299 12.2857 7.03339V7.54306C12.2857 9.16696 12.725 10.7592 13.5536 12.1617L14.0143 12.9385ZM5.575 16.3128C5.92857 17.297 6.88214 18 8 18C9.11786 18 10.0714 17.297 10.425 16.3128H5.575Z" fill="currentColor"/></svg>',
   layout: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="11" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.3h12M2 9.7h12" stroke="currentColor" stroke-width="1.2"/></svg>',
   rack: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3.5" width="12" height="9" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12" stroke="currentColor" stroke-width="1.4"/></svg>',
-  mic: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="6" y="1.5" width="4" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 8.5a4.5 4.5 0 0 0 9 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M8 13v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-  video: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4.5" width="9" height="7" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 7l4-2.3v6.6l-4-2.3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-  image: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.3" stroke="currentColor" stroke-width="1.4"/><circle cx="5.2" cy="6" r="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M2 12l4-4 3 3 2-2 3 3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>',
-  pauseTri: '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>',
 };
 
 /* ================= BOTTOM TAB BAR ================= */
@@ -1694,14 +1144,10 @@ function renderTabBar(active){
   const ongoing = currentOngoing();
   const items = [
     { key:'dashboard', label:'Home', icon:ICON.home, onclick:"railTo('dashboard')" },
-    { key:'schedule', label:'Audit Schedule', icon:ICON.calendar, onclick:"railTo('schedule')" },
     { key:'tasks', label:'Tasks', icon:ICON.tasks, onclick:"railTo('tasks')" },
     { key:'scan', label:'Scan', icon:ICON.scan, onclick:"openQuickScan()" },
   ];
-  // Label reflects what this tab actually opens on each device — tablet's
-  // Progress tab is the Reported Audits board, mobile's is still the
-  // original rack/bay Audit Progress breakdown (see renderProgress).
-  if (ongoing) items.push({ key:'progress', label: STATE.device === 'tablet' ? 'Reported Audits' : 'Progress', icon:ICON.progress, onclick:`railTo('progress', {auditId:'${ongoing.audit_id}'})` });
+  if (ongoing) items.push({ key:'progress', label:'Progress', icon:ICON.progress, onclick:`railTo('progress', {auditId:'${ongoing.audit_id}'})` });
   return `<div class="tabbar">${items.map(it => `<button class="tabbar-item ${active===it.key?'active':''}" onclick="${it.onclick}"><span class="icon-slot">${it.icon}</span><span class="lbl">${it.label}</span></button>`).join('')}</div>`;
 }
 
@@ -1718,9 +1164,7 @@ function statusBarHtml(){
       <span class="icons"><span class="sb-dot"></span>Synced</span>
     </div>`;
 }
-// `sub` is accepted but no longer rendered — every header now shows just the
-// title line, matching the Figma reference (no subtitle row underneath).
-function headerBlock({ title, sub, showBack, menuItems, avatar, showBell }){
+function headerBlock({ title, sub, showBack, menuItems, avatar }){
   // Most screens only ever offered one overflow item — "Sync Now" — which meant
   // tapping the three-dot button just to open a one-item dropdown for it. Those
   // screens get a direct sync icon button instead; screens with a real multi-item
@@ -1732,9 +1176,6 @@ function headerBlock({ title, sub, showBack, menuItems, avatar, showBell }){
     : singleSync
       ? `<button class="icon-btn" onclick="syncNow(this)" aria-label="Sync now">${ICON.sync}</button>`
       : `<button class="icon-btn" onclick="toggleMenu()">${ICON.more}</button>${menu}`;
-  // Bell is a plain decorative icon (matches the Figma reference's header) —
-  // no unread count/badge, since this app doesn't track notifications yet.
-  const bell = showBell ? `<button class="icon-btn" aria-label="Notifications" onclick="toast('No new notifications')">${ICON.bell}</button>` : '';
   return `
     <div class="navtop">
       ${statusBarHtml()}
@@ -1742,8 +1183,9 @@ function headerBlock({ title, sub, showBack, menuItems, avatar, showBell }){
         ${showBack ? `<button class="back-btn" onclick="back()" aria-label="Back">${ICON.back}</button>` : ''}
         <div style="min-width:0; flex:1;">
           <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${title}</h1>
+          <div class="sub">${sub}</div>
         </div>
-        <div class="header-actions">${bell}${actions}</div>
+        <div class="header-actions">${actions}</div>
       </div>
     </div>
   `;
@@ -1752,20 +1194,18 @@ function headerBlock({ title, sub, showBack, menuItems, avatar, showBell }){
 /* ================= LOGIN ================= */
 function renderLogin(){
   return `
-    <div style="display:flex; flex-direction:column; flex:1; background:var(--muted);">
+    <div style="display:flex; flex-direction:column; flex:1; background:var(--brand-navy);">
       ${statusBarHtml()}
       <div class="login-screen">
-        <div class="login-card">
-          <div class="login-mark">R</div>
-          <h2>RAMS 2.0</h2>
-          <p>Inventory Reconciliation · Mobile</p>
-          <div class="login-wh">${ICON.wh} ${INSPECTOR.warehouse}</div>
-          <div class="login-field"><label>Email</label><div class="login-input">${ICON.user}<input type="email" placeholder="Enter email" value="${STATE.loginEmail}" oninput="STATE.loginEmail=this.value" style="background:none; border:none; color:var(--foreground); font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
-          <div class="login-field"><label>Password</label><div class="login-input">${ICON.lock}<input type="password" placeholder="••••••••" value="${STATE.loginPassword}" oninput="STATE.loginPassword=this.value" onkeydown="if(event.key==='Enter') doLogin()" style="background:none; border:none; color:var(--foreground); font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
-          ${STATE.loginError ? `<div class="banner warn" style="width:100%; margin-bottom:13px;"><span class="dot"></span> ${STATE.loginError}</div>` : ''}
-          <button class="login-btn" onclick="doLogin()" ${STATE.authBusy ? 'disabled' : ''}>${STATE.authBusy ? 'Logging in…' : 'Log in'}</button>
-          <div class="login-foot">Forgot password? Contact your supervisor</div>
-        </div>
+        <div class="login-mark">R</div>
+        <h2>RAMS 2.0</h2>
+        <p>Inventory Reconciliation · Mobile</p>
+        <div class="login-wh">${ICON.wh} ${INSPECTOR.warehouse}</div>
+        <div class="login-field"><label>Email</label><div class="login-input">${ICON.user}<input type="email" placeholder="Enter email" value="${STATE.loginEmail}" oninput="STATE.loginEmail=this.value" style="background:none; border:none; color:#fff; font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
+        <div class="login-field"><label>Password</label><div class="login-input">${ICON.lock}<input type="password" placeholder="••••••••" value="${STATE.loginPassword}" oninput="STATE.loginPassword=this.value" onkeydown="if(event.key==='Enter') doLogin()" style="background:none; border:none; color:#fff; font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
+        ${STATE.loginError ? `<div class="banner warn" style="width:100%; margin-bottom:13px;"><span class="dot"></span> ${STATE.loginError}</div>` : ''}
+        <button class="login-btn" onclick="doLogin()" ${STATE.authBusy ? 'disabled' : ''}>${STATE.authBusy ? 'Logging in…' : 'Log in'}</button>
+        <div class="login-foot">Forgot password? Contact your supervisor</div>
       </div>
     </div>
   `;
@@ -2037,61 +1477,27 @@ function taskCard(a){
   `;
 }
 
-// Card for the To Do Task board — distinct from taskCard (used by the
-// Dashboard's task preview). Fields mirror exactly what Audit Details itself
-// shows for this audit (its "Audit Schedule Details" card uses start_date as
-// "Audit Date" and r.bayTotal as "Total Bay"; its bay summary row uses
-// r.bayDone/pending) — so a number seen here matches the same number on the
-// page this card opens into, rather than a different rack-based rollup
-// invented just for this board.
-function todoCard(a){
-  const uis = uiStatus(a);
-  const r = rollup(a.audit_id);
-  const bayPending = r.bayTotal - r.bayDone;
-  return `
-    <button type="button" class="todo-card" onclick="push('auditDetails', {auditId:'${a.audit_id}'})">
-      <div class="todo-card-title">${a.audit_type}</div>
-      <div class="todo-card-grid">
-        <div class="todo-field"><span class="k">Task Status</span><span class="pill ${pillClass(uis)}">${uis}</span></div>
-        <div class="todo-field"><span class="k">Audit Date</span><span class="v mono">${fmtDate(a.start_date)}</span></div>
-        <div class="todo-field"><span class="k">Total Bay</span><span class="todo-num-chip">${r.bayTotal}</span></div>
-        <div class="todo-field"><span class="k">Priority</span><span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span></div>
-        <div class="todo-field"><span class="k">Completed Bay</span><span class="todo-num-chip">${r.bayDone}</span></div>
-        <div class="todo-field"><span class="k">Pending Bay</span><span class="todo-num-chip">${bayPending}</span></div>
-      </div>
-    </button>
-  `;
-}
-
 /* ================= TASKS ================= */
 function renderTasks(){
-  // Completed/closed audits aren't "to do" anymore regardless of when they
-  // were due — dropped before bucketing rather than given a column, matching
-  // the board having no Completed column of its own.
-  const myTasks = mine().filter(a => !['Submitted','Reconciled','Closed'].includes(a.status));
+  const myTasks = mine();
+  const counts = { 'To Do':0, 'In Progress':0, 'Completed':0, 'Overdue':0 };
+  myTasks.forEach(a => counts[uiStatus(a)]++);
   const q = STATE.tasksSearch.trim().toLowerCase();
-  const searched = myTasks.filter(a => !q || [a.audit_id, a.audit_name, ...a.scope_values].join(' ').toLowerCase().includes(q));
-  const byBucket = { 'Delayed':[], 'Today':[], 'This Week':[], 'This Month':[] };
-  searched.forEach(a => byBucket[dueBucket(a)].push(a));
-
-  const columns = DUE_BUCKETS.map(({ key, color }) => `
-    <div class="todo-col">
-      <div class="todo-col-head todo-col-${color}">
-        <span>${key}</span>
-        <span class="todo-col-count">${String(byBucket[key].length).padStart(2, '0')}</span>
-      </div>
-      <div class="todo-col-body">
-        ${byBucket[key].length ? byBucket[key].map(todoCard).join('') : `<div class="todo-col-empty">Nothing here</div>`}
-      </div>
-    </div>
-  `).join('');
+  const filtered = myTasks.filter(a => {
+    if (uiStatus(a) !== STATE.tasksTab) return false;
+    if (!q) return true;
+    return [a.audit_id, a.audit_name, ...a.scope_values].join(' ').toLowerCase().includes(q);
+  });
 
   return `
     ${headerBlock({ title:'My Audit Tasks', sub:`${myTasks.length} Assigned · ${INSPECTOR.warehouse}`, showBack: true,
       menuItems:[{label:'Sync Now', action:"toast('Synced')"},{label:'Settings', action:"toast('Settings')"}] })}
     <div class="body-pad">
       <div class="search-wrap">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
-      <div class="todo-board">${columns}</div>
+      <div class="tabs">${['To Do','In Progress','Completed','Overdue'].map(t => `<button class="tab ${STATE.tasksTab===t?'active':''}" onclick="STATE.tasksTab='${t}'; render()">${t} (${counts[t]})</button>`).join('')}</div>
+      <div class="task-list" style="${filtered.length ? '' : 'flex:1; justify-content:center;'}">
+        ${filtered.length ? filtered.map(taskCard).join('') : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No audits here</div><div>Nothing in "${STATE.tasksTab}" right now.</div></div>`}
+      </div>
     </div>
     ${renderTabBar('tasks')}
   `;
@@ -2404,23 +1810,20 @@ function renderAuditDetails(){
 
   const scheduleBlock = `
     <div class="card">
-      <div class="insp-section-label"><span class="icon-box">${ICON.search}</span>Audit Schedule Details</div>
+      <div class="insp-section-label"><span class="icon-box">${ICON.search}</span>Inspection Schedule Details</div>
       <div class="insp-grid">
-        <div><div class="l">Audit Type</div><div class="v">${a.audit_type}</div></div>
-        <div><div class="l">Audit Date</div><div class="v">${fmtDate(a.start_date)}</div></div>
+        <div><div class="l">Inspection Type</div><div class="v">${a.audit_type}</div></div>
+        <div><div class="l">Inspection Date</div><div class="v">${fmtDate(a.start_date)}</div></div>
         <div><div class="l">Total Bay</div><div class="v">${r.bayTotal}</div></div>
         <div><div class="l">Priority</div><div class="v"><span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span></div></div>
       </div>
     </div>
   `;
 
-  // Tablet routes into the new Rack View diagram first (see renderRackView) so
-  // an inspector sees where the bay's Pallet LPNs physically sit before
-  // counting; mobile has no diagram and keeps jumping straight to Count Sheet.
   function bayPill(b){
-    if (isSubmitted) return `<span class="bay-pill ${b.done?'done':'pending'}">${b.code}</span>`;
-    const target = isTablet ? 'rackView' : 'countSheet';
-    return `<button class="bay-pill ${b.done?'done':'pending'}" onclick="push('${target}', {auditId:'${a.audit_id}', layout:'${b.layout}', rack:'${b.rack}', bay:'${b.code}', loc:'${b.openLoc}'})">${b.code}</button>`;
+    return isSubmitted
+      ? `<span class="bay-pill ${b.done?'done':'pending'}">${b.code}</span>`
+      : `<button class="bay-pill ${b.done?'done':'pending'}" onclick="push('countSheet', {auditId:'${a.audit_id}', layout:'${b.layout}', rack:'${b.rack}', bay:'${b.code}', loc:'${b.openLoc}'})">${b.code}</button>`;
   }
 
   // Below one rack in scope, an accordion is just extra chrome around a
@@ -2459,12 +1862,12 @@ function renderAuditDetails(){
     `;
   }).join('') : `<div class="bay-pill-grid">${flatBays.length ? flatBays.map(bayPill).join('') : `<div class="empty-state" style="padding:12px 0;"><div>No bays in scope yet.</div></div>`}</div>`;
 
-  // Mobile's narrower width wrapped "Audit Completed"/"Audit Pending" onto
-  // their own rows below "Total Bay" — shorter labels plus a no-wrap row
+  // Mobile's narrower width wrapped "Inspection Completed"/"Inspection Pending"
+  // onto their own rows below "Total Bay" — shorter labels plus a no-wrap row
   // keep it on one line there. Tablet has the room for the fuller wording and
   // already fits on one line, so it keeps its original labels/wrap behavior.
-  const completedLabel = isTablet ? 'Audit Completed' : 'Completed';
-  const pendingLabel = isTablet ? 'Audit Pending' : 'Pending';
+  const completedLabel = isTablet ? 'Inspection Completed' : 'Completed';
+  const pendingLabel = isTablet ? 'Inspection Pending' : 'Pending';
   // Mobile: Total Bay sits on its own top row, with Completed/Pending together
   // on a second row below it — reads better in the narrower width than all
   // three squeezed onto one line. Tablet has the room to keep everything on
@@ -2489,7 +1892,7 @@ function renderAuditDetails(){
     </div>
   `;
 
-  const startLabel = isSubmitted ? 'View Audit Summary' : isFullyCounted ? 'View Audit Summary' : (a.status === 'In Progress' ? 'Resume Audit' : 'Start Audit');
+  const startLabel = isSubmitted ? 'View Audit Summary' : isFullyCounted ? 'View Audit Summary' : (a.status === 'In Progress' ? 'Resume Inspection' : 'Start Inspection');
   const startAction = showCompletedState
     ? `push('auditSummary', {auditId:'${a.audit_id}'})`
     : `push('countSheet', {auditId:'${a.audit_id}'})`;
@@ -2502,7 +1905,8 @@ function renderAuditDetails(){
       <button class="link-btn" style="width:100%; text-align:center; padding:4px 0;" onclick="push('progress', {auditId:'${a.audit_id}'})">View Full Rack/Bay Breakdown</button>
     </div>
     <div class="footer-bar">
-      <button class="btn primary" onclick="${startAction}">${startLabel} ${ICON.circleArrowRight}</button>
+      <button class="btn outline" onclick="back()">Cancel</button>
+      <button class="btn primary" onclick="${startAction}">${startLabel} ${ICON.chevron}</button>
     </div>
   `;
 }
@@ -2723,16 +2127,6 @@ function findLoc(auditId, layout, rack, bay, locCode){
   const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
   return bayObj ? bayObj.locations.find(l => l.code === locCode) : null;
 }
-// Seeds/reuses STATE.scan for a given location — same in-progress-pallet-or-fresh-start
-// logic used whether the location is entered via the Count Sheet page directly or
-// via a Rack View scan. Keyed off auditId+loc so re-entering the same location (from
-// either entry point) resumes the same in-flight lines instead of resetting them.
-function ensureScanState(auditId, layout, rack, bay, locCode, locObj){
-  if (STATE.scan && STATE.scan.auditId === auditId && STATE.scan.loc === locCode) return;
-  const existing = locObj.pallets.find(p => !p.saved) || null;
-  STATE.scan = { auditId, layout, rack, bay, loc:locCode, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
-  STATE.expandedSavedPallet = null;
-}
 function resumeAudit(auditId){
   const ls = lastSaved(auditId);
   if (ls) push('countSheet', { auditId, layout: ls.layout, rack: ls.rack, bay: ls.bay, loc: ls.loc.code });
@@ -2747,25 +2141,25 @@ function resumeAudit(auditId){
 function skuEditCardBody(line, { qtySetter, condSetter, disabled }){
   return `
     <div class="sku-card-head">
+      <div class="sku-avatar">${ICON.box}</div>
       <div class="sku-id">
         <div class="sku-code">${line.sku}</div>
         <span class="lot-badge"><span class="dot"></span>LOT ${line.lot}</span>
       </div>
     </div>
     <div class="sku-section">
-      <span class="sec-label">Quantity <span style="color:var(--rag-red-strong);">*</span></span>
       <div class="qty-stepper-row">
-        <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
+        <span class="sec-label">Quantity</span>
+        <div class="qty-stepper">
+          <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(Math.max(0, line.qty - 1))}">${ICON.minus}</button>
+          <input class="qty-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${line.qty}" onfocus="this.select()" ${disabled?'disabled':''} onchange="${qtySetter('this.value')}">
+          <button type="button" ${disabled?'disabled':''} onclick="${qtySetter(line.qty + 1)}">${ICON.plus}</button>
+        </div>
       </div>
     </div>
     <div class="sku-section">
-      <span class="sec-label">Condition <span style="color:var(--rag-red-strong);">*</span></span>
-      <div class="cond-radio-grid">${CONDITIONS.map(c => `
-        <label class="cond-radio">
-          <input type="radio" name="cond-${line.sku}" ${line.condition===c?'checked':''} ${disabled?'disabled':''} onchange="${condSetter(c)}">
-          <span>${c}</span>
-        </label>
-      `).join('')}</div>
+      <span class="sec-label">Condition</span>
+      <div class="cond-chip-row">${CONDITIONS.map(c => `<button type="button" class="cond-chip ${line.condition===c?'selected':''}" ${disabled?'disabled':''} onclick="${condSetter(c)}">${line.condition===c?ICON.checkSm:''}${c}</button>`).join('')}</div>
     </div>
   `;
 }
@@ -2777,836 +2171,6 @@ function skuCardFooter(saveOnclick, deleteOnclick, deleteLabel){
     </div>
   `;
 }
-// One pallet can carry several SKU lines (scan.lines) — this collapsed-row /
-// expanded-edit-card accordion is shared by the Count Sheet page and the
-// Rack View SKU panel so a pallet with multiple SKUs edits identically in
-// both places. withEvidence adds the note/audio/photo/video block (Rack
-// View only, for now) to whichever line is currently expanded.
-function renderScanLinesAccordion(scan, { withEvidence } = {}){
-  // expandedIdx === -1 is an explicit "collapsed" state (via Save); null/undefined
-  // means "not yet set" and defaults to the most recently scanned line.
-  const activeIdx = scan.expandedIdx === -1 ? -1
-    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
-  return scan.lines.map((line, idx) => idx === activeIdx ? `
-    <div class="sku-card active">
-      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
-      ${withEvidence ? renderEvidenceBlock(idx, line) : ''}
-      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
-    </div>
-  ` : `
-    <div class="sku-row-card">
-      <div class="sku-row-col">
-        <span class="col-label">SKU</span>
-        <div class="col-val mono">${line.sku}</div>
-      </div>
-      <div class="sku-row-col">
-        <span class="col-label">Quantity</span>
-        <div class="col-val">${line.qty}</div>
-      </div>
-      <div class="sku-row-col">
-        <span class="col-label">Condition</span>
-        ${severityPillHtml(line.condition)}
-      </div>
-      <div class="sku-row-col actions">
-        <span class="col-label">Action</span>
-        <div class="sku-row-actions">
-          <button type="button" class="icon-action-btn" onclick="editLine(${idx})" aria-label="Edit ${line.sku}">${ICON.pencil}</button>
-          <button type="button" class="icon-action-btn danger" onclick="removeLine(${idx})" aria-label="Delete ${line.sku}">${ICON.trash}</button>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-/* ================= RACK VIEW (tablet-only) =================
-   Reached from a bay pill on Audit Details — shows a schematic elevation of
-   the tapped bay (levels stacked bottom-up, a fixed count of slots per
-   level) so an inspector can see where a Pallet LPN physically sits
-   before jumping into the actual count. Not a picker: Layout/Rack/Bay are
-   fixed to the bay that was tapped; only the Pallet LPN — via a
-   diagram cell or the scan icon — can change within it. */
-
-// Most bays are a flat, uniform list (every level holds the same
-// RACK_DIAGRAM_SLOTS_PER_LEVEL count) and are placed by straight index math.
-// A bay generated by fillBayLevels carries explicit level/slot on each
-// location instead (its levels don't all hold the same count — a real bay's
-// levels don't), so this groups by that metadata when present rather than
-// assuming uniform width.
-function buildBayDiagram(bayObj, selectedLocCode){
-  const locs = bayObj ? bayObj.locations : [];
-  const perLevel = RACK_DIAGRAM_SLOTS_PER_LEVEL;
-  const hasLevelMeta = locs.length > 0 && locs[0].level != null;
-  const byLevel = hasLevelMeta ? new Map() : null;
-  if (hasLevelMeta) locs.forEach(loc => {
-    if (!byLevel.has(loc.level)) byLevel.set(loc.level, []);
-    byLevel.get(loc.level)[loc.slot - 1] = loc;
-  });
-  const levels = hasLevelMeta
-    ? Math.max(RACK_DIAGRAM_LEVELS, ...byLevel.keys())
-    : Math.max(RACK_DIAGRAM_LEVELS, Math.ceil(locs.length / perLevel));
-  const rows = [];
-  for (let level = levels; level >= 1; level--) {
-    const startIdx = (level - 1) * perLevel;
-    const cells = [];
-    for (let slot = 0; slot < perLevel; slot++) {
-      const loc = hasLevelMeta ? (byLevel.get(level) || [])[slot] : locs[startIdx + slot];
-      if (!loc) { cells.push(`<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`); continue; }
-      const isSelected = loc.code === selectedLocCode;
-      const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : ''].filter(Boolean).join(' ');
-      cells.push(`<button type="button" class="${cls}" title="${loc.code} · ${loc.status}" aria-label="${loc.code}" onclick="selectRackViewLoc('${loc.code}')"></button>`);
-    }
-    rows.push(`<div class="rack-diagram-row"><span class="rack-diagram-row-label">L${level}</span><div class="rack-diagram-row-cells">${cells.join('')}</div></div>`);
-  }
-  return `
-    <div class="rack-diagram-card">
-      <div class="rack-diagram">${rows.join('')}</div>
-    </div>
-    <div class="rack-diagram-caption">Bay ${bayObj.code}</div>
-  `;
-}
-
-function selectRackViewLoc(code){ STATE.rackViewClickedLoc = code; STATE.params.loc = code; render(); }
-function cancelRackViewSelection(){ STATE.rackViewClickedLoc = null; STATE.params.loc = null; render(); }
-
-// Scanning a SKU straight from Rack View (rather than only from the full Count
-// Sheet page) seeds the same STATE.scan used there via ensureScanState, so
-// whatever gets scanned here is exactly what the Count Sheet would show if
-// reached later for this location. scanSku() itself picks real-camera vs the
-// desktop-preview cycling fallback and calls applySkuResult, which is what
-// actually opens/updates the right-side panel via the render() it triggers.
-function scanSkuFromRackView(auditId, layout, rack, bay, locCode){
-  const locObj = findLoc(auditId, layout, rack, bay, locCode);
-  if (!locObj) return;
-  ensureScanState(auditId, layout, rack, bay, locCode, locObj);
-  STATE.rackViewSkuPanelOpen = true;
-  scanSku();
-}
-// The panel can hold a whole pallet's worth of SKUs, so Cancel just closes
-// it — undoing one SKU is the accordion card's own delete button
-// (removeLine, with its confirm dialog), not an all-or-nothing panel action.
-function cancelRackViewSkuScan(){
-  STATE.rackViewSkuPanelOpen = false;
-  render();
-}
-function saveRackViewSkuScan(){ STATE.rackViewSkuPanelOpen = false; render(); }
-
-// Desktop/web preview has no camera — cycles through this bay's real
-// locations, same fallback pattern as scanStorageLocationFieldSimulated.
-function scanRackViewLoc(auditId){
-  const { layout, rack, bay } = STATE.params;
-  const rackObj = findRackIn(auditId, layout, rack);
-  const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
-  if (!bayObj || !bayObj.locations.length) return;
-  if (!IS_REAL_MOBILE) {
-    STATE._rackViewScanCount = (STATE._rackViewScanCount || 0) + 1;
-    const loc = bayObj.locations[(STATE._rackViewScanCount - 1) % bayObj.locations.length];
-    STATE.params.loc = loc.code;
-    toast('Pallet LPN scanned');
-    render();
-    return;
-  }
-  openCameraScan('Point at the Pallet LPN QR code', (text) => {
-    const code = text.trim();
-    const match = bayObj.locations.find(l => l.code === code);
-    if (!match) { toast(`"${code}" isn't a Pallet LPN in this bay`, 'error'); return; }
-    STATE.params.loc = code;
-    toast('Pallet LPN scanned');
-    render();
-  });
-}
-
-// Racks are grouped by Layout — real data already on the audit — rather than
-// a fabricated "today's schedule vs scheduled cycle" split the app has no
-// actual tracking for. Shared by the initial render and the search filter's
-// surgical #rvpick-list update.
-function rackViewPickerRackListHtml(auditId, search){
-  const layouts = layoutsOf(auditId);
-  const q = (search || '').trim().toLowerCase();
-  const sections = layouts.map(ly => {
-    const racks = ly.racks.filter(r => !q || `rack ${r.code}`.toLowerCase().includes(q));
-    if (!racks.length) return '';
-    return `
-      <div class="rvpick-group"><span class="lbl">${ly.name}</span><span class="count">Total : ${String(ly.racks.length).padStart(2,'0')}</span></div>
-      ${racks.map(r => {
-        const isSelected = ly.name === STATE.params.layout && r.code === STATE.params.rack;
-        return `<button type="button" class="rvpick-item ${isSelected?'selected':''}" onclick="chooseRackViewRack('${ly.name}', '${r.code}')"><span>Rack ${r.code}</span>${isSelected ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>`;
-      }).join('')}
-    `;
-  }).join('');
-  return sections.trim() ? sections : `<div class="rvpick-empty">No racks match "${search}"</div>`;
-}
-function rackViewPickerBayListHtml(auditId, search){
-  const rackObj = findRackIn(auditId, STATE.params.layout, STATE.params.rack);
-  const bays = rackObj ? rackObj.bays : [];
-  const q = (search || '').trim().toLowerCase();
-  const filtered = bays.filter(b => !q || `bay ${b.code}`.toLowerCase().includes(q));
-  if (!filtered.length) return `<div class="rvpick-empty">No bays match "${search}"</div>`;
-  return filtered.map(b => {
-    const isSelected = b.code === STATE.params.bay;
-    return `<button type="button" class="rvpick-item ${isSelected?'selected':''}" onclick="chooseRackViewBay('${b.code}')"><span>Bay ${b.code}</span>${isSelected ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>`;
-  }).join('');
-}
-function openRackViewPicker(field){ STATE.rackViewPicker = { field, search:'' }; render(); }
-function closeRackViewPicker(){ STATE.rackViewPicker = null; render(); }
-// Search only replaces the list (not the whole panel) so the input's focus
-// and cursor survive every keystroke — same technique as filterSheetList.
-function filterRackViewPicker(auditId, value){
-  STATE.rackViewPicker.search = value;
-  const list = document.getElementById('rvpick-list');
-  if (!list) return;
-  list.innerHTML = STATE.rackViewPicker.field === 'rack' ? rackViewPickerRackListHtml(auditId, value) : rackViewPickerBayListHtml(auditId, value);
-}
-function chooseRackViewRack(layoutName, rackCode){
-  const rackObj = findRackIn(STATE.params.auditId, layoutName, rackCode);
-  const firstBay = rackObj && rackObj.bays[0];
-  STATE.params.layout = layoutName;
-  STATE.params.rack = rackCode;
-  STATE.params.bay = firstBay ? firstBay.code : null;
-  STATE.params.loc = null;
-  STATE.rackViewClickedLoc = null;
-  STATE.rackViewPicker = null;
-  render();
-}
-function chooseRackViewBay(bayCode){
-  STATE.params.bay = bayCode;
-  STATE.params.loc = null;
-  STATE.rackViewClickedLoc = null;
-  STATE.rackViewPicker = null;
-  render();
-}
-
-// Right-side panel shown after a Rack View SKU scan — same skuEditCardBody
-// used by the Count Sheet page, so qty/condition edits here land in the same
-// STATE.scan.lines a later Count Sheet visit for this location would show.
-// Evidence (note/audio/photo/video) captured for the SKU currently open in
-// the Rack View panel — kept on the line itself (not a separate STATE tree)
-// so it travels with that scan line the same way qty/condition do. No real
-// mic/camera capture is wired up (this is a desktop-preview UI pass); each
-// button simulates its capture the same way the rest of this app's scan
-// flows fall back to fixture data when there's no real device to read from.
-function ensureEvidence(line){
-  if (!line.evidence) line.evidence = { note:'', noteOpen:false, audio:null, images:[], videos:[] };
-  return line.evidence;
-}
-function setEvidenceNote(idx, val){ ensureEvidence(STATE.scan.lines[idx]).note = val; }
-// The note field itself only appears once opened (matching the reference's
-// clean default state — just the label + icon row until acted on); reveal
-// it on the same click that focuses it, rather than rendering an empty
-// textarea up front for every SKU line whether or not it has a note.
-function focusEvidenceNote(idx){
-  ensureEvidence(STATE.scan.lines[idx]).noteOpen = true;
-  render();
-  const el = document.getElementById(`rv-evidence-note-${idx}`);
-  if (el) el.focus();
-}
-function recordEvidenceAudio(idx){
-  const ev = ensureEvidence(STATE.scan.lines[idx]);
-  ev.audio = { durationSec: 20, playing: false, bars: generateWaveformBars() };
-  render();
-}
-function toggleEvidenceAudioPlay(idx){
-  const ev = ensureEvidence(STATE.scan.lines[idx]);
-  if (!ev.audio) return;
-  ev.audio.playing = !ev.audio.playing;
-  render();
-}
-function removeEvidenceAudio(idx){ ensureEvidence(STATE.scan.lines[idx]).audio = null; render(); }
-// Clicking "Add photo" opens the New Attachment modal (mark-up + save) below
-// instead of silently pushing a blank image straight into evidence — the
-// image only actually gets added to line.evidence.images on Save.
-function addEvidenceImage(idx){
-  STATE.imageAttachmentModal = { lineIdx: idx, color: ANNOTATION_COLORS[0], strokes: [], redoStack: [], drawMode: true };
-  render();
-}
-function removeEvidenceImage(idx, i){ ensureEvidence(STATE.scan.lines[idx]).images.splice(i, 1); render(); }
-function addEvidenceVideo(idx){ ensureEvidence(STATE.scan.lines[idx]).videos.push({ durationSec: 20 }); render(); }
-function removeEvidenceVideo(idx, i){ ensureEvidence(STATE.scan.lines[idx]).videos.splice(i, 1); render(); }
-
-// ---- New Attachment modal — mark up a photo with colored freehand
-// annotations (matches the reference's color row + draw/undo/redo toolbar)
-// before saving it onto the SKU line's evidence.images. There's no real
-// camera capture wired up here (same honest-stub reasoning as the rest of
-// this evidence flow), so the "photo" is a placeholder graphic — what's
-// real is the annotation itself: actual freehand drawing, actual undo/redo
-// history, actual per-stroke color.
-function closeImageAttachmentModal(){ STATE.imageAttachmentModal = null; render(); }
-function setImageAnnotationColor(color){ STATE.imageAttachmentModal.color = color; render(); }
-function toggleImageDrawMode(){ STATE.imageAttachmentModal.drawMode = !STATE.imageAttachmentModal.drawMode; render(); }
-function undoImageAnnotation(){
-  const m = STATE.imageAttachmentModal;
-  if (!m.strokes.length) return;
-  m.redoStack.push(m.strokes.pop());
-  render();
-}
-function redoImageAnnotation(){
-  const m = STATE.imageAttachmentModal;
-  if (!m.redoStack.length) return;
-  m.strokes.push(m.redoStack.pop());
-  render();
-}
-function resetImageAnnotations(){
-  const m = STATE.imageAttachmentModal;
-  m.strokes = []; m.redoStack = [];
-  render();
-}
-function saveImageAttachment(){
-  const m = STATE.imageAttachmentModal;
-  ensureEvidence(STATE.scan.lines[m.lineIdx]).images.push({ strokes: m.strokes });
-  closeImageAttachmentModal();
-}
-function drawImageAnnotationStroke(ctx, stroke){
-  if (stroke.points.length < 2) return;
-  ctx.strokeStyle = stroke.color;
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-  stroke.points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-  ctx.stroke();
-}
-// Redraws every committed stroke from STATE (the source of truth) and wires
-// up freehand pointer drawing — called after every render() re-creates the
-// modal's DOM (a plain canvas element has no memory of its own across an
-// innerHTML swap, same reasoning as cameraScanLoop's canvas elsewhere).
-function setupImageAnnotationCanvas(){
-  const m = STATE.imageAttachmentModal;
-  if (!m) return;
-  const canvas = document.getElementById('img-annotate-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  m.strokes.forEach(s => drawImageAnnotationStroke(ctx, s));
-
-  let current = null;
-  const toLocal = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const point = e.touches ? e.touches[0] : e;
-    return { x: (point.clientX - rect.left) * (canvas.width / rect.width), y: (point.clientY - rect.top) * (canvas.height / rect.height) };
-  };
-  const start = (e) => {
-    if (!STATE.imageAttachmentModal.drawMode) return;
-    e.preventDefault();
-    current = { color: STATE.imageAttachmentModal.color, points: [toLocal(e)] };
-  };
-  const move = (e) => {
-    if (!current) return;
-    e.preventDefault();
-    current.points.push(toLocal(e));
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    m.strokes.forEach(s => drawImageAnnotationStroke(ctx, s));
-    drawImageAnnotationStroke(ctx, current);
-  };
-  const end = () => {
-    if (!current) return;
-    if (current.points.length > 1) { m.strokes.push(current); m.redoStack = []; }
-    current = null;
-    render();
-  };
-  canvas.addEventListener('mousedown', start);
-  canvas.addEventListener('mousemove', move);
-  window.addEventListener('mouseup', end);
-  canvas.addEventListener('touchstart', start, { passive: false });
-  canvas.addEventListener('touchmove', move, { passive: false });
-  canvas.addEventListener('touchend', end);
-}
-function renderImageAttachmentModal(){
-  const slot = document.getElementById('image-modal-slot');
-  const m = STATE.imageAttachmentModal;
-  if (!m) { slot.innerHTML = ''; return; }
-  slot.innerHTML = `
-    <div class="modal-overlay open" onclick="closeImageAttachmentModal()">
-      <div class="modal img-modal" style="max-width:560px; width:100%;" onclick="event.stopPropagation()">
-        <div class="modal-head">
-          <h3>New Attachment</h3>
-          <button onclick="closeImageAttachmentModal()">${ICON.close}</button>
-        </div>
-        <div class="modal-body">
-          <div class="img-modal-hint">Attach or click only four images related to any issues</div>
-          <div class="img-modal-photo">
-            <span class="img-modal-photo-placeholder">${ICON.box}</span>
-            <canvas id="img-annotate-canvas" width="560" height="260"></canvas>
-          </div>
-          <div class="img-modal-toolrow">
-            <div class="img-color-row">
-              ${ANNOTATION_COLORS.map(c => `<button type="button" class="img-color-swatch ${m.color===c?'selected':''}" style="background:${c};" onclick="setImageAnnotationColor('${c}')" aria-label="Color ${c}">${m.color===c?ICON.checkSm:''}</button>`).join('')}
-            </div>
-            <div class="img-tool-btns">
-              <button type="button" class="card-icon-btn ${m.drawMode?'issue-filter-active':''}" title="Draw" aria-label="Toggle draw mode" onclick="toggleImageDrawMode()">${ICON.draw}</button>
-              <button type="button" class="card-icon-btn" title="Redo" aria-label="Redo" onclick="redoImageAnnotation()">${ICON.redo}</button>
-              <button type="button" class="card-icon-btn" title="Undo" aria-label="Undo" onclick="undoImageAnnotation()">${ICON.undo}</button>
-            </div>
-          </div>
-          <div class="img-modal-footer">
-            <button type="button" class="card-icon-btn danger" title="Clear annotations" aria-label="Clear annotations" onclick="resetImageAnnotations()">${ICON.trash}</button>
-            <button type="button" class="btn primary" style="width:auto; padding:0 28px;" onclick="saveImageAttachment()">Save Image</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  requestAnimationFrame(setupImageAnnotationCanvas);
-}
-
-function renderEvidenceBlock(idx, line){
-  const ev = ensureEvidence(line);
-  return `
-    <div class="rv-evidence">
-      <div class="rv-evidence-row">
-        <span class="rv-evidence-label">Write a note or record an audio for the issue</span>
-        <div class="rv-evidence-btns">
-          <button type="button" class="card-icon-btn" title="Add note" aria-label="Add note" onclick="focusEvidenceNote(${idx})">${ICON.pencil}</button>
-          <button type="button" class="card-icon-btn" title="Record audio" aria-label="Record audio" onclick="recordEvidenceAudio(${idx})">${ICON.mic}</button>
-        </div>
-      </div>
-      ${(ev.noteOpen || ev.note) ? `<textarea class="rv-evidence-note" id="rv-evidence-note-${idx}" placeholder="Add a note..." onchange="setEvidenceNote(${idx}, this.value)">${ev.note}</textarea>` : ''}
-      ${ev.audio ? `
-        <div class="rv-evidence-audio">
-          <button type="button" class="card-icon-btn" onclick="toggleEvidenceAudioPlay(${idx})" aria-label="${ev.audio.playing ? 'Pause' : 'Play'}">${ev.audio.playing ? ICON.pauseTri : ICON.playTri}</button>
-          <div class="rv-evidence-waveform">${ev.audio.bars.map(h => `<span style="height:${h}px;"></span>`).join('')}</div>
-          <span class="rv-evidence-duration">${ev.audio.durationSec}s</span>
-          <button type="button" class="card-icon-btn danger" onclick="removeEvidenceAudio(${idx})" aria-label="Delete audio">${ICON.trash}</button>
-        </div>
-      ` : ''}
-      <div class="rv-evidence-row">
-        <span class="rv-evidence-label">Click on upload image or capture video for the issue</span>
-        <div class="rv-evidence-btns">
-          <button type="button" class="card-icon-btn" title="Add photo" aria-label="Add photo" onclick="addEvidenceImage(${idx})">${ICON.camera}</button>
-          <button type="button" class="card-icon-btn" title="Add video" aria-label="Add video" onclick="addEvidenceVideo(${idx})">${ICON.video}</button>
-        </div>
-      </div>
-      ${ev.images.length ? `
-        <div class="rv-evidence-group">
-          <div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(ev.images.length).padStart(2, '0')}</span></div>
-          <div class="rv-evidence-thumbs">${ev.images.map((img, i) => `<button type="button" class="rv-evidence-thumb" onclick="removeEvidenceImage(${idx}, ${i})" aria-label="Remove image">${ICON.image}</button>`).join('')}</div>
-        </div>
-      ` : ''}
-      ${ev.videos.length ? `
-        <div class="rv-evidence-group">
-          <div class="rv-evidence-group-head">${ICON.video} Video Attachments <span class="acc-badge">${String(ev.videos.length).padStart(2, '0')}</span></div>
-          <div class="rv-evidence-thumbs">${ev.videos.map((v, i) => `<button type="button" class="rv-evidence-thumb" onclick="removeEvidenceVideo(${idx}, ${i})" aria-label="Remove video"><span class="dur">00:${v.durationSec}sec</span>${ICON.playTri}</button>`).join('')}</div>
-        </div>
-      ` : ''}
-    </div>
-  `;
-}
-
-// A single location can hold several pallets (P1, P2, P3 stacked at the same
-// level), and a single pallet can carry several SKUs — this panel is the
-// reconciliation record for whichever pallet is currently being scanned:
-// scan.pallet identifies it, scan.lines holds every SKU counted on it so far.
-// The scan icon in the header (not a close/X) re-runs scanSku() without
-// closing the panel, so a whole pallet's worth of SKUs can be counted in one
-// sitting without hunting for a scan action buried below a scrolling list of
-// already-counted SKU cards. Cancel/Save in the fixed footer close it.
-function renderRackViewSkuPanel(){
-  if (!STATE.rackViewSkuPanelOpen || !STATE.scan || !STATE.scan.lines.length) return '';
-  const scan = STATE.scan;
-  return `
-    <button type="button" class="rv-sku-panel-backdrop" onclick="cancelRackViewSkuScan()" aria-label="Close"></button>
-    <div class="rv-sku-panel" onclick="event.stopPropagation()">
-      <div class="rv-sku-panel-head">
-        <div>
-          <h3>Reconciliation Form</h3>
-          <div class="rv-sku-panel-sub mono">${scan.loc} · ${scan.pallet || 'New Pallet'}</div>
-        </div>
-        <button type="button" class="card-icon-btn" onclick="scanSku()" title="Scan another SKU" aria-label="Scan another SKU">${ICON.qr}</button>
-      </div>
-      <div class="rv-sku-panel-body">
-        <div class="rv-sku-list">${renderScanLinesAccordion(scan, { withEvidence: true })}</div>
-      </div>
-      <div class="rv-sku-panel-footer">
-        <button type="button" class="btn outline" onclick="cancelRackViewSkuScan()">Cancel</button>
-        <button type="button" class="btn primary" onclick="saveRackViewSkuScan()">Save</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderRackView(){
-  const { auditId, layout, rack, bay } = STATE.params;
-  const a = AUDITS.find(x => x.audit_id === auditId);
-  if (!a) return renderTasks();
-  const layoutObj = findLayoutIn(auditId, layout);
-  const rackObj = findRackIn(auditId, layout, rack);
-  const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
-  if (!layoutObj || !rackObj || !bayObj) return renderAuditDetails();
-
-  // Nothing is highlighted until the inspector actually taps a cell — no
-  // auto-picked "first open location" default. Landing on this bay fresh
-  // (a new auditId/layout/rack/bay combo, e.g. via a bay pill elsewhere)
-  // clears any selection left over from a previously viewed bay.
-  const seedKey = `${auditId}|${layout}|${rack}|${bay}`;
-  if (STATE._rackViewSeedKey !== seedKey) {
-    STATE._rackViewSeedKey = seedKey;
-    STATE.rackViewClickedLoc = null;
-  }
-  const selectedCode = bayObj.locations.find(l => l.code === STATE.rackViewClickedLoc) ? STATE.rackViewClickedLoc : null;
-  const selectedLoc = bayObj.locations.find(l => l.code === selectedCode);
-
-  const picker = STATE.rackViewPicker;
-  const rackDropdown = picker && picker.field === 'rack' ? `
-    <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
-    <div class="rvpick-panel" onclick="event.stopPropagation()">
-      <div class="rvpick-search">${ICON.search}<input autofocus placeholder="Search" value="${picker.search}" oninput="filterRackViewPicker('${auditId}', this.value)" /></div>
-      <div id="rvpick-list">${rackViewPickerRackListHtml(auditId, picker.search)}</div>
-    </div>
-  ` : '';
-  const bayDropdown = picker && picker.field === 'bay' ? `
-    <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
-    <div class="rvpick-panel" onclick="event.stopPropagation()">
-      <div class="rvpick-search">${ICON.search}<input autofocus placeholder="Search" value="${picker.search}" oninput="filterRackViewPicker('${auditId}', this.value)" /></div>
-      <div id="rvpick-list">${rackViewPickerBayListHtml(auditId, picker.search)}</div>
-    </div>
-  ` : '';
-
-  const topFields = `
-    <div class="loc-picker-toprow rv-no-labels">
-      <div class="field"><div class="picker-btn fixed"><span class="mono">${layoutObj.name}</span></div></div>
-      <div class="field rvpick-wrap">
-        <button type="button" class="picker-btn" onclick="openRackViewPicker('rack')">
-          <span class="mono">Rack ${rackObj.code}</span>
-          <span class="chevronDown">${ICON.chevronDown}</span>
-        </button>
-        ${rackDropdown}
-      </div>
-      <div class="field rvpick-wrap">
-        <button type="button" class="picker-btn" onclick="openRackViewPicker('bay')">
-          <span class="mono">Bay ${bayObj.code}</span>
-          <span class="chevronDown">${ICON.chevronDown}</span>
-        </button>
-        ${bayDropdown}
-      </div>
-      <div class="field">
-        <div class="picker-btn fixed">
-          <span class="mono">${selectedLoc ? (selectedLoc.slot != null ? `Pallet ${String(selectedLoc.slot).padStart(2,'0')}` : selectedLoc.code) : '—'}</span>
-          ${selectedLoc ? `<span class="pill ${locStatusPillClass(selectedLoc.status)}">${selectedLoc.status}</span>` : ''}
-        </div>
-      </div>
-      <div class="rv-scan-qr">
-        <span>OR Scan the QR</span>
-        <button type="button" class="card-icon-btn" title="Scan Pallet LPN QR" aria-label="Scan Pallet LPN QR" onclick="scanRackViewLoc('${auditId}')">${ICON.qr}</button>
-      </div>
-    </div>
-  `;
-
-  return `
-    ${headerBlock({ title: a.audit_name, sub: a.audit_id, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-    <div class="rv-toolbar-row">${topFields}</div>
-    <div class="body-pad">
-      <div class="card rv-diagram-card">
-        <div class="rv-diagram-header">Front View</div>
-        <div class="rv-diagram-body">
-          ${buildBayDiagram(bayObj, selectedCode)}
-        </div>
-        <div class="rv-actions-row">
-          <button class="btn outline auto" onclick="cancelRackViewSelection()">Cancel</button>
-          <button class="btn primary auto" ${selectedCode ? '' : 'disabled'} onclick="scanSkuFromRackView('${auditId}', '${layoutObj.name}', '${rackObj.code}', '${bayObj.code}', '${selectedCode}')">Start Audit ${ICON.chevron}</button>
-        </div>
-      </div>
-    </div>
-    ${renderRackViewSkuPanel()}
-  `;
-}
-
-/* ================= AUDIT SCHEDULE (calendar) =================
-   Monthly calendar of this inspector's audits, keyed off each audit's
-   start_date — matches the Figma "Inspection Schedule" reference: a
-   Mon-Sun month grid with color-coded chips per day, and a "Schedule
-   Details" modal (grouped by audit type) on day tap. Real content only:
-   audit name, scope and team size come straight from AUDITS — no
-   fabricated duration/hours fields the app doesn't actually track. */
-
-function scheduleTypeKey(auditType){
-  return { 'Spot Check':'spot', 'Full':'full', 'Cycle Count':'cycle' }[auditType] || 'spot';
-}
-
-// Sunday-first Date#getDay() (0-6) remapped to a Monday-first column index
-// (0-6) to match the Figma grid's Mon..Sun header order.
-function mondayIndex(jsDay){ return (jsDay + 6) % 7; }
-
-function initScheduleCal(){
-  const now = new Date();
-  STATE.scheduleCal = { year: now.getFullYear(), month: now.getMonth(), day: now.getDate(), view: 'month' };
-}
-
-function shiftScheduleMonth(delta){
-  const c = STATE.scheduleCal;
-  const d = new Date(c.year, c.month + delta, 1);
-  c.year = d.getFullYear(); c.month = d.getMonth(); c.day = 1;
-  render();
-}
-// Week/Day views navigate by real day counts (7 or 1) off the same anchor
-// date, rather than reusing shiftScheduleMonth's month-only math — a week can
-// cross a month boundary and needs the day to carry over correctly.
-function shiftScheduleWeek(delta){
-  const c = STATE.scheduleCal;
-  const d = new Date(c.year, c.month, c.day + delta * 7);
-  c.year = d.getFullYear(); c.month = d.getMonth(); c.day = d.getDate();
-  render();
-}
-function shiftScheduleDay(delta){
-  const c = STATE.scheduleCal;
-  const d = new Date(c.year, c.month, c.day + delta);
-  c.year = d.getFullYear(); c.month = d.getMonth(); c.day = d.getDate();
-  render();
-}
-function toggleScheduleViewMenu(){ STATE.scheduleViewOpen = !STATE.scheduleViewOpen; render(); }
-function setScheduleView(view){ STATE.scheduleCal.view = view; STATE.scheduleViewOpen = false; render(); }
-
-function openScheduleDay(dateISO){ STATE.scheduleModal = { dateISO }; render(); }
-// Clicking a specific audit — its calendar bar, or its card inside the day
-// popover — jumps straight into that audit's own Audit Details page rather
-// than just opening/staying on the day list.
-function openAuditDetailsFromSchedule(auditId){ STATE.scheduleModal = null; push('auditDetails', { auditId }); }
-function closeScheduleModal(){ STATE.scheduleModal = null; render(); }
-
-// Greedy interval-scheduling lane assignment — each audit-bar takes the first
-// lane whose existing bars don't overlap its column range within this week,
-// same technique a Gantt chart uses to stack non-overlapping bars.
-function assignScheduleLanes(bars){
-  const lanes = []; // lanes[i] = array of {colStart, colEnd} already placed
-  return bars.map(bar => {
-    const colEnd = bar.colStart + bar.colSpan - 1;
-    let lane = lanes.findIndex(placed => placed.every(p => colEnd < p.colStart || bar.colStart > p.colEnd));
-    if (lane === -1) { lane = lanes.length; lanes.push([]); }
-    lanes[lane].push({ colStart: bar.colStart, colEnd });
-    return { ...bar, lane };
-  });
-}
-
-const CAL_TO_ISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const CAL_VISIBLE_LANES = 3;
-
-// One Mon-Sun row: day cells + stacked audit bars. refMonth marks which
-// dates render dimmed ("other-month") — pass null (week view has no
-// containing-month concept) to keep every day in that row fully lit.
-// Shared by the month grid (looped once per week) and the week view (called
-// once for a single week), so both stay pixel-identical.
-function buildScheduleWeekRow(weekDates, refMonth, todayISO, auditPool){
-  const weekStartISO = CAL_TO_ISO(weekDates[0]), weekEndISO = CAL_TO_ISO(weekDates[6]);
-
-  // Every audit whose [start_date, end_date] range touches this week at all,
-  // clipped to the columns (0=Mon..6=Sun) it actually spans within this row —
-  // an audit running past Sunday continues as its own clipped bar next week.
-  const bars = auditPool
-    .filter(a => a.start_date <= weekEndISO && a.end_date >= weekStartISO)
-    .map(a => {
-      const spanStartISO = a.start_date > weekStartISO ? a.start_date : weekStartISO;
-      const spanEndISO = a.end_date < weekEndISO ? a.end_date : weekEndISO;
-      const colStart = mondayIndex(new Date(spanStartISO + 'T00:00:00').getDay());
-      const colSpan = Math.round((new Date(spanEndISO+'T00:00:00') - new Date(spanStartISO+'T00:00:00')) / 86400000) + 1;
-      return { audit: a, colStart, colSpan, spanStartISO };
-    })
-    .sort((x, y) => x.colStart - y.colStart || y.colSpan - x.colSpan);
-
-  const placed = assignScheduleLanes(bars);
-  const visibleBars = placed.filter(b => b.lane < CAL_VISIBLE_LANES);
-  const hiddenByCol = [0,0,0,0,0,0,0];
-  placed.filter(b => b.lane >= CAL_VISIBLE_LANES).forEach(b => {
-    for (let c = b.colStart; c < b.colStart + b.colSpan; c++) hiddenByCol[c]++;
-  });
-
-  const dayCellsHtml = weekDates.map(d => {
-    const iso = CAL_TO_ISO(d);
-    const inMonth = refMonth == null || d.getMonth() === refMonth;
-    const isToday = iso === todayISO;
-    const isSunday = mondayIndex(d.getDay()) === 6;
-    return `<button type="button" class="cal-day-cell ${inMonth?'':'other-month'} ${isToday?'is-today':''} ${isSunday?'is-sunday':''}" onclick="openScheduleDay('${iso}')"><span class="cal-day-num">${d.getDate()}</span></button>`;
-  }).join('');
-
-  // One CSS-grid row per lane, sharing the day-grid's column count/gap —
-  // each bar is placed via grid-column (colStart+1 / span colSpan) so it
-  // lines up exactly with the gapped day cells above it, and several
-  // non-overlapping bars can share a lane row as separate grid items.
-  const laneRows = Array.from({ length: CAL_VISIBLE_LANES }, (_, lane) =>
-    visibleBars.filter(b => b.lane === lane)
-  ).filter(row => row.length);
-  const barsHtml = laneRows.map(row => `
-    <div class="cal-bar-row">
-      ${row.map(b => `<button type="button" class="cal-bar type-${scheduleTypeKey(b.audit.audit_type)}" style="grid-column:${b.colStart+1} / span ${b.colSpan};" onclick="openScheduleDay('${b.spanStartISO}')">${b.audit.audit_type}</button>`).join('')}
-    </div>
-  `).join('');
-
-  const moreHtml = hiddenByCol.some(n => n > 0) ? `
-    <div class="cal-more-row">
-      ${hiddenByCol.map(n => n > 0 ? `<div class="cal-more">+${n} More</div>` : '<div></div>').join('')}
-    </div>
-  ` : '';
-
-  return `
-    <div class="cal-week">
-      <div class="cal-week-grid">${dayCellsHtml}</div>
-      <div class="cal-week-bars">${barsHtml}${moreHtml}</div>
-    </div>
-  `;
-}
-
-// Same grouped-by-type list used by both the day-tap popover (renderScheduleModal)
-// and the inline Day view, so a given day reads identically whichever way it's reached.
-function dayAuditsGroupsHtml(dateISO){
-  const dayAudits = mine().filter(a => a.start_date <= dateISO && a.end_date >= dateISO);
-  const groups = ['Spot Check', 'Full', 'Cycle Count']
-    .map(type => ({ type, audits: dayAudits.filter(a => a.audit_type === type) }))
-    .filter(g => g.audits.length);
-  return groups.length ? groups.map(g => `
-    <div class="sched-group-label">${g.type}</div>
-    ${g.audits.map(a => `
-      <button type="button" class="sched-card type-${scheduleTypeKey(a.audit_type)}" onclick="openAuditDetailsFromSchedule('${a.audit_id}')">
-        <div class="name">${a.audit_name}</div>
-        <div class="scope">${a.scope_values.join(', ')}</div>
-        <div class="meta">${ICON.user} ${a.team_members.length} member${a.team_members.length===1?'':'s'}</div>
-      </button>
-    `).join('')}
-  `).join('') : `
-    <div class="empty-state" style="padding:30px 0;">
-      <div class="glyph">${ICON.tasks}</div>
-      <div>No inspections scheduled for this day.</div>
-    </div>
-  `;
-}
-
-const SCHEDULE_VIEWS = [
-  { key:'month', label:'Monthly' },
-  { key:'week', label:'Weekly' },
-  { key:'day', label:'Daily' },
-];
-function scheduleViewMenuHtml(){
-  if (!STATE.scheduleViewOpen) return '';
-  return `
-    <button type="button" class="rvpick-backdrop" onclick="toggleScheduleViewMenu()" aria-label="Close"></button>
-    <div class="rvpick-panel" style="left:auto; right:0; width:160px;" onclick="event.stopPropagation()">
-      ${SCHEDULE_VIEWS.map(v => `<button type="button" class="rvpick-item ${STATE.scheduleCal.view===v.key?'selected':''}" onclick="setScheduleView('${v.key}')"><span>${v.label}</span>${STATE.scheduleCal.view===v.key?ICON.checkSm:''}</button>`).join('')}
-    </div>
-  `;
-}
-
-function renderSchedule(){
-  if (!STATE.scheduleCal) initScheduleCal();
-  const { year, month, day, view } = STATE.scheduleCal;
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const auditPool = mine();
-
-  const viewSelect = `
-    <div class="rvpick-wrap">
-      <button type="button" class="cal-view-select" onclick="toggleScheduleViewMenu()">${SCHEDULE_VIEWS.find(v=>v.key===view).label} ${ICON.chevronDown}</button>
-      ${scheduleViewMenuHtml()}
-    </div>
-  `;
-
-  if (view === 'week') {
-    const anchor = new Date(year, month, day);
-    const weekStart = new Date(anchor); weekStart.setDate(anchor.getDate() - mondayIndex(anchor.getDay()));
-    const weekDates = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d; });
-    const weekLabel = `${weekDates[0].toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${weekDates[6].toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
-    const weekdays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-    return `
-      ${headerBlock({ title:'Audit Schedule', showBack:true, showBell:true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-      <div class="body-pad">
-        <div class="cal-toolbar">
-          <div class="cal-nav">
-            <button type="button" class="cal-nav-btn cal-nav-prev" onclick="shiftScheduleWeek(-1)" aria-label="Previous week">${ICON.chevron}</button>
-            <span class="cal-month-label">${weekLabel}</span>
-            <button type="button" class="cal-nav-btn" onclick="shiftScheduleWeek(1)" aria-label="Next week">${ICON.chevron}</button>
-          </div>
-          ${viewSelect}
-        </div>
-        <div class="cal-grid">
-          <div class="cal-weekday-row">${weekdays.map(w => `<div class="cal-weekday">${w}</div>`).join('')}</div>
-          <div class="cal-weeks">${buildScheduleWeekRow(weekDates, null, todayISO, auditPool)}</div>
-        </div>
-        <div class="cal-legend">
-          <span class="sw type-spot">Spot Check</span>
-          <span class="sw type-full">Full</span>
-          <span class="sw type-cycle">Cycle Count</span>
-        </div>
-      </div>
-    `;
-  }
-
-  if (view === 'day') {
-    const anchor = new Date(year, month, day);
-    const dateISO = CAL_TO_ISO(anchor);
-    const dateLabel = anchor.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-    return `
-      ${headerBlock({ title:'Audit Schedule', showBack:true, showBell:true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-      <div class="body-pad">
-        <div class="cal-toolbar">
-          <div class="cal-nav">
-            <button type="button" class="cal-nav-btn cal-nav-prev" onclick="shiftScheduleDay(-1)" aria-label="Previous day">${ICON.chevron}</button>
-            <span class="cal-month-label">${dateLabel}</span>
-            <button type="button" class="cal-nav-btn" onclick="shiftScheduleDay(1)" aria-label="Next day">${ICON.chevron}</button>
-          </div>
-          ${viewSelect}
-        </div>
-        <div class="card">${dayAuditsGroupsHtml(dateISO)}</div>
-      </div>
-    `;
-  }
-
-  const firstOfMonth = new Date(year, month, 1);
-  const startOffset = mondayIndex(firstOfMonth.getDay());
-  const gridStart = new Date(year, month, 1 - startOffset);
-  const lastOfMonth = new Date(year, month + 1, 0);
-  const endOffset = 6 - mondayIndex(lastOfMonth.getDay());
-  const gridEnd = new Date(year, month + 1, endOffset);
-  const totalWeeks = Math.round((gridEnd - gridStart) / 86400000 + 1) / 7;
-
-  const weekRows = [];
-  for (let w = 0; w < totalWeeks; w++) {
-    const weekDates = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(gridStart); d.setDate(gridStart.getDate() + w * 7 + i); return d;
-    });
-    weekRows.push(buildScheduleWeekRow(weekDates, month, todayISO, auditPool));
-  }
-
-  const monthLabel = firstOfMonth.toLocaleDateString('en-IN', { month:'long', year:'numeric' });
-  const weekdays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-
-  return `
-    ${headerBlock({ title:'Audit Schedule', showBack:true, showBell:true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-    <div class="body-pad">
-      <div class="cal-toolbar">
-        <div class="cal-nav">
-          <button type="button" class="cal-nav-btn cal-nav-prev" onclick="shiftScheduleMonth(-1)" aria-label="Previous month">${ICON.chevron}</button>
-          <span class="cal-month-label">${monthLabel}</span>
-          <button type="button" class="cal-nav-btn" onclick="shiftScheduleMonth(1)" aria-label="Next month">${ICON.chevron}</button>
-        </div>
-        ${viewSelect}
-      </div>
-      <div class="cal-grid">
-        <div class="cal-weekday-row">${weekdays.map(w => `<div class="cal-weekday">${w}</div>`).join('')}</div>
-        <div class="cal-weeks">${weekRows.join('')}</div>
-      </div>
-      <div class="cal-legend">
-        <span class="sw type-spot">Spot Check</span>
-        <span class="sw type-full">Full</span>
-        <span class="sw type-cycle">Cycle Count</span>
-      </div>
-    </div>
-  `;
-}
-
-function renderScheduleModal(){
-  const slot = document.getElementById('schedule-modal-slot');
-  if (!STATE.scheduleModal) { slot.innerHTML = ''; return; }
-  const { dateISO } = STATE.scheduleModal;
-  const dayAuditsCount = mine().filter(a => a.start_date <= dateISO && a.end_date >= dateISO).length;
-  const dateLabel = new Date(dateISO + 'T00:00:00').toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
-
-  slot.innerHTML = `
-    <div class="modal-overlay sched-overlay open" onclick="closeScheduleModal()">
-      <div class="modal sched-popover" style="max-width:420px; width:100%; max-height:60vh; overflow-y:auto;" onclick="event.stopPropagation()">
-        <div class="modal-head">
-          <div class="sched-modal-head"><h3>Schedule Details</h3>${dayAuditsCount ? `<span class="count-badge">+${dayAuditsCount}</span>` : ''}</div>
-          <button onclick="closeScheduleModal()">${ICON.close}</button>
-        </div>
-        <div class="sched-modal-date">${dateLabel}</div>
-        <div class="modal-body">${dayAuditsGroupsHtml(dateISO)}</div>
-      </div>
-    </div>
-  `;
-}
-
 function renderCountSheet(){
   const { auditId, layout, rack, bay, loc } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
@@ -3700,12 +2264,35 @@ function renderCountSheet(){
     `;
   }
 
-  ensureScanState(auditId, al, ar, ab, aloc, locObj);
+  if (!STATE.scan || STATE.scan.auditId !== auditId || STATE.scan.loc !== aloc) {
+    const existing = locObj.pallets.find(p => !p.saved) || null;
+    STATE.scan = { auditId, layout:al, rack:ar, bay:ab, loc:aloc, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
+    STATE.expandedSavedPallet = null;
+  }
   const scan = STATE.scan;
   const readOnly = locObj.status === 'Completed';
   const savedPallets = locObj.pallets.filter(p => p.saved);
 
-  const skuCards = renderScanLinesAccordion(scan);
+  // expandedIdx === -1 is an explicit "collapsed" state (via Save); null/undefined
+  // means "not yet set" and defaults to the most recently scanned line.
+  const activeIdx = scan.expandedIdx === -1 ? -1
+    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
+
+  const skuCards = scan.lines.map((line, idx) => idx === activeIdx ? `
+    <div class="sku-card active">
+      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
+      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
+    </div>
+  ` : `
+    <button type="button" class="sku-row-collapsed" onclick="editLine(${idx})">
+      <span class="sku-avatar sm">${ICON.box}</span>
+      <div class="sku-id"><div class="sku-code">${line.sku}</div><div class="sku-lot">${line.lot}</div></div>
+      <div class="sku-row-right">
+        <span class="sku-row-qty">Qty ${line.qty}</span>
+        <span class="sku-row-edit">${ICON.pencil} Edit</span>
+      </div>
+    </button>
+  `).join('');
 
   // Same collapsed-row / edit-card accordion pattern as the in-progress SKU
   // lines above (.sku-row-collapsed <-> .sku-card), so a saved record edits
@@ -3989,188 +2576,10 @@ function renderQuickScan(){
 }
 
 /* ================= PROGRESS ================= */
-function toggleIssuesSort(){ STATE.issuesSortOpen = !STATE.issuesSortOpen; STATE.issuesFilterOpen = false; render(); }
-function setIssuesSortDir(dir){ STATE.issuesSortDir = dir; STATE.issuesSortOpen = false; render(); }
-function toggleIssuesFilter(){ STATE.issuesFilterOpen = !STATE.issuesFilterOpen; STATE.issuesSortOpen = false; render(); }
-function setIssuesFilter(kind, value){
-  const key = 'issuesFilter' + kind;
-  STATE[key] = STATE[key] === value ? null : value;
-  render();
-}
-function clearIssuesFilters(){ STATE.issuesFilterRack = null; STATE.issuesFilterBay = null; STATE.issuesFilterCondition = null; render(); }
-// One card per flagged (non-"Good") SKU line — summaryStats().flagged is the
-// same real, already-computed list Audit Summary's "Flagged Items" uses, so
-// this isn't a separate/fabricated issue log, just this data shown as the
-// reference's card grid instead of a flat kv-list. There's no per-line
-// timestamp in the data model (no "reported date" the app actually tracks),
-// so sort is by Qty — a real field — rather than inventing a fake date to
-// match the reference's "Oldest/Newest" control.
-function reportedIssueCard(auditId, f){
-  const onclick = `push('issueDetails', {auditId:'${auditId}', layout:'${f.layout}', rack:'${f.rack}', bay:'${f.bay}', locCode:'${f.locCode}', pallet:'${f.pallet}', sku:'${f.sku}'})`;
-  return `
-    <button type="button" class="issue-card" onclick="${onclick}">
-      <div class="issue-card-head"><span class="issue-head-icon">${ICON.box}</span><span class="k">Pallet:</span><span class="sku-code">${f.pallet}</span></div>
-      <div class="issue-card-grid">
-        <div class="todo-field"><span class="k">Scanned SKU</span><span class="v mono">${f.sku}</span></div>
-        <div class="todo-field"><span class="k">Rack</span><span class="v mono">${f.rack}</span></div>
-        <div class="todo-field"><span class="k">Bay</span><span class="v mono">${f.bay}</span></div>
-        <div class="todo-field"><span class="k">No. of SKUs</span><span class="todo-num-chip">${f.skuCount}</span></div>
-        <div class="todo-field"><span class="k">Quantity</span><span class="todo-num-chip">${f.qty}</span></div>
-        <div class="todo-field"><span class="k">Condition</span>${severityPillHtml(f.condition)}</div>
-      </div>
-    </button>
-  `;
-}
-// Detail page reached by tapping a Reported Audits card. Re-derives the
-// flagged entry from summaryStats() by its identifying fields (layout/rack/
-// bay/locCode/pallet/sku) rather than passing the whole object through
-// STATE.params, so it always reflects live state if the underlying line
-// changes. Every field shown is real data already tracked elsewhere in the
-// app (SKU/condition/qty/lot/evidence) — no fabricated "Defect PIN"/"Raised
-// By"/"Test Reading" fields the app has no source for, unlike the reference
-// mock's fields that don't map to anything this app actually tracks.
-function renderIssueDetails(){
-  const { auditId, layout, rack, bay, locCode, pallet, sku } = STATE.params;
-  const a = AUDITS.find(x => x.audit_id === auditId);
-  if (!a) return renderTasks();
-  const f = summaryStats(auditId).flagged.find(x =>
-    x.layout===layout && x.rack===rack && x.bay===bay && x.locCode===locCode && x.pallet===pallet && x.sku===sku);
-  if (!f) return renderProgress();
-  const ev = f.evidence || {};
-
-  // All four evidence sections always show — an empty one reads as "nothing
-  // was captured for this SKU" (an honest, real state for a fixture-seeded
-  // record that was never scanned through the evidence flow), rather than
-  // silently disappearing the section as if it never existed.
-  const imagesBlock = `
-    <div class="rv-evidence-group">
-      <div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String((ev.images||[]).length).padStart(2,'0')}</span></div>
-      ${ev.images && ev.images.length
-        ? `<div class="rv-evidence-thumbs">${ev.images.map(() => `<div class="rv-evidence-thumb">${ICON.image}</div>`).join('')}</div>`
-        : `<div class="issue-evidence-empty">No images attached</div>`}
-    </div>
-  `;
-  const videosBlock = `
-    <div class="rv-evidence-group">
-      <div class="rv-evidence-group-head">${ICON.video} Video Attachments <span class="acc-badge">${String((ev.videos||[]).length).padStart(2,'0')}</span></div>
-      ${ev.videos && ev.videos.length
-        ? `<div class="rv-evidence-thumbs">${ev.videos.map(v => `<div class="rv-evidence-thumb"><span class="dur">00:${v.durationSec}sec</span>${ICON.playTri}</div>`).join('')}</div>`
-        : `<div class="issue-evidence-empty">No videos attached</div>`}
-    </div>
-  `;
-  const audioBlock = ev.audio ? `
-    <div class="rv-evidence-audio">
-      <span class="card-icon-btn" style="pointer-events:none;">${ICON.playTri}</span>
-      <div class="rv-evidence-waveform">${ev.audio.bars.map(h => `<span style="height:${h}px;"></span>`).join('')}</div>
-      <span class="rv-evidence-duration">${ev.audio.durationSec}s</span>
-    </div>
-  ` : `<div class="issue-evidence-empty">No audio recorded</div>`;
-
-  return `
-    ${headerBlock({ title:'Reported Audit Details', showBack:true, showBell:true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-    <div class="body-pad">
-      <div class="card">
-        <div class="insp-section-label"><span class="icon-box">${ICON.search}</span>Issue Details</div>
-        <div class="insp-grid">
-          <div><div class="l">SKU Code</div><div class="v mono">${f.sku}</div></div>
-          <div><div class="l">Condition</div><div class="v">${severityPillHtml(f.condition)}</div></div>
-          <div><div class="l">Pallet ID</div><div class="v mono">${f.pallet}</div></div>
-          <div><div class="l">Location</div><div class="v">${f.layout} · Rack ${f.rack} · Bay ${f.bay}, ${f.locCode}</div></div>
-          <div><div class="l">SKU Name</div><div class="v">${f.name}</div></div>
-          <div><div class="l">Lot</div><div class="v mono">${f.lot}</div></div>
-          <div><div class="l">Quantity</div><div class="v">${f.qty}</div></div>
-          <div><div class="l">No. of SKUs on Pallet</div><div class="v">${f.skuCount}</div></div>
-          <div><div class="l">Audit Type</div><div class="v">${a.audit_type}</div></div>
-          <div><div class="l">Note</div><div class="v">${ev.note || 'NA'}</div></div>
-        </div>
-        <div class="insp-section-label" style="margin-top:22px;"><span class="icon-box">${ICON.mic}</span>Audio Note</div>
-        <div style="margin-top:14px;">${audioBlock}</div>
-      </div>
-      <div class="card" style="margin-top:14px;">${imagesBlock}</div>
-      <div class="card" style="margin-top:14px;">${videosBlock}</div>
-    </div>
-  `;
-}
-// Tablet-only redesign of the Progress tab — matches the "Reported Issues"
-// reference's search/sort toolbar + card-grid layout. Mobile keeps the
-// original rack/bay progress breakdown below; device-gated rather than
-// shared since the two are different content, not a responsive reflow of
-// the same page.
-function renderProgressIssuesBoard(auditId, a){
-  const s = summaryStats(auditId);
-  // Filter option lists come from this audit's own flagged items (not every
-  // rack/bay/condition in the whole app) — so a filter never shows a choice
-  // that would empty the list into nothing.
-  const racks = [...new Set(s.flagged.map(f => f.rack))].sort();
-  const bays = [...new Set(s.flagged.map(f => f.bay))].sort();
-  const conditions = CONDITIONS.filter(c => c !== 'Good' && s.flagged.some(f => f.condition === c));
-
-  const q = STATE.issuesSearch.trim().toLowerCase();
-  let issues = s.flagged.filter(f => {
-    if (STATE.issuesFilterRack && f.rack !== STATE.issuesFilterRack) return false;
-    if (STATE.issuesFilterBay && f.bay !== STATE.issuesFilterBay) return false;
-    if (STATE.issuesFilterCondition && f.condition !== STATE.issuesFilterCondition) return false;
-    return !q || [f.sku, f.name, f.rack, f.locCode, f.pallet].join(' ').toLowerCase().includes(q);
-  });
-  issues = issues.slice().sort((x, y) => STATE.issuesSortDir === 'asc' ? x.qty - y.qty : y.qty - x.qty);
-
-  const sortDropdown = STATE.issuesSortOpen ? `
-    <button type="button" class="rvpick-backdrop" onclick="toggleIssuesSort()" aria-label="Close"></button>
-    <div class="rvpick-panel issue-sort-panel" onclick="event.stopPropagation()">
-      <div class="issue-sort-title">Sort by Qty</div>
-      <button type="button" class="rvpick-item ${STATE.issuesSortDir==='asc'?'selected':''}" onclick="setIssuesSortDir('asc')"><span>Low to High</span>${STATE.issuesSortDir==='asc'?ICON.checkSm:''}</button>
-      <button type="button" class="rvpick-item ${STATE.issuesSortDir==='desc'?'selected':''}" onclick="setIssuesSortDir('desc')"><span>High to Low</span>${STATE.issuesSortDir==='desc'?ICON.checkSm:''}</button>
-    </div>
-  ` : '';
-
-  const filterGroup = (title, options, current, kind) => options.length ? `
-    <div class="issue-sort-title">${title}</div>
-    ${options.map(opt => `<button type="button" class="rvpick-item ${current===opt?'selected':''}" onclick="setIssuesFilter('${kind}', '${opt}')"><span>${opt}</span>${current===opt?ICON.checkSm:''}</button>`).join('')}
-  ` : '';
-  const activeFilterCount = [STATE.issuesFilterRack, STATE.issuesFilterBay, STATE.issuesFilterCondition].filter(Boolean).length;
-  const filterDropdown = STATE.issuesFilterOpen ? `
-    <button type="button" class="rvpick-backdrop" onclick="toggleIssuesFilter()" aria-label="Close"></button>
-    <div class="rvpick-panel issue-sort-panel" onclick="event.stopPropagation()">
-      ${filterGroup('Rack', racks, STATE.issuesFilterRack, 'Rack')}
-      ${filterGroup('Bay', bays, STATE.issuesFilterBay, 'Bay')}
-      ${filterGroup('Condition', conditions, STATE.issuesFilterCondition, 'Condition')}
-      ${activeFilterCount ? `<button type="button" class="rvpick-item" onclick="clearIssuesFilters()"><span>Clear filters</span></button>` : ''}
-    </div>
-  ` : '';
-
-  return `
-    ${headerBlock({ title:'Reported Audits', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-    <div class="body-pad">
-      <div class="issue-toolbar">
-        <div class="search-wrap" style="flex:1;">${ICON.search}<input placeholder="Search SKU, rack, location..." value="${STATE.issuesSearch}" oninput="STATE.issuesSearch=this.value; render()" /></div>
-        <div class="issue-sort-chip">
-          <span class="dot"></span>
-          <span>Qty</span>
-          <span class="val">${STATE.issuesSortDir==='asc'?'Low to High':'High to Low'}</span>
-          <button type="button" class="clear" onclick="setIssuesSortDir('desc')" aria-label="Reset sort">${ICON.close}</button>
-        </div>
-        <div class="issue-toolbar-spacer"></div>
-        <div class="rvpick-wrap">
-          <button type="button" class="card-icon-btn ${activeFilterCount ? 'issue-filter-active' : ''}" title="Filter" aria-label="Filter" onclick="toggleIssuesFilter()">${ICON.filter}</button>
-          ${filterDropdown}
-        </div>
-        <div class="rvpick-wrap">
-          <button type="button" class="card-icon-btn" title="Sort" aria-label="Sort" onclick="toggleIssuesSort()">${ICON.sort}</button>
-          ${sortDropdown}
-        </div>
-      </div>
-      <div class="acc-badge" style="margin-bottom:14px; width:fit-content; font-size:10px; padding:3px 9px;">Total : ${issues.length}</div>
-      ${issues.length ? `<div class="issue-grid">${issues.map(f => reportedIssueCard(auditId, f)).join('')}</div>` : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No reported issues</div><div>Nothing matches these filters.</div></div>`}
-    </div>
-    ${renderTabBar('progress')}
-  `;
-}
-
 function renderProgress(){
   const { auditId } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
   if (!a) return renderTasks();
-  if (STATE.device === 'tablet') return renderProgressIssuesBoard(auditId, a);
   const r = rollup(auditId);
   const layouts = layoutsOf(auditId);
   const np = nextPending(auditId);
@@ -4327,16 +2736,14 @@ function render(){
   if (screen === 'login') {
     document.getElementById('screen').innerHTML = wrap(renderLogin());
   } else {
-    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails };
+    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
   if (screenEl) screenEl.scrollTop = prevScrollTop;
   renderRail();
   renderSheetOverlay();
   renderConfirmModal();
-  renderScheduleModal();
   renderCameraOverlay();
-  renderImageAttachmentModal();
 }
 
 function sheetListHtml(){
