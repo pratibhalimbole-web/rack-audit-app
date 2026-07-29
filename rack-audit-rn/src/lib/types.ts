@@ -99,6 +99,18 @@ export type InventoryItem = {
   lot: string;
 };
 
+// What the warehouse's master slotting plan says SHOULD be at a location —
+// independent of whatever an inspector actually finds there during a count.
+// Most locations' master slot matches what's seeded as "found" (no
+// discrepancy); a handful are deliberately overridden to differ, so the
+// Mismatch SKUs view has real, inspectable discrepancies to show.
+export type MasterSlot = {
+  sku: string;
+  name: string;
+  lot: string;
+  qty: number;
+};
+
 export type QrPayload = {
   layout: string;
   rack: string;

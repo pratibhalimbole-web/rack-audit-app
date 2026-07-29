@@ -22,6 +22,7 @@ import type {
   LayoutNode,
   LocationNode,
   LocationStatus,
+  MasterSlot,
   Pallet,
   QrPayload,
   QuickScanEntry,
@@ -355,3 +356,34 @@ export function seedEvidenceForFlaggedLines(locationsMap: Record<string, AuditLo
 
 fillAllBaysToFullLevels(LOCATIONS);
 seedEvidenceForFlaggedLines(LOCATIONS);
+
+// The warehouse's master slotting plan — what SKU/quantity is SUPPOSED to be
+// at a location, independent of whatever an inspector actually finds there.
+// Keyed by location code, since a location's slot assignment doesn't vary
+// by audit. Most locations' master slot is set to match what's already
+// seeded as "found" (so no discrepancy), matching the fact that most real
+// counts match the plan; a deterministic minority (every 17th location) is
+// deliberately offset — either a quantity variance or an outright SKU swap
+// — so the Mismatch SKUs view has real, inspectable discrepancies rather
+// than a coincidental 1:1 match everywhere.
+export const MASTER_INVENTORY: Record<string, MasterSlot> = {};
+
+function buildMasterInventory(locationsMap: Record<string, AuditLocationsTree>): void {
+  let mismatchIdx = 0;
+  allLocationNodesInMap(locationsMap).forEach((loc, idx) => {
+    const found = loc.pallets[0]?.lines[0];
+    if (!found) return;
+    let master: MasterSlot = { sku: found.sku, name: found.name, lot: found.lot, qty: found.qty };
+    if (idx % 17 === 3) {
+      if (mismatchIdx % 2 === 0) {
+        master = { ...master, qty: master.qty + 3 + (mismatchIdx % 5) };
+      } else {
+        const swap = INVENTORY_POOL[(mismatchIdx + 2) % INVENTORY_POOL.length];
+        if (swap.sku !== master.sku) master = { sku: swap.sku, name: swap.name, lot: swap.lot, qty: master.qty };
+      }
+      mismatchIdx++;
+    }
+    MASTER_INVENTORY[loc.code] = master;
+  });
+}
+buildMasterInventory(LOCATIONS);

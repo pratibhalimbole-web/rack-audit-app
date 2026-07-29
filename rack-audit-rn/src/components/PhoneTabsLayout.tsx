@@ -82,6 +82,7 @@ export default function PhoneTabsLayout() {
       <Tabs.Screen name="audit/[auditId]/summary" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/rack/[rackId]" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/issue/[lineId]" options={{ href: null }} />
+      <Tabs.Screen name="audit/[auditId]/discrepancy/[key]" options={{ href: null }} />
     </Tabs>
   );
 }

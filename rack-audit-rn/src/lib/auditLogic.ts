@@ -1,5 +1,5 @@
-import { INSPECTOR, TODAY } from './mockData';
-import type { Audit, AuditLocationsTree, Condition, Evidence, LocationNode, Priority } from './types';
+import { INSPECTOR, MASTER_INVENTORY, TODAY } from './mockData';
+import type { Audit, AuditLocationsTree, Condition, Evidence, LocationNode, MasterSlot, Priority } from './types';
 
 // Pure domain logic ported from rack-audit-app.html (~lines 1475-1555).
 // Kept framework-agnostic (no React/Query here) so both TanStack Query
@@ -178,4 +178,58 @@ export function summaryStats(tree: AuditLocationsTree | undefined): SummaryStats
   });
 
   return { palletCount, lineCount, qtyTotal, byCondition, flagged };
+}
+
+export type SkuMismatch = {
+  layout: string;
+  rack: string;
+  bay: string;
+  locCode: string;
+  pallet: string;
+  expected: MasterSlot;
+  foundSku: string;
+  foundName: string;
+  foundLot: string;
+  foundQty: number;
+  evidence?: Evidence;
+};
+
+// Compares each location's master-slotted SKU/qty (MASTER_INVENTORY, what
+// the warehouse plan says should be there) against what the first pallet
+// actually recorded — a real discrepancy check, not the condition-based
+// "flagged" list summaryStats() already covers. Only locations with an
+// actual difference are returned.
+export function skuMismatches(tree: AuditLocationsTree | undefined): SkuMismatch[] {
+  const out: SkuMismatch[] = [];
+  allLocations(tree).forEach(({ layout, rack, bay, loc }) => {
+    const expected = MASTER_INVENTORY[loc.code];
+    const found = loc.pallets[0]?.lines[0];
+    if (!expected || !found) return;
+    if (found.sku !== expected.sku || found.qty !== expected.qty) {
+      out.push({
+        layout,
+        rack,
+        bay,
+        locCode: loc.code,
+        pallet: loc.pallets[0].pallet,
+        expected,
+        foundSku: found.sku,
+        foundName: found.name,
+        foundLot: found.lot,
+        foundQty: found.qty,
+        evidence: found.evidence,
+      });
+    }
+  });
+  return out;
+}
+
+export function mismatchType(m: SkuMismatch): 'SKU Mismatch' | 'Quantity Variance' {
+  return m.foundSku !== m.expected.sku ? 'SKU Mismatch' : 'Quantity Variance';
+}
+
+export function mismatchSeverity(m: SkuMismatch): 'Critical' | 'Medium' | 'Low' {
+  if (m.foundSku !== m.expected.sku) return 'Critical';
+  const diffPct = Math.abs(m.foundQty - m.expected.qty) / Math.max(1, m.expected.qty);
+  return diffPct >= 0.1 ? 'Medium' : 'Low';
 }
