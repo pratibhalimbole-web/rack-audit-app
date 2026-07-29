@@ -376,7 +376,30 @@
   .issue-sort-panel{left:auto; right:0; width:200px;}
   .issue-filter-active{border-color:var(--primary); color:var(--primary);}
   .issue-sort-title{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); padding:6px 10px 8px;}
+  /* Plain single-column multi-select filter: Rack/Bay/Condition checklists,
+     one after another, in one scrollable panel — wider than Sort's 200px
+     since checkbox rows need more room, but no split columns. */
+  .issue-filter-panel{left:auto; right:0; width:260px; max-width:calc(100vw - 24px); padding:14px;}
+  .issue-filter-values-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .issue-filter-values-head .lbl{font-size:var(--text-sm); font-weight:700; color:var(--foreground);}
+  .issue-filter-values-head .count{font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); background:var(--muted); padding:3px 10px; border-radius:999px;}
+  /* .rvpick-panel already scrolls the whole panel (max-height/overflow-y) —
+     no separate scroll container in here, or two scrollbars stack up. */
+  .issue-filter-checklist{}
+  /* Two classes beats .rvpick-item's single-class justify-content:space-between
+     on specificity regardless of source order, instead of depending on
+     which rule happens to be declared later in the stylesheet. */
+  .rvpick-item.issue-filter-check{justify-content:flex-start; gap:10px;}
+  .issue-filter-checkbox{width:18px; height:18px; border-radius:5px; border:1.5px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--primary-foreground);}
+  .issue-filter-check.selected .issue-filter-checkbox{background:var(--primary); border-color:var(--primary);}
+  .issue-filter-check.selected .issue-filter-checkbox svg{width:11px; height:11px;}
+  /* min-width:0 on the grid items: a CSS grid item's default min-width is
+     auto, which lets unshrinkable content (nowrap mono SKU codes, the
+     todo-num-chip badges) grow the item past its 1fr track share — pushing
+     the whole grid wider than the card and clipping the rightmost column
+     against #screen's overflow:hidden. */
   .issue-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:16px;}
+  .issue-grid > *{min-width:0;}
   /* padding/margin:0 reset — this is a <button>, and the browser's default
      button padding was insetting the header strip from the card's own
      border instead of it running edge-to-edge. */
@@ -433,6 +456,14 @@
   .chip{background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-xs); font-weight:700; padding:4px 10px; border-radius:5px;}
 
   .insp-section-label{display:flex; align-items:center; gap:10px; font-weight:700; font-size:var(--text-base); color:var(--foreground);}
+  /* Profile Settings screen */
+  .settings-personal-row{margin-bottom:16px;}
+  .settings-profile-block{display:flex; align-items:flex-start; gap:16px; margin-bottom:24px;}
+  .settings-photo{width:84px; height:84px; border-radius:var(--radius-xl); background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .settings-photo svg{width:34px; height:34px;}
+  .settings-card{margin-bottom:16px;}
+  .settings-card-row{display:flex; align-items:center; flex-wrap:wrap; gap:14px; justify-content:space-between;}
+  .device.tablet .settings-profile-block{align-items:center;}
   .icon-box{width:32px; height:32px; border-radius:var(--radius-lg); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .insp-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:16px 20px; margin-top:16px;}
   .insp-grid .l{font-weight:700; font-size:var(--text-sm); color:var(--foreground); margin-bottom:4px;}
@@ -1025,6 +1056,11 @@
       <div id="camera-slot"></div>
       <div id="image-modal-slot"></div>
     </div>
+    <!-- Outside #device (which clips overflow for its rounded-corner frame)
+         and position:fixed to the real viewport — so this panel can never
+         get cropped by #device's own overflow:hidden the way it was when it
+         lived inside it (see toggleIssuesFilter/toggleIssuesSort). -->
+    <div id="issue-picker-slot"></div>
   </div>
   <p class="foot-note">Log in → Resume/Start an audit → Scan a pallet, count SKUs, Save Record → check Progress. Every KPI updates from real state. On Tablet, the left rail gives direct navigation.</p>
 </div>
@@ -1087,7 +1123,7 @@ const sb = SUPABASE_URL.startsWith('http') && window.supabase
 const IS_REAL_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 const TODAY = new Date('2026-07-08T00:00:00');
-const INSPECTOR = { name:'Arjun Sharma', initials:'AS', warehouse:'Warehouse-01' };
+const INSPECTOR = { name:'Arjun Sharma', initials:'AS', warehouse:'Warehouse-01', email:'arjun.sharma@rams.digital', role:'Inspector' };
 
 const INVENTORY_POOL = [
   { sku:'SKU-1042', name:'Steel Bracket 90', lot:'L-2291' },
@@ -1558,8 +1594,9 @@ function currentOngoing(){ return mine().find(a => a.status === 'In Progress' &&
 let STATE = {
   device: 'phone', stack: ['login'], params: {}, previewMode: 'normal',
   tasksSearch: '', scan: null, menuOpen: false,
-  issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false,
-  issuesFilterOpen: false, issuesFilterRack: null, issuesFilterBay: null, issuesFilterCondition: null,
+  issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false, issuesSortAnchor: null,
+  issuesFilterOpen: false, issuesFilterAnchor: null,
+  issuesFilterValues: { rack: [], bay: [], condition: [] },
   imageAttachmentModal: null,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
@@ -1849,7 +1886,7 @@ function renderDashboard(){
       title:'Dashboard', sub:`${INSPECTOR.name.split(' ')[0]} · ${INSPECTOR.warehouse}`, showBack:false, avatar:true,
       menuItems:[
         { label:'Refresh', action:"toast('Refreshed')" },
-        { label:'Settings', action:"toast('Settings')" },
+        { label:'Settings', action:"push('settings')" },
         { label:'Help', action:"toast('Help')" },
         { label:'Log out', action:'goHome()' },
       ]
@@ -1971,7 +2008,7 @@ function renderDashboardTablet(){
       title:'Dashboard', sub:`${INSPECTOR.name.split(' ')[0]} · ${INSPECTOR.warehouse}`, showBack:false, avatar:true,
       menuItems:[
         { label:'Refresh', action:"toast('Refreshed')" },
-        { label:'Settings', action:"toast('Settings')" },
+        { label:'Settings', action:"push('settings')" },
         { label:'Help', action:"toast('Help')" },
         { label:'Log out', action:'goHome()' },
       ]
@@ -2088,7 +2125,7 @@ function renderTasks(){
 
   return `
     ${headerBlock({ title:'My Audit Tasks', sub:`${myTasks.length} Assigned · ${INSPECTOR.warehouse}`, showBack: true,
-      menuItems:[{label:'Sync Now', action:"toast('Synced')"},{label:'Settings', action:"toast('Settings')"}] })}
+      menuItems:[{label:'Sync Now', action:"toast('Synced')"},{label:'Settings', action:"push('settings')"}] })}
     <div class="body-pad">
       <div class="search-wrap">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
       <div class="todo-board">${columns}</div>
@@ -2666,6 +2703,18 @@ function anchorRectFor(btnEl){
   const btnRect = btnEl.getBoundingClientRect();
   const deviceRect = deviceEl.getBoundingClientRect();
   return { top: btnRect.bottom - deviceRect.top + 6, left: btnRect.left - deviceRect.left, width: btnRect.width };
+}
+// Same trigger-anchoring idea as anchorRectFor, but in real viewport
+// coordinates (not relative to #device) for a panel rendered via
+// position:fixed outside #device — #device clips overflow for its
+// rounded-corner frame, so anything that needs to escape that clip (a panel
+// wider than its small icon-button trigger, opening leftward from it) has
+// to live outside it rather than merely in a different sibling slot still
+// nested inside #device.
+function viewportAnchorForRight(btnEl){
+  if (!btnEl) return null;
+  const btnRect = btnEl.getBoundingClientRect();
+  return { top: btnRect.bottom + 6, right: window.innerWidth - btnRect.right, width: btnRect.width };
 }
 // STATE.sheet only feeds renderSheetOverlay/#sheet-slot — nothing in the
 // underlying screen reads it — so dismissing the dropdown (backdrop tap or the
@@ -3989,15 +4038,37 @@ function renderQuickScan(){
 }
 
 /* ================= PROGRESS ================= */
-function toggleIssuesSort(){ STATE.issuesSortOpen = !STATE.issuesSortOpen; STATE.issuesFilterOpen = false; render(); }
-function setIssuesSortDir(dir){ STATE.issuesSortDir = dir; STATE.issuesSortOpen = false; render(); }
-function toggleIssuesFilter(){ STATE.issuesFilterOpen = !STATE.issuesFilterOpen; STATE.issuesSortOpen = false; render(); }
-function setIssuesFilter(kind, value){
-  const key = 'issuesFilter' + kind;
-  STATE[key] = STATE[key] === value ? null : value;
+// Anchored via viewportAnchorForRight and rendered into #issue-picker-slot —
+// outside #device entirely (see the slot's own position:fixed CSS) — so the
+// panel can never get clipped by #device's overflow:hidden frame, which was
+// cropping it before even after an earlier attempt just moved it to a
+// sibling slot still nested inside #device.
+function toggleIssuesSort(btnEl){
+  STATE.issuesSortOpen = !STATE.issuesSortOpen;
+  STATE.issuesSortAnchor = STATE.issuesSortOpen ? viewportAnchorForRight(btnEl) : null;
+  STATE.issuesFilterOpen = false;
   render();
 }
-function clearIssuesFilters(){ STATE.issuesFilterRack = null; STATE.issuesFilterBay = null; STATE.issuesFilterCondition = null; render(); }
+function setIssuesSortDir(dir){ STATE.issuesSortDir = dir; STATE.issuesSortOpen = false; render(); }
+function toggleIssuesFilter(btnEl){
+  STATE.issuesFilterOpen = !STATE.issuesFilterOpen;
+  STATE.issuesFilterAnchor = STATE.issuesFilterOpen ? viewportAnchorForRight(btnEl) : null;
+  STATE.issuesSortOpen = false;
+  render();
+}
+// Multi-select per real field (Rack/Bay/Condition) rather than one active
+// value — a plain checklist per section, all shown at once.
+function toggleIssuesFilterValue(facet, value){
+  const list = STATE.issuesFilterValues[facet];
+  const i = list.indexOf(value);
+  if (i === -1) list.push(value); else list.splice(i, 1);
+  render();
+}
+function clearIssuesFacet(facet){ STATE.issuesFilterValues[facet] = []; render(); }
+function clearIssuesFilters(){
+  STATE.issuesFilterValues = { rack: [], bay: [], condition: [] };
+  render();
+}
 // One card per flagged (non-"Good") SKU line — summaryStats().flagged is the
 // same real, already-computed list Audit Summary's "Flagged Items" uses, so
 // this isn't a separate/fabricated issue log, just this data shown as the
@@ -4096,53 +4167,50 @@ function renderIssueDetails(){
 // original rack/bay progress breakdown below; device-gated rather than
 // shared since the two are different content, not a responsive reflow of
 // the same page.
+const FACET_LABEL = { rack:'Rack', bay:'Bay', condition:'Condition' };
+
+function issueMatchesFilters(f, values){
+  if (values.rack.length && !values.rack.includes(f.rack)) return false;
+  if (values.bay.length && !values.bay.includes(f.bay)) return false;
+  if (values.condition.length && !values.condition.includes(f.condition)) return false;
+  return true;
+}
+// One removable chip per field with an active selection — Rack/Bay/Condition
+// can all be active at once with this filter panel's multi-select checklists.
+function facetChipHtml(facet){
+  const vals = STATE.issuesFilterValues[facet];
+  if (!vals.length) return '';
+  const shown = vals.length > 1 ? `${vals[0]} +${vals.length - 1}` : vals[0];
+  return `
+    <div class="issue-sort-chip">
+      <span class="dot"></span>
+      <span>${FACET_LABEL[facet]}</span>
+      <span class="val">${shown}</span>
+      <button type="button" class="clear" onclick="clearIssuesFacet('${facet}')" aria-label="Clear ${FACET_LABEL[facet]} filter">${ICON.close}</button>
+    </div>
+  `;
+}
+
 function renderProgressIssuesBoard(auditId, a){
   const s = summaryStats(auditId);
-  // Filter option lists come from this audit's own flagged items (not every
-  // rack/bay/condition in the whole app) — so a filter never shows a choice
-  // that would empty the list into nothing.
-  const racks = [...new Set(s.flagged.map(f => f.rack))].sort();
-  const bays = [...new Set(s.flagged.map(f => f.bay))].sort();
-  const conditions = CONDITIONS.filter(c => c !== 'Good' && s.flagged.some(f => f.condition === c));
 
   const q = STATE.issuesSearch.trim().toLowerCase();
-  let issues = s.flagged.filter(f => {
-    if (STATE.issuesFilterRack && f.rack !== STATE.issuesFilterRack) return false;
-    if (STATE.issuesFilterBay && f.bay !== STATE.issuesFilterBay) return false;
-    if (STATE.issuesFilterCondition && f.condition !== STATE.issuesFilterCondition) return false;
-    return !q || [f.sku, f.name, f.rack, f.locCode, f.pallet].join(' ').toLowerCase().includes(q);
-  });
+  let issues = s.flagged.filter(f => issueMatchesFilters(f, STATE.issuesFilterValues) &&
+    (!q || [f.sku, f.name, f.rack, f.locCode, f.pallet].join(' ').toLowerCase().includes(q)));
   issues = issues.slice().sort((x, y) => STATE.issuesSortDir === 'asc' ? x.qty - y.qty : y.qty - x.qty);
 
-  const sortDropdown = STATE.issuesSortOpen ? `
-    <button type="button" class="rvpick-backdrop" onclick="toggleIssuesSort()" aria-label="Close"></button>
-    <div class="rvpick-panel issue-sort-panel" onclick="event.stopPropagation()">
-      <div class="issue-sort-title">Sort by Qty</div>
-      <button type="button" class="rvpick-item ${STATE.issuesSortDir==='asc'?'selected':''}" onclick="setIssuesSortDir('asc')"><span>Low to High</span>${STATE.issuesSortDir==='asc'?ICON.checkSm:''}</button>
-      <button type="button" class="rvpick-item ${STATE.issuesSortDir==='desc'?'selected':''}" onclick="setIssuesSortDir('desc')"><span>High to Low</span>${STATE.issuesSortDir==='desc'?ICON.checkSm:''}</button>
-    </div>
-  ` : '';
-
-  const filterGroup = (title, options, current, kind) => options.length ? `
-    <div class="issue-sort-title">${title}</div>
-    ${options.map(opt => `<button type="button" class="rvpick-item ${current===opt?'selected':''}" onclick="setIssuesFilter('${kind}', '${opt}')"><span>${opt}</span>${current===opt?ICON.checkSm:''}</button>`).join('')}
-  ` : '';
-  const activeFilterCount = [STATE.issuesFilterRack, STATE.issuesFilterBay, STATE.issuesFilterCondition].filter(Boolean).length;
-  const filterDropdown = STATE.issuesFilterOpen ? `
-    <button type="button" class="rvpick-backdrop" onclick="toggleIssuesFilter()" aria-label="Close"></button>
-    <div class="rvpick-panel issue-sort-panel" onclick="event.stopPropagation()">
-      ${filterGroup('Rack', racks, STATE.issuesFilterRack, 'Rack')}
-      ${filterGroup('Bay', bays, STATE.issuesFilterBay, 'Bay')}
-      ${filterGroup('Condition', conditions, STATE.issuesFilterCondition, 'Condition')}
-      ${activeFilterCount ? `<button type="button" class="rvpick-item" onclick="clearIssuesFilters()"><span>Clear filters</span></button>` : ''}
-    </div>
-  ` : '';
+  // Panel content itself is rendered by renderIssuePickerOverlay() into
+  // #issue-picker-slot (a sibling of #screen, outside its overflow-clipped
+  // box) — only the trigger buttons + active-filter chips live here.
+  const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length;
+  const chips = ['rack','bay','condition'].map(facetChipHtml).join('');
 
   return `
     ${headerBlock({ title:'Reported Audits', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
       <div class="issue-toolbar">
         <div class="search-wrap" style="flex:1;">${ICON.search}<input placeholder="Search SKU, rack, location..." value="${STATE.issuesSearch}" oninput="STATE.issuesSearch=this.value; render()" /></div>
+        ${chips}
         <div class="issue-sort-chip">
           <span class="dot"></span>
           <span>Qty</span>
@@ -4151,12 +4219,10 @@ function renderProgressIssuesBoard(auditId, a){
         </div>
         <div class="issue-toolbar-spacer"></div>
         <div class="rvpick-wrap">
-          <button type="button" class="card-icon-btn ${activeFilterCount ? 'issue-filter-active' : ''}" title="Filter" aria-label="Filter" onclick="toggleIssuesFilter()">${ICON.filter}</button>
-          ${filterDropdown}
+          <button type="button" class="card-icon-btn ${activeFilterCount ? 'issue-filter-active' : ''}" title="Filter" aria-label="Filter" onclick="toggleIssuesFilter(this)">${ICON.filter}</button>
         </div>
         <div class="rvpick-wrap">
-          <button type="button" class="card-icon-btn" title="Sort" aria-label="Sort" onclick="toggleIssuesSort()">${ICON.sort}</button>
-          ${sortDropdown}
+          <button type="button" class="card-icon-btn" title="Sort" aria-label="Sort" onclick="toggleIssuesSort(this)">${ICON.sort}</button>
         </div>
       </div>
       <div class="acc-badge" style="margin-bottom:14px; width:fit-content; font-size:10px; padding:3px 9px;">Total : ${issues.length}</div>
@@ -4312,6 +4378,81 @@ function submitAudit(auditId){
   render();
 }
 
+/* ================= PROFILE SETTINGS ================= */
+// Reached from the Dashboard/Tasks avatar menu's "Settings" item, which was
+// a toast() stub before this — built per the supplied reference design,
+// adapted to this app's real data (INSPECTOR's name/email/warehouse/role,
+// no fabricated fields) rather than copied verbatim. Appearance reuses the
+// existing studio setTheme() toggle so switching here and the studio
+// Light/Dark buttons stay in sync with each other.
+function renderSettings(){
+  const mode = document.documentElement.getAttribute('data-theme') ||
+    (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  return `
+    <div class="navtop">
+      ${statusBarHtml()}
+      <div class="app-header">
+        <button class="back-btn" onclick="back()" aria-label="Back">${ICON.back}</button>
+        <div style="min-width:0; flex:1;"><h1>Profile Settings</h1></div>
+        <div class="header-actions">
+          <button class="icon-btn" aria-label="Notifications" onclick="toast('No new notifications')">${ICON.bell}</button>
+          <button class="icon-btn" onclick="syncNow(this)" aria-label="Sync now">${ICON.sync}</button>
+        </div>
+      </div>
+    </div>
+    <div class="body-pad">
+      <div class="settings-personal-row">
+        <div>
+          <div style="font-weight:700; font-size:var(--text-lg); color:var(--foreground);">Personal Details</div>
+          <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">Manage and update your personal information</div>
+        </div>
+      </div>
+      <div class="settings-profile-block">
+        <div class="settings-photo">${ICON.user}</div>
+        <div style="min-width:0;">
+          <div style="font-weight:800; font-size:var(--text-base); color:var(--foreground);">${INSPECTOR.name}</div>
+          <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">${INSPECTOR.email}</div>
+          <div style="font-weight:700; font-size:var(--text-sm); color:var(--foreground); margin-top:2px;">${INSPECTOR.role}</div>
+          <button class="btn outline small" style="width:auto; margin-top:10px; padding:0 18px;" onclick="toast('Edit Details')">Edit Details</button>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="settings-card-row">
+          <div style="min-width:0;">
+            <div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">Appearance</div>
+            <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">Choose how Rack Audit looks on this device</div>
+          </div>
+          <div class="segmented">
+            <button class="${mode==='light'?'active':''}" onclick="setTheme('light'); render();">Light</button>
+            <button class="${mode==='dark'?'active':''}" onclick="setTheme('dark'); render();">Dark</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="settings-card-row">
+          <div style="min-width:0;">
+            <div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">Security &amp; Privacy</div>
+            <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">Manage your security &amp; privacy options to protect your personal information.</div>
+          </div>
+          <button class="btn outline small" style="width:auto; padding:0 18px;" onclick="toast('Change Password')">Change Password</button>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="settings-card-row">
+          <div style="min-width:0;">
+            <div style="font-weight:700; font-size:var(--text-base); color:var(--foreground);">Log Out</div>
+            <div style="font-size:var(--text-sm); color:var(--muted-foreground); margin-top:2px;">Securely sign out of your account and return to the login screen.</div>
+          </div>
+          <button class="btn" style="width:auto; padding:0 18px; background:var(--rag-red); color:#fff;" onclick="goHome()">Log Out</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 /* ================= MAIN RENDER ================= */
 // Every state change re-renders the whole screen from a fresh HTML string
 // (no diffing) — replacing #screen's innerHTML would otherwise reset its
@@ -4327,12 +4468,13 @@ function render(){
   if (screen === 'login') {
     document.getElementById('screen').innerHTML = wrap(renderLogin());
   } else {
-    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails };
+    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails, settings: renderSettings };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
   if (screenEl) screenEl.scrollTop = prevScrollTop;
   renderRail();
   renderSheetOverlay();
+  renderIssuePickerOverlay();
   renderConfirmModal();
   renderScheduleModal();
   renderCameraOverlay();
@@ -4382,6 +4524,81 @@ function renderSheetOverlay(){
       </div>
     </div>
   `;
+}
+
+// Reported Audits board's Filter/Sort panels — rendered into #issue-picker-slot,
+// a sibling of #device itself (not just of #screen) so #device's own
+// overflow:hidden (for its rounded-corner frame) can't clip them either.
+// position:fixed + real viewport coordinates (viewportAnchorForRight,
+// captured once at the trigger click in toggleIssuesFilter/toggleIssuesSort)
+// means this panel is never inside any clipped box at all.
+function renderIssuePickerOverlay(){
+  const slot = document.getElementById('issue-picker-slot');
+  if (!STATE.issuesSortOpen && !STATE.issuesFilterOpen) { slot.innerHTML = ''; return; }
+
+  const anchorStyle = (anchor) => anchor
+    ? `style="position:fixed; top:${anchor.top}px; left:auto; right:${anchor.right}px; width:${Math.max(anchor.width, 200)}px;"` : '';
+
+  let sortPanel = '';
+  if (STATE.issuesSortOpen) {
+    sortPanel = `
+      <button type="button" class="rvpick-backdrop" onclick="toggleIssuesSort()" aria-label="Close"></button>
+      <div class="rvpick-panel issue-sort-panel" ${anchorStyle(STATE.issuesSortAnchor)} onclick="event.stopPropagation()">
+        <div class="issue-sort-title">Sort by Qty</div>
+        <button type="button" class="rvpick-item ${STATE.issuesSortDir==='asc'?'selected':''}" onclick="setIssuesSortDir('asc')"><span>Low to High</span>${STATE.issuesSortDir==='asc'?ICON.checkSm:''}</button>
+        <button type="button" class="rvpick-item ${STATE.issuesSortDir==='desc'?'selected':''}" onclick="setIssuesSortDir('desc')"><span>High to Low</span>${STATE.issuesSortDir==='desc'?ICON.checkSm:''}</button>
+      </div>
+    `;
+  }
+
+  // Plain multi-select checklist filter, one section per real field this
+  // audit's flagged lines actually carry: Rack, Bay, Condition (the app's own
+  // CONDITIONS list — no synthesized "severity" grouping, no facet-switcher).
+  // A single scrollable column, same rvpick-item building block Sort uses.
+  let filterPanel = '';
+  if (STATE.issuesFilterOpen) {
+    const s = summaryStats(STATE.params.auditId);
+    const optionsByFacet = {
+      rack: [...new Set(s.flagged.map(f => f.rack))].sort(),
+      bay: [...new Set(s.flagged.map(f => f.bay))].sort(),
+      condition: CONDITIONS.filter(c => c !== 'Good' && s.flagged.some(f => f.condition === c)),
+    };
+    const previewCount = s.flagged.filter(f => issueMatchesFilters(f, STATE.issuesFilterValues)).length;
+    const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length;
+
+    const checklistSection = (facet) => {
+      const options = optionsByFacet[facet];
+      if (!options.length) return '';
+      const checked = STATE.issuesFilterValues[facet];
+      return `
+        <div class="issue-sort-title">${FACET_LABEL[facet]}</div>
+        ${options.map(opt => `
+          <button type="button" class="rvpick-item issue-filter-check ${checked.includes(opt)?'selected':''}" onclick="toggleIssuesFilterValue('${facet}', '${opt}')">
+            <span class="issue-filter-checkbox">${checked.includes(opt)?ICON.checkSm:''}</span>
+            <span>${opt}</span>
+          </button>
+        `).join('')}
+      `;
+    };
+
+    filterPanel = `
+      <button type="button" class="rvpick-backdrop" onclick="toggleIssuesFilter()" aria-label="Close"></button>
+      <div class="rvpick-panel issue-filter-panel" ${anchorStyle(STATE.issuesFilterAnchor)} onclick="event.stopPropagation()">
+        <div class="issue-filter-values-head">
+          <span class="lbl">Filters</span>
+          <span class="count">Total : ${previewCount}</span>
+        </div>
+        <div class="issue-filter-checklist">
+          ${checklistSection('rack')}
+          ${checklistSection('bay')}
+          ${checklistSection('condition')}
+        </div>
+        ${activeFilterCount ? `<button type="button" class="rvpick-item" onclick="clearIssuesFilters()"><span>Clear filters</span></button>` : ''}
+      </div>
+    `;
+  }
+
+  slot.innerHTML = sortPanel + filterPanel;
 }
 
 function renderConfirmModal(){
