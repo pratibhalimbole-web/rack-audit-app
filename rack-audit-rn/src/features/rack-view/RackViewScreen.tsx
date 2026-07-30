@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { SlideInRight, SlideOutRight, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
@@ -9,7 +11,7 @@ import { EvidenceBlock } from '@/components/EvidenceBlock';
 import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import { Pill } from '@/components/Pill';
 import { SkuLineCard } from '@/components/SkuLineCard';
-import { BottomSheetPicker, type SheetOption } from '@/components/BottomSheetPicker';
+import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
@@ -55,12 +57,47 @@ export function RackViewScreen() {
   const [attachmentTarget, setAttachmentTarget] = useState<number | null>(null);
   const confirm = useConfirmDialog();
 
+  // Figma-style canvas: pinch to zoom, drag to pan, the toolbar/footer stay
+  // put since only this transformed layer moves — not the whole screen.
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const panGesture = Gesture.Pan().onUpdate((e) => {
+    translateX.value = savedTranslateX.value + e.translationX;
+    translateY.value = savedTranslateY.value + e.translationY;
+  }).onEnd(() => {
+    savedTranslateX.value = translateX.value;
+    savedTranslateY.value = translateY.value;
+  });
+
+  const pinchGesture = Gesture.Pinch().onUpdate((e) => {
+    scale.value = Math.min(4, Math.max(1, savedScale.value * e.scale));
+  }).onEnd(() => {
+    savedScale.value = scale.value;
+  });
+
+  const canvasGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+
+  const canvasAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
+  }));
+
   const seedKey = `${auditId}|${layout}|${rackCode}|${bayCode}`;
   const seedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (seedKeyRef.current !== seedKey) {
       seedKeyRef.current = seedKey;
       setSelectedLoc(null);
+      scale.value = 1;
+      savedScale.value = 1;
+      translateX.value = 0;
+      translateY.value = 0;
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
     }
   }, [seedKey]);
 
@@ -174,12 +211,28 @@ export function RackViewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title={audit.audit_name} sub={audit.audit_id} showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
+      <AppHeader title={audit.audit_name} sub={audit.audit_id} showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} backgroundColor="#F7F8FA" />
 
       <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <ToolbarField label={layoutObj.name} fixed />
-        <ToolbarField label={`Rack ${rackObj.code}`} onPress={() => setPickerField('rack')} />
-        <ToolbarField label={`Bay ${bayObj.code}`} onPress={() => setPickerField('bay')} />
+        <View>
+          <ToolbarField label={`Rack ${rackObj.code}`} open={pickerField === 'rack'} onPress={() => setPickerField(pickerField === 'rack' ? null : 'rack')} />
+          {pickerField === 'rack' ? (
+            <>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
+              <InlineDropdown options={rackOptions} selectedValue={rackCode} onSelect={handlePickRack} />
+            </>
+          ) : null}
+        </View>
+        <View>
+          <ToolbarField label={`Bay ${bayObj.code}`} open={pickerField === 'bay'} onPress={() => setPickerField(pickerField === 'bay' ? null : 'bay')} />
+          {pickerField === 'bay' ? (
+            <>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
+              <InlineDropdown options={bayOptions} selectedValue={bayCode} onSelect={handlePickBay} />
+            </>
+          ) : null}
+        </View>
         <ToolbarField
           label={selectedLocObj ? (selectedLocObj.slot != null ? `Pallet ${String(selectedLocObj.slot).padStart(2, '0')}` : selectedLocObj.code) : '—'}
           fixed
@@ -190,65 +243,65 @@ export function RackViewScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
-        <Card>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 12 }}>Front View</Text>
-          <View style={styles.diagram}>
-            {rows.map((row) => (
-              <View key={row.level} style={styles.diagramRow}>
-                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, width: 26 }}>L{row.level}</Text>
-                <View style={styles.diagramCells}>
-                  {row.cells.map((cell, i) => {
-                    if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
-                    const selected = cell.code === selectedLoc;
-                    const bg = cell.status === 'Completed' ? tokens.rag.green.soft : cell.status === 'In Progress' ? tokens.accentPurple.soft : tokens.muted;
-                    const border = selected ? tokens.primary : cell.status === 'Completed' ? tokens.rag.green.border : tokens.border;
-                    return (
-                      <Pressable
-                        key={cell.code}
-                        onPress={() => setSelectedLoc(cell.code)}
-                        style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
-                      />
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
+      <View style={styles.body}>
+        <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
+          <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Front View</Text>
           </View>
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bayObj.code}</Text>
-          <View style={styles.diagramActions}>
-            <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              disabled={!selectedLoc}
-              onPress={handleStartAudit}
-              style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: selectedLoc ? 1 : 0.5 }]}
-            >
-              <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Start Audit</Text>
-              <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
-            </Pressable>
+          <View style={styles.diagramBody}>
+            <GestureDetector gesture={canvasGesture}>
+              <View style={styles.diagramCenter}>
+                <Animated.View style={canvasAnimatedStyle}>
+                  <View style={styles.diagram}>
+                    {rows.map((row) => (
+                      <View key={row.level} style={styles.diagramRow}>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 30 }}>L{row.level}</Text>
+                        <View style={styles.diagramCells}>
+                          {row.cells.map((cell, i) => {
+                            if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
+                            const selected = cell.code === selectedLoc;
+                            const bg = cell.status === 'Completed' ? tokens.rag.green.soft : cell.status === 'In Progress' ? tokens.accentPurple.soft : tokens.muted;
+                            const border = selected ? tokens.primary : cell.status === 'Completed' ? tokens.rag.green.border : tokens.border;
+                            return (
+                              <Pressable
+                                key={cell.code}
+                                onPress={() => setSelectedLoc(cell.code)}
+                                style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
+                              />
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bayObj.code}</Text>
+                </Animated.View>
+              </View>
+            </GestureDetector>
+            <View style={styles.footerRow}>
+              <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={!selectedLoc}
+                onPress={handleStartAudit}
+                style={[styles.primaryBtn, styles.footerBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: selectedLoc ? 1 : 0.5 }]}
+              >
+                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Start Audit</Text>
+                <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
+              </Pressable>
+            </View>
           </View>
         </Card>
-      </ScrollView>
+      </View>
 
-      {pickerField ? (
-        <BottomSheetPicker
-          visible
-          title={pickerField === 'rack' ? 'Select Rack' : 'Select Bay'}
-          options={pickerField === 'rack' ? rackOptions : bayOptions}
-          selectedValue={pickerField === 'rack' ? rackCode : bayCode}
-          onSelect={(v) => (pickerField === 'rack' ? handlePickRack(v) : handlePickBay(v))}
-          onClose={() => setPickerField(null)}
-        />
-      ) : null}
-
-      <Modal visible={skuPanelOpen} transparent animationType="slide" onRequestClose={() => setSkuPanelOpen(false)}>
+      <Modal visible={skuPanelOpen} transparent animationType="fade" onRequestClose={() => setSkuPanelOpen(false)}>
         <Pressable style={[styles.backdrop, { backgroundColor: tokens.scrim }]} onPress={() => setSkuPanelOpen(false)}>
-          <Pressable
-            style={[styles.skuPanel, { backgroundColor: tokens.card, borderTopLeftRadius: tokens.radius.xxl, borderTopRightRadius: tokens.radius.xxl }]}
-            onPress={(e) => e.stopPropagation()}
-          >
+          <Animated.View entering={SlideInRight.duration(250)} exiting={SlideOutRight.duration(200)} style={styles.skuPanelSlide}>
+            <Pressable
+              style={[styles.skuPanel, { backgroundColor: tokens.card, borderTopLeftRadius: tokens.radius.xxl, borderBottomLeftRadius: tokens.radius.xxl }]}
+              onPress={(e) => e.stopPropagation()}
+            >
             <View style={styles.skuPanelHead}>
               <View>
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Reconciliation Form</Text>
@@ -260,7 +313,7 @@ export function RackViewScreen() {
                 <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
               </Pressable>
             </View>
-            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
               {scanLines.map((line, idx) => (
                 <SkuLineCard
                   key={idx}
@@ -313,7 +366,8 @@ export function RackViewScreen() {
                 <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
               </Pressable>
             </View>
-          </Pressable>
+            </Pressable>
+          </Animated.View>
         </Pressable>
       </Modal>
 
@@ -353,18 +407,47 @@ export function RackViewScreen() {
   );
 }
 
-function ToolbarField({ label, fixed, tag, onPress }: { label: string; fixed?: boolean; tag?: string; onPress?: () => void }) {
+function ToolbarField({ label, fixed, tag, open, onPress }: { label: string; fixed?: boolean; tag?: string; open?: boolean; onPress?: () => void }) {
   const { tokens } = useTheme();
   const content = (
-    <View style={[styles.toolbarField, { backgroundColor: fixed ? tokens.muted : tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+    <View style={[styles.toolbarField, { backgroundColor: fixed ? tokens.muted : tokens.card, borderColor: open ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}>
       <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }} numberOfLines={1}>
         {label}
       </Text>
       {tag ? <Pill label={tag} tone={STATUS_TONE[tag as keyof typeof STATUS_TONE] ?? 'To Do'} /> : null}
-      {!fixed ? <Ionicons name="chevron-down" size={14} color={tokens.mutedForeground} /> : null}
+      {!fixed ? <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={tokens.mutedForeground} /> : null}
     </View>
   );
   return fixed ? content : <Pressable onPress={onPress}>{content}</Pressable>;
+}
+
+// Anchored right under the field that opened it — a web-style dropdown
+// instead of BottomSheetPicker's slide-up-from-the-bottom sheet. Only used
+// here (Rack View is tablet-only); phone's Count Sheet keeps the bottom
+// sheet, per no-shared-device-behavior-changes.
+function InlineDropdown({ options, selectedValue, onSelect }: { options: SheetOption[]; selectedValue: string; onSelect: (value: string) => void }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={[styles.inlineDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+      <ScrollView style={{ maxHeight: 260 }}>
+        {options.map((o) => {
+          const selected = o.value === selectedValue;
+          return (
+            <Pressable
+              key={o.value}
+              onPress={() => onSelect(o.value)}
+              style={[styles.inlineDropdownItem, { borderBottomColor: tokens.border }, selected ? { backgroundColor: tokens.muted } : null]}
+            >
+              <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }} numberOfLines={1}>
+                {o.label}
+              </Text>
+              {selected ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -372,17 +455,24 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   toolbarField: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, height: 36, minWidth: 70 },
   scanIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  body: { padding: 16 },
-  diagram: { gap: 4 },
-  diagramRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  diagramCells: { flexDirection: 'row', gap: 6, flex: 1 },
-  cell: { width: 26, height: 18, borderWidth: 1, borderRadius: 3 },
+  inlineDropdown: { position: 'absolute', top: 40, left: 0, minWidth: 160, borderWidth: 1, zIndex: 30, elevation: 30 },
+  inlineDropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
+  body: { flex: 1, padding: 16 },
+  diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  diagramBody: { flex: 1, padding: 14 },
+  diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  diagram: { gap: 6 },
+  diagramRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  diagramCells: { flexDirection: 'row', gap: 8 },
+  cell: { width: 38, height: 26, borderWidth: 1, borderRadius: 4 },
   cellEmpty: { borderStyle: 'dashed', opacity: 0.4 },
-  diagramActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
   outlineBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   primaryBtn: { flex: 1, flexDirection: 'row', height: 44, alignItems: 'center', justifyContent: 'center', gap: 6 },
-  backdrop: { flex: 1, justifyContent: 'flex-end' },
-  skuPanel: { maxHeight: '80%', padding: 16 },
+  footerRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
+  footerBtn: { flex: 0, paddingHorizontal: 18 },
+  backdrop: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' },
+  skuPanelSlide: { height: '100%' },
+  skuPanel: { width: 420, maxWidth: '90%', height: '100%', padding: 16 },
   skuPanelHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
 });

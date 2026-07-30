@@ -47,6 +47,9 @@ export const INVENTORY_POOL: InventoryItem[] = [
   { sku: 'SKU-9011', name: 'Rack Label Kit', lot: 'L-2311' },
   { sku: 'SKU-5088', name: 'Corner Protector', lot: 'L-2319' },
   { sku: 'SKU-1180', name: 'Fastener Pack M10', lot: 'L-2322' },
+  { sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', lot: 'L-2340' },
+  { sku: 'SKU-4411', name: 'Washer Pack Steel', lot: 'L-2341' },
+  { sku: 'SKU-4412', name: 'Rubber Gasket Set', lot: 'L-2342' },
 ];
 
 export const AUDITS: Audit[] = [
@@ -109,13 +112,19 @@ export function makeLayout(name: string, racks: RackNode[]): LayoutNode {
 // never overwrites a location that already has real pallets (source
 // seedDemoPalletIfEmpty, lines 1167-1180). Left unsaved so it still reads as
 // an in-progress pallet to resume.
-function seedDemoPalletIfEmpty(loc: LocationNode, seedIdx: number): LocationNode {
+//
+// codePrefix (the bay's own code, e.g. "A-05-B01") is folded into the
+// generated pallet LPN — level+slot alone repeats every bay (fillBayLevels
+// resets to level 1 at the start of each one), which produced the same
+// "P-0101" pallet ID in every bay across the whole rack. A pallet ID must be
+// unique across the whole audit, so the bay has to be part of it.
+function seedDemoPalletIfEmpty(loc: LocationNode, seedIdx: number, codePrefix: string): LocationNode {
   if (loc.pallets.length) return loc;
   const item = INVENTORY_POOL[seedIdx % INVENTORY_POOL.length];
   const condition: Condition = CONDITIONS[seedIdx % CONDITIONS.length];
   const pallet: Pallet = {
     pallet: loc.level != null
-      ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}`
+      ? `P-${codePrefix.replace(/[^A-Za-z0-9]/g, '')}-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}`
       : `P-${loc.code.replace(/[^A-Za-z0-9]/g, '')}`,
     lines: [{ sku: item.sku, name: item.name, lot: item.lot, qty: 10 + (seedIdx % 30), condition }],
   };
@@ -129,7 +138,7 @@ export function fillBayLevels(codePrefix: string, existingLocs: LocationNode[]):
   existingLocs.forEach((l, i) => {
     l.level = 1;
     l.slot = i + 1;
-    seedDemoPalletIfEmpty(l, i);
+    seedDemoPalletIfEmpty(l, i, codePrefix);
   });
   const rest: LocationNode[] = [];
   let seedIdx = existingLocs.length;
@@ -137,7 +146,7 @@ export function fillBayLevels(codePrefix: string, existingLocs: LocationNode[]):
     const palletsThisLevel = level % 2 === 0 ? 2 : 3;
     for (let slot = 1; slot <= palletsThisLevel; slot++) {
       const loc = makeLoc(`${codePrefix}-${String(level).padStart(2, '0')}${String(slot).padStart(2, '0')}`, 'Not Started', level, slot);
-      seedDemoPalletIfEmpty(loc, seedIdx++);
+      seedDemoPalletIfEmpty(loc, seedIdx++, codePrefix);
       rest.push(loc);
     }
   }
@@ -209,7 +218,9 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
   'AUD-0225': {
     layouts: [
       makeLayout('Layout A', [
-        makeRack('C-04', [makeBay('C-04-01', [makeLoc('C-04-01-01', 'Completed'), makeLoc('C-04-01-02', 'Completed')])]),
+        makeRack('C-04', [
+          makeBay('C-04-01', [makeLoc('C-04-01-01', 'Completed'), makeLoc('C-04-01-02', 'Completed'), makeLoc('C-04-01-03', 'Completed')]),
+        ]),
       ]),
     ],
   },
@@ -261,6 +272,19 @@ LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[1].pallets.push({
   lines: [
     { sku: 'SKU-9011', name: 'Rack Label Kit', lot: 'L-2311', qty: 12, condition: 'Good' },
     { sku: 'SKU-1180', name: 'Fastener Pack M10', lot: 'L-2322', qty: 3, condition: 'Broken' },
+  ],
+  saved: true,
+});
+// Reconciliation form supports scanning multiple SKUs under one pallet LPN —
+// P-1202 exercises that: three distinct SKUs, each independently flagged,
+// counted on the same pallet. Reported Audits groups flagged lines by pallet
+// so this shows as one card listing all three, not three separate cards.
+LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[2].pallets.push({
+  pallet: 'P-1202',
+  lines: [
+    { sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', lot: 'L-2340', qty: 4, condition: 'Damaged' },
+    { sku: 'SKU-4411', name: 'Washer Pack Steel', lot: 'L-2341', qty: 2, condition: 'Broken' },
+    { sku: 'SKU-4412', name: 'Rubber Gasket Set', lot: 'L-2342', qty: 6, condition: 'Wet' },
   ],
   saved: true,
 });

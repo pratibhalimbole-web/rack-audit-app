@@ -80,7 +80,10 @@ export default function PhoneTabsLayout() {
       <Tabs.Screen name="audit/[auditId]/count-sheet" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/progress" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/summary" options={{ href: null }} />
-      <Tabs.Screen name="audit/[auditId]/rack/[rackId]" options={{ href: null }} />
+      {/* Rack View already has its own back button (AppHeader), and its
+          canvas is meant to fill the whole screen — the bottom tab bar
+          would just eat into that space for no navigational benefit. */}
+      <Tabs.Screen name="audit/[auditId]/rack/[rackId]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/issue/[lineId]" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/discrepancy/[key]" options={{ href: null }} />
     </Tabs>

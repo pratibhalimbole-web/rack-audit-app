@@ -20,12 +20,14 @@ export function AppHeader({
   showBack,
   avatar,
   menuItems,
+  backgroundColor,
 }: {
   title: string;
   sub?: string;
   showBack?: boolean;
   avatar?: boolean;
   menuItems?: HeaderMenuItem[];
+  backgroundColor?: string;
 }) {
   const { tokens } = useTheme();
   const inspector = useAuthStore((s) => s.inspector);
@@ -39,7 +41,7 @@ export function AppHeader({
       // header's absolutely-positioned dropdown once it extends past the
       // header's own bounds, on both iOS (paint order) and Android
       // (elevation-based stacking).
-      style={{ backgroundColor: tokens.card, borderBottomWidth: 1, borderBottomColor: tokens.border, zIndex: 20, elevation: 20 }}
+      style={{ backgroundColor: backgroundColor ?? tokens.card, borderBottomWidth: 1, borderBottomColor: tokens.border, zIndex: 20, elevation: 20 }}
     >
       <View style={styles.row}>
         {showBack ? (
