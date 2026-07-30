@@ -95,7 +95,7 @@ export function ProgressScreen() {
                             <Ionicons
                               name={status === 'Completed' ? 'checkmark-circle' : 'cube-outline'}
                               size={20}
-                              color={status === 'Completed' ? tokens.rag.green.strong : tokens.mutedForeground}
+                              color={status === 'Completed' ? tokens.rag.green.strong : '#667085'}
                             />
                             <View style={{ flex: 1 }}>
                               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Bay {bay.code}</Text>
@@ -108,7 +108,7 @@ export function ProgressScreen() {
                                 </View>
                               ) : null}
                             </View>
-                            <Ionicons name="chevron-forward" size={16} color={tokens.slate400} />
+                            <Ionicons name="chevron-forward" size={16} color="#667085" />
                           </Pressable>
                         );
                       })}
@@ -120,7 +120,7 @@ export function ProgressScreen() {
           ))
         ) : (
           <Card style={styles.emptyCard}>
-            <Ionicons name="cube-outline" size={26} color={tokens.slate400} />
+            <Ionicons name="cube-outline" size={26} color="#667085" />
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>No racks in scope yet.</Text>
           </Card>
         )}

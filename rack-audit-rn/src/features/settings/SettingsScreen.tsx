@@ -28,11 +28,11 @@ export function SettingsScreen() {
             Profile Settings
           </Text>
           <Pressable hitSlop={8} style={styles.headerIconBtn}>
-            <Ionicons name="notifications-outline" size={20} color={tokens.mutedForeground} />
+            <Ionicons name="notifications-outline" size={20} color="#667085" />
           </Pressable>
           <View>
             <Pressable hitSlop={8} style={styles.headerIconBtn}>
-              <Ionicons name="sync-outline" size={20} color={tokens.mutedForeground} />
+              <Ionicons name="sync-outline" size={20} color="#667085" />
             </Pressable>
             <View style={[styles.badge, { backgroundColor: tokens.rag.green.base }]}>
               <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>+9</Text>
@@ -49,7 +49,7 @@ export function SettingsScreen() {
           </Text>
           <View style={styles.profileRow}>
             <View style={[styles.photoPlaceholder, { backgroundColor: tokens.muted, borderRadius: tokens.radius.xl }]}>
-              <Ionicons name="person" size={32} color={tokens.slate400} />
+              <Ionicons name="person" size={32} color="#667085" />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>

@@ -56,7 +56,7 @@ export function TasksBoard() {
       />
       <View style={styles.searchWrap}>
         <View style={[styles.searchBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="search" size={16} color={tokens.mutedForeground} />
+          <Ionicons name="search" size={16} color="#667085" />
           <TextInput
             value={search}
             onChangeText={setSearch}

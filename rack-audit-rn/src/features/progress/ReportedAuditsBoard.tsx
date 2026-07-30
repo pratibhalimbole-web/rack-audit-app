@@ -157,7 +157,7 @@ export function ReportedAuditsBoard() {
 
       <View style={styles.toolbar}>
         <View style={[styles.searchBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="search" size={16} color={tokens.mutedForeground} />
+          <Ionicons name="search" size={16} color="#667085" />
           <TextInput
             value={search}
             onChangeText={setSearch}
@@ -246,7 +246,7 @@ export function ReportedAuditsBoard() {
                         <Text style={{ color: openCategory === cat ? tokens.primary : tokens.popoverForeground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold, flex: 1 }}>
                           {CATEGORY_LABEL[cat]}
                         </Text>
-                        <Ionicons name={openCategory === cat ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                        <Ionicons name={openCategory === cat ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
                       </Pressable>
                     ))}
                   </View>
@@ -302,7 +302,7 @@ export function ReportedAuditsBoard() {
           </View>
           <Pressable onPress={clearAllFilters} style={styles.closeAllRow}>
             <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Close all</Text>
-            <Ionicons name="chevron-up" size={16} color={tokens.mutedForeground} />
+            <Ionicons name="chevron-up" size={16} color="#667085" />
           </Pressable>
         </View>
       ) : null}
@@ -324,7 +324,7 @@ export function ReportedAuditsBoard() {
             </View>
           ) : (
             <View style={styles.empty}>
-              <Ionicons name="cube-outline" size={28} color={tokens.slate400} />
+              <Ionicons name="cube-outline" size={28} color="#667085" />
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No reported issues</Text>
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Nothing matches these filters.</Text>
             </View>
@@ -337,7 +337,7 @@ export function ReportedAuditsBoard() {
           </View>
         ) : (
           <View style={styles.empty}>
-            <Ionicons name="checkmark-circle-outline" size={28} color={tokens.slate400} />
+            <Ionicons name="checkmark-circle-outline" size={28} color="#667085" />
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No SKU mismatches</Text>
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Every counted location matches the master inventory plan.</Text>
           </View>

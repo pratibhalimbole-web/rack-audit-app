@@ -84,7 +84,7 @@ export function EvidenceBlock({
         <ThumbGroup icon="image-outline" label="Image Attachments" count={evidence.images.length}>
           {evidence.images.map((_, i) => (
             <Pressable key={i} onPress={() => onRemoveImage(i)} style={[styles.thumb, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-              <Ionicons name="image-outline" size={18} color={tokens.mutedForeground} />
+              <Ionicons name="image-outline" size={18} color="#667085" />
             </Pressable>
           ))}
         </ThumbGroup>
@@ -95,7 +95,7 @@ export function EvidenceBlock({
           {evidence.videos.map((v, i) => (
             <Pressable key={i} onPress={() => onRemoveVideo(i)} style={[styles.thumb, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
               <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>00:{v.durationSec}s</Text>
-              <Ionicons name="play" size={14} color={tokens.mutedForeground} />
+              <Ionicons name="play" size={14} color="#667085" />
             </Pressable>
           ))}
         </ThumbGroup>
@@ -118,7 +118,7 @@ function ThumbGroup({ icon, label, count, children }: { icon: keyof typeof Ionic
   return (
     <View style={{ marginTop: 4 }}>
       <View style={styles.groupHeadRow}>
-        <Ionicons name={icon} size={14} color={tokens.mutedForeground} />
+        <Ionicons name={icon} size={14} color="#667085" />
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>{label}</Text>
         <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
           <Text style={{ color: tokens.accentBlue.strong, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{String(count).padStart(2, '0')}</Text>

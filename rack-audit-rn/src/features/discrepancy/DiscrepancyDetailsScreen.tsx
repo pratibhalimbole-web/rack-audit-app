@@ -151,14 +151,14 @@ function EvidenceGroup({ icon, label, count }: { icon: keyof typeof Ionicons.gly
   return (
     <View style={styles.evidenceRow}>
       <View style={styles.evidenceHead}>
-        <Ionicons name={icon} size={14} color={tokens.mutedForeground} />
+        <Ionicons name={icon} size={14} color="#667085" />
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{label.toUpperCase()}</Text>
       </View>
       {count > 0 ? (
         <View style={styles.thumbRow}>
           {Array.from({ length: count }, (_, i) => (
             <View key={i} style={[styles.thumb, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-              <Ionicons name={icon} size={18} color={tokens.mutedForeground} />
+              <Ionicons name={icon} size={18} color="#667085" />
             </View>
           ))}
         </View>

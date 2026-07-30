@@ -63,7 +63,7 @@ export function BottomSheetPicker({
           </View>
           {options.length > 6 ? (
             <View style={[styles.searchBox, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-              <Ionicons name="search" size={16} color={tokens.mutedForeground} />
+              <Ionicons name="search" size={16} color="#667085" />
               <TextInput
                 value={search}
                 onChangeText={setSearch}

@@ -102,7 +102,7 @@ export function IssueDetailsScreen() {
             <View style={styles.thumbRow}>
               {images.map((_, i) => (
                 <View key={i} style={[styles.thumb, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-                  <Ionicons name="image-outline" size={20} color={tokens.mutedForeground} />
+                  <Ionicons name="image-outline" size={20} color="#667085" />
                 </View>
               ))}
             </View>
@@ -118,7 +118,7 @@ export function IssueDetailsScreen() {
               {videos.map((v, i) => (
                 <View key={i} style={[styles.thumb, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
                   <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>00:{v.durationSec}s</Text>
-                  <Ionicons name="play" size={16} color={tokens.mutedForeground} />
+                  <Ionicons name="play" size={16} color="#667085" />
                 </View>
               ))}
             </View>

@@ -18,7 +18,7 @@ export function TaskCard({ audit, variant = 'phone' }: { audit: Audit; variant?:
 
   const icon = (
     <View style={[styles.iconWrap, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-      <Ionicons name={AUDIT_TYPE_ICON[audit.audit_type]} size={16} color={tokens.mutedForeground} />
+      <Ionicons name={AUDIT_TYPE_ICON[audit.audit_type]} size={16} color="#667085" />
     </View>
   );
 
@@ -47,7 +47,7 @@ export function TaskCard({ audit, variant = 'phone' }: { audit: Audit; variant?:
         {nameBlock}
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginRight: 10 }}>Due {fmtDate(audit.end_date)}</Text>
         <Pill label={uis} tone={uis} />
-        <Ionicons name="chevron-forward" size={16} color={tokens.slate400} style={{ marginLeft: 8 }} />
+        <Ionicons name="chevron-forward" size={16} color="#667085" style={{ marginLeft: 8 }} />
       </Pressable>
     );
   }
@@ -57,7 +57,7 @@ export function TaskCard({ audit, variant = 'phone' }: { audit: Audit; variant?:
       <View style={styles.row}>
         {icon}
         {nameBlock}
-        <Ionicons name="chevron-forward" size={16} color={tokens.slate400} />
+        <Ionicons name="chevron-forward" size={16} color="#667085" />
       </View>
       <View style={[styles.footer, { borderTopColor: tokens.border }]}>
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Due {fmtDate(audit.end_date)}</Text>

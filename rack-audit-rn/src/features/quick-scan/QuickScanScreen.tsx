@@ -171,7 +171,7 @@ export function QuickScanScreen() {
       <View style={styles.centeredEmpty}>
         <View style={[styles.scanBlock, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
           <View style={[styles.glyphCircle, { backgroundColor: tokens.muted }]}>
-            <Ionicons name="camera-outline" size={26} color={tokens.mutedForeground} />
+            <Ionicons name="camera-outline" size={26} color="#667085" />
           </View>
           <Pressable onPress={handleScan} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
             <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Location QR</Text>

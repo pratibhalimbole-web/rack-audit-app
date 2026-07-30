@@ -51,7 +51,7 @@ export function SkuLineCard({
         <Col label="Action">
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Pressable onPress={onEdit} hitSlop={8}>
-              <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
+              <Ionicons name="pencil" size={16} color="#667085" />
             </Pressable>
             <Pressable onPress={onDelete} hitSlop={8}>
               <Ionicons name="trash-outline" size={16} color={tokens.rag.red.strong} />

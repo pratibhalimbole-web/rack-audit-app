@@ -411,3 +411,35 @@ function buildMasterInventory(locationsMap: Record<string, AuditLocationsTree>):
   });
 }
 buildMasterInventory(LOCATIONS);
+
+export type ExpectedSkuLine = { sku: string; name: string; lot: string; qty: number };
+
+// What a pallet at this location is SUPPOSED to hold, per the pick list —
+// the reconciliation form shows this before scanning so an inspector can
+// scan against a known checklist rather than guessing, since a real pallet
+// can carry several SKUs (the reconciliation form supports scanning more
+// than one). Most locations' expected list is a single line matching
+// MASTER_INVENTORY (the common, no-surprise case); a deterministic subset
+// get 2-4 lines, one of which is deliberately off (wrong qty) so the
+// checklist has real "expected vs. found" variance to demonstrate, same
+// spirit as buildMasterInventory's every-17th mismatch.
+export const EXPECTED_SKUS: Record<string, ExpectedSkuLine[]> = {};
+
+function buildExpectedSkus(locationsMap: Record<string, AuditLocationsTree>): void {
+  allLocationNodesInMap(locationsMap).forEach((loc, idx) => {
+    const master = MASTER_INVENTORY[loc.code];
+    if (!master) return;
+    const lineCount = idx % 5 === 0 ? 4 : idx % 3 === 0 ? 2 : 1;
+    const lines: ExpectedSkuLine[] = [{ sku: master.sku, name: master.name, lot: master.lot, qty: master.qty }];
+    for (let i = 1; i < lineCount; i++) {
+      const extra = INVENTORY_POOL[(idx + i) % INVENTORY_POOL.length];
+      if (lines.some((l) => l.sku === extra.sku)) continue;
+      lines.push({ sku: extra.sku, name: extra.name, lot: extra.lot, qty: 4 + ((idx + i * 3) % 16) });
+    }
+    if (lines.length > 1 && idx % 6 === 0) {
+      lines[1] = { ...lines[1], qty: lines[1].qty + 2 };
+    }
+    EXPECTED_SKUS[loc.code] = lines;
+  });
+}
+buildExpectedSkus(LOCATIONS);

@@ -16,7 +16,7 @@ export function DayAuditsList({ dateISO, auditPool }: { dateISO: string; auditPo
   if (!groups.length) {
     return (
       <View style={styles.empty}>
-        <Ionicons name="checkbox-outline" size={26} color={tokens.slate400} />
+        <Ionicons name="checkbox-outline" size={26} color="#667085" />
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>No inspections scheduled for this day.</Text>
       </View>
     );
@@ -38,7 +38,7 @@ export function DayAuditsList({ dateISO, auditPool }: { dateISO: string; auditPo
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{a.audit_name}</Text>
                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{a.scope_values.join(', ')}</Text>
                 <View style={styles.metaRow}>
-                  <Ionicons name="person-outline" size={12} color={tokens.mutedForeground} />
+                  <Ionicons name="person-outline" size={12} color="#667085" />
                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>
                     {a.team_members.length} member{a.team_members.length === 1 ? '' : 's'}
                   </Text>

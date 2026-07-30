@@ -83,7 +83,7 @@ export function AuditSummaryScreen() {
 
         {nothingCounted ? (
           <Card style={styles.emptyCard}>
-            <Ionicons name="cube-outline" size={26} color={tokens.slate400} />
+            <Ionicons name="cube-outline" size={26} color="#667085" />
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Nothing counted yet</Text>
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center' }}>
               Condition breakdown and flagged items will show up here once pallets are saved.

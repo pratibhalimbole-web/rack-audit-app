@@ -187,7 +187,7 @@ export function CountSheetScreen() {
         <View style={{ gap: 10 }}>
           <View style={[styles.scanBlock, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
             <View style={[styles.glyphCircle, { backgroundColor: tokens.muted }]}>
-              <Ionicons name="camera-outline" size={22} color={tokens.mutedForeground} />
+              <Ionicons name="camera-outline" size={22} color="#667085" />
             </View>
             <Pressable onPress={() => setScannerOpen('location')} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
               <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Location QR</Text>
@@ -232,7 +232,7 @@ export function CountSheetScreen() {
         <ScrollView contentContainerStyle={styles.body}>
           {locationCard}
           <View style={styles.emptyState}>
-            <Ionicons name="location-outline" size={28} color={tokens.slate400} />
+            <Ionicons name="location-outline" size={28} color="#667085" />
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center' }}>
               Scanning and counting tools appear here once a location is picked.
             </Text>
@@ -353,7 +353,7 @@ export function CountSheetScreen() {
                       onPress={() => setExpandedSavedPallet(isOpen ? null : p.pallet)}
                       style={[styles.savedRow, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
                     >
-                      <Ionicons name="cube-outline" size={18} color={tokens.mutedForeground} />
+                      <Ionicons name="cube-outline" size={18} color="#667085" />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{p.pallet}</Text>
                         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>
@@ -424,7 +424,7 @@ export function CountSheetScreen() {
             ) : null}
             <View style={[styles.scanBlock, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
               <View style={[styles.glyphCircle, { backgroundColor: tokens.muted }]}>
-                <Ionicons name="camera-outline" size={22} color={tokens.mutedForeground} />
+                <Ionicons name="camera-outline" size={22} color="#667085" />
               </View>
               <Pressable onPress={() => setScannerOpen('sku')} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
                 <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan SKU</Text>

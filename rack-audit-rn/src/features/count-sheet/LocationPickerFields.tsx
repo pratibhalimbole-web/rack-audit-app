@@ -112,7 +112,7 @@ function FieldRow({
           <Text style={{ color: value ? tokens.foreground : tokens.mutedForeground, fontSize: tokens.text.sm }}>{value ?? `Select ${label}`}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {tag ? <Pill label={tag} tone={tag === 'Not Started' ? 'To Do' : tag === 'In Progress' ? 'In Progress' : 'Completed'} /> : null}
-            <Ionicons name="chevron-down" size={16} color={tokens.mutedForeground} />
+            <Ionicons name="chevron-down" size={16} color="#667085" />
           </View>
         </Pressable>
       )}

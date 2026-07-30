@@ -15,7 +15,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
+import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, type ExpectedSkuLine } from '@/lib/mockData';
 import type { CountLine, Evidence } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -51,9 +51,16 @@ export function RackViewScreen() {
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
   const [scanPallet, setScanPallet] = useState<string | null>(null);
+  const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [skuScanCount, setSkuScanCount] = useState(0);
-  const [scannerOpen, setScannerOpen] = useState<'pallet' | 'sku' | null>(null);
+  const [scannerOpen, setScannerOpen] = useState<'pallet' | 'batch' | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<{ text: string; tone: 'success' | 'warning' } | null>(null);
+  const [batchScanCount, setBatchScanCount] = useState(0);
+  // Session-only flags (not persisted) — "Raise Issue" in the detail view
+  // just gives the inspector visible confirmation; the underlying condition
+  // already makes the line show up in Reported Audits once saved.
+  const [issuesRaised, setIssuesRaised] = useState<Set<string>>(new Set());
   const [attachmentTarget, setAttachmentTarget] = useState<number | null>(null);
   const confirm = useConfirmDialog();
 
@@ -100,6 +107,12 @@ export function RackViewScreen() {
       savedTranslateY.value = 0;
     }
   }, [seedKey]);
+
+  useEffect(() => {
+    if (!scanFeedback) return;
+    const t = setTimeout(() => setScanFeedback(null), 1800);
+    return () => clearTimeout(t);
+  }, [scanFeedback]);
 
   if (!audit || isLoading || !tree) {
     return (
@@ -162,36 +175,37 @@ export function RackViewScreen() {
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
     setExpandedIdx(null);
+    setExpectedSkus(EXPECTED_SKUS[selectedLocObj.code] ?? []);
+    setScanFeedback(null);
     setSkuPanelOpen(true);
-    applySkuPick(INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length], base);
-    setSkuScanCount((c) => c + 1);
   };
 
-  const applySkuPick = (pick: { sku: string; name: string; lot: string }, base?: CountLine[]) => {
+  // Batch/handheld-scanner friendly: stays on the checklist (no per-scan
+  // detail popup — that would fight a real bulk scanner firing several
+  // codes in a row) and just gives quick matched/unexpected feedback.
+  const applyBatchScan = (pick: { sku: string; name: string; lot: string }, base?: CountLine[]) => {
     const lines = base ?? scanLines;
     const dupIdx = lines.findIndex((l) => l.sku === pick.sku);
-    if (dupIdx !== -1) {
-      const next = lines.slice();
-      next[dupIdx] = { ...next[dupIdx], qty: next[dupIdx].qty + 1 };
-      setScanLines(next);
-      setExpandedIdx(dupIdx);
-    } else {
-      const next = [...lines, { sku: pick.sku, name: pick.name, lot: pick.lot, qty: 1, condition: 'Good' as const }];
-      setScanLines(next);
-      setExpandedIdx(next.length - 1);
-    }
+    const next =
+      dupIdx !== -1 ? lines.map((l, i) => (i === dupIdx ? { ...l, qty: l.qty + 1 } : l)) : [...lines, { sku: pick.sku, name: pick.name, lot: pick.lot, qty: 1, condition: 'Good' as const }];
+    setScanLines(next);
+    const isExpected = expectedSkus.some((e) => e.sku === pick.sku);
+    setScanFeedback(isExpected ? { text: `${pick.sku} verified`, tone: 'success' } : { text: `${pick.sku} not on the expected list`, tone: 'warning' });
+    setBatchScanCount((c) => c + 1);
   };
 
-  const handleSimulatedSkuScan = () => {
-    applySkuPick(INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length]);
-    setSkuScanCount((c) => c + 1);
-  };
-
-  const handleRealSkuScanned = (data: string) => {
-    setScannerOpen(null);
+  const handleBatchScanned = (data: string) => {
     const code = data.trim();
     const pick = INVENTORY_POOL.find((p) => p.sku === code) ?? { sku: code, name: 'Unlisted SKU', lot: '—' };
-    applySkuPick(pick);
+    applyBatchScan(pick);
+  };
+
+  const handleBatchSimulated = () => {
+    // Walk the expected checklist first (a believable demo of "verify what
+    // should be here"), then simulate the occasional unexpected extra.
+    const unmatched = expectedSkus.find((e) => !scanLines.some((l) => l.sku === e.sku));
+    applyBatchScan(unmatched ?? INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length]);
+    setSkuScanCount((c) => c + 1);
   };
 
   const ensureLineEvidence = (line: CountLine): Evidence => line.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
@@ -295,8 +309,8 @@ export function RackViewScreen() {
         </Card>
       </View>
 
-      <Modal visible={skuPanelOpen} transparent animationType="fade" onRequestClose={() => setSkuPanelOpen(false)}>
-        <Pressable style={[styles.backdrop, { backgroundColor: tokens.scrim }]} onPress={() => setSkuPanelOpen(false)}>
+      <Modal visible={skuPanelOpen} transparent statusBarTranslucent animationType="fade" onRequestClose={() => setSkuPanelOpen(false)}>
+        <Pressable style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.7)' }]} onPress={() => setSkuPanelOpen(false)}>
           <Animated.View entering={SlideInRight.duration(250)} exiting={SlideOutRight.duration(200)} style={styles.skuPanelSlide}>
             <Pressable
               style={[styles.skuPanel, { backgroundColor: tokens.card, borderTopLeftRadius: tokens.radius.xxl, borderBottomLeftRadius: tokens.radius.xxl }]}
@@ -309,55 +323,183 @@ export function RackViewScreen() {
                   {selectedLocObj?.code} · {scanPallet ?? 'New Pallet'}
                 </Text>
               </View>
-              <Pressable onPress={() => setScannerOpen('sku')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-                <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
-              </Pressable>
             </View>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
-              {scanLines.map((line, idx) => (
+
+            {expandedIdx !== null && scanLines[expandedIdx] ? (
+              // Detail view for the one SKU just scanned (or being re-edited):
+              // qty/condition/evidence, same as before — Save/Delete return to
+              // the checklist instead of leaving an ever-growing card list.
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
+                {(() => {
+                  const line = scanLines[expandedIdx];
+                  const exp = expectedSkus.find((e) => e.sku === line.sku);
+                  const qtyMismatch = !!exp && exp.qty !== line.qty;
+                  const conditionFlagged = line.condition !== 'Good';
+                  if (!qtyMismatch && !conditionFlagged) return null;
+                  const raised = issuesRaised.has(line.sku);
+                  return (
+                    <Pressable
+                      disabled={raised}
+                      onPress={() => setIssuesRaised((prev) => new Set(prev).add(line.sku))}
+                      style={[
+                        styles.raiseIssueBox,
+                        {
+                          backgroundColor: raised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                          borderColor: raised ? tokens.rag.green.border : tokens.rag.red.border,
+                          borderRadius: tokens.radius.lg,
+                        },
+                      ]}
+                    >
+                      <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                      <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
+                        {raised
+                          ? 'Issue raised for this SKU'
+                          : qtyMismatch
+                            ? `Raise Issue — expected ${exp?.qty}, found ${line.qty}`
+                            : `Raise Issue — condition: ${line.condition}`}
+                      </Text>
+                      {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
+                    </Pressable>
+                  );
+                })()}
                 <SkuLineCard
-                  key={idx}
-                  line={line}
-                  active={idx === (expandedIdx ?? scanLines.length - 1)}
+                  line={scanLines[expandedIdx]}
+                  active
                   onQtyChange={(qty) => {
                     const next = scanLines.slice();
-                    next[idx] = { ...next[idx], qty };
+                    next[expandedIdx] = { ...next[expandedIdx], qty };
                     setScanLines(next);
                   }}
                   onConditionChange={(condition) => {
                     const next = scanLines.slice();
-                    next[idx] = { ...next[idx], condition };
+                    next[expandedIdx] = { ...next[expandedIdx], condition };
                     setScanLines(next);
                   }}
-                  onSave={() => setExpandedIdx(-1)}
+                  onSave={() => setExpandedIdx(null)}
                   onDelete={() =>
-                    confirm.ask(`Remove ${line.sku} from this record?`, () => {
-                      setScanLines(scanLines.filter((_, i) => i !== idx));
+                    confirm.ask(`Remove ${scanLines[expandedIdx].sku} from this record?`, () => {
+                      setScanLines(scanLines.filter((_, i) => i !== expandedIdx));
                       setExpandedIdx(null);
                     })
                   }
-                  onEdit={() => setExpandedIdx(idx)}
+                  onEdit={() => {}}
                   evidenceSlot={
                     <EvidenceBlock
-                      evidence={ensureLineEvidence(line)}
-                      onOpenNote={() => updateLineEvidence(idx, { noteOpen: true })}
-                      onChangeNote={(note) => updateLineEvidence(idx, { note })}
-                      onRecordAudio={() => updateLineEvidence(idx, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                      evidence={ensureLineEvidence(scanLines[expandedIdx])}
+                      onOpenNote={() => updateLineEvidence(expandedIdx, { noteOpen: true })}
+                      onChangeNote={(note) => updateLineEvidence(expandedIdx, { note })}
+                      onRecordAudio={() => updateLineEvidence(expandedIdx, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
                       onToggleAudioPlay={() => {
-                        const ev = ensureLineEvidence(line);
+                        const ev = ensureLineEvidence(scanLines[expandedIdx]);
                         if (!ev.audio) return;
-                        updateLineEvidence(idx, { audio: { ...ev.audio, playing: !ev.audio.playing } });
+                        updateLineEvidence(expandedIdx, { audio: { ...ev.audio, playing: !ev.audio.playing } });
                       }}
-                      onRemoveAudio={() => updateLineEvidence(idx, { audio: null })}
-                      onAddImage={() => setAttachmentTarget(idx)}
-                      onRemoveImage={(i) => updateLineEvidence(idx, { images: ensureLineEvidence(line).images.filter((_, ii) => ii !== i) })}
-                      onAddVideo={() => updateLineEvidence(idx, { videos: [...ensureLineEvidence(line).videos, { durationSec: 20 }] })}
-                      onRemoveVideo={(i) => updateLineEvidence(idx, { videos: ensureLineEvidence(line).videos.filter((_, ii) => ii !== i) })}
+                      onRemoveAudio={() => updateLineEvidence(expandedIdx, { audio: null })}
+                      onAddImage={() => setAttachmentTarget(expandedIdx)}
+                      onRemoveImage={(i) =>
+                        updateLineEvidence(expandedIdx, { images: ensureLineEvidence(scanLines[expandedIdx]).images.filter((_, ii) => ii !== i) })
+                      }
+                      onAddVideo={() =>
+                        updateLineEvidence(expandedIdx, { videos: [...ensureLineEvidence(scanLines[expandedIdx]).videos, { durationSec: 20 }] })
+                      }
+                      onRemoveVideo={(i) =>
+                        updateLineEvidence(expandedIdx, { videos: ensureLineEvidence(scanLines[expandedIdx]).videos.filter((_, ii) => ii !== i) })
+                      }
                     />
                   }
                 />
-              ))}
-            </ScrollView>
+              </ScrollView>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
+                {expectedSkus.length ? (
+                  <View style={[styles.expectedBox, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 8 }}>
+                      Expected on this Pallet · {scanLines.filter((l) => expectedSkus.some((e) => e.sku === l.sku)).length}/{expectedSkus.length} scanned
+                    </Text>
+                    {expectedSkus.map((exp) => {
+                      const foundIdx = scanLines.findIndex((l) => l.sku === exp.sku);
+                      const found = foundIdx !== -1 ? scanLines[foundIdx] : undefined;
+                      const status: 'pending' | 'matched' | 'mismatch' = !found ? 'pending' : found.qty === exp.qty ? 'matched' : 'mismatch';
+                      const statusColor = status === 'matched' ? tokens.rag.green.strong : status === 'mismatch' ? tokens.rag.red.strong : '#667085';
+                      return (
+                        <View key={exp.sku} style={styles.expectedRow}>
+                          <Ionicons
+                            name={status === 'matched' ? 'checkmark-circle' : status === 'mismatch' ? 'close-circle' : 'ellipse-outline'}
+                            size={18}
+                            color={statusColor}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{exp.sku}</Text>
+                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
+                              {exp.name} · Expected Qty {exp.qty}
+                            </Text>
+                          </View>
+                          {status === 'mismatch' ? (
+                            <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Found {found?.qty}</Text>
+                          ) : null}
+                          {issuesRaised.has(exp.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
+                          {found ? (
+                            <Pressable
+                              onPress={() => setExpandedIdx(foundIdx)}
+                              style={[styles.rowScanBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.sm }]}
+                            >
+                              <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {/* SKUs scanned that aren't on the expected checklist at all —
+                    still reachable/editable, just called out separately. */}
+                {scanLines.map((line, idx) =>
+                  !expectedSkus.some((e) => e.sku === line.sku) ? (
+                    <View key={idx} style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.rag.amber.border ?? tokens.border, borderRadius: tokens.radius.lg }]}>
+                      <View style={[styles.unexpectedTag, { backgroundColor: tokens.rag.amber.soft, borderRadius: tokens.radius.sm }]}>
+                        <Ionicons name="alert-circle-outline" size={12} color={tokens.rag.amber.strong} />
+                        <Text style={{ color: tokens.rag.amber.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>Not on the expected list</Text>
+                      </View>
+                      <View style={styles.expectedRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{line.sku}</Text>
+                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
+                            {line.name} · Qty {line.qty} · {line.condition}
+                          </Text>
+                        </View>
+                        {issuesRaised.has(line.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
+                        <Pressable
+                          onPress={() => setExpandedIdx(idx)}
+                          style={[styles.rowScanBtn, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.sm }]}
+                        >
+                          <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null,
+                )}
+
+                {!expectedSkus.length && !scanLines.length ? (
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
+                    No SKUs scanned yet — use the scanner above.
+                  </Text>
+                ) : null}
+              </ScrollView>
+            )}
+            {expandedIdx === null ? (
+              <Pressable
+                onPress={() => {
+                  setScanFeedback(null);
+                  setBatchScanCount(0);
+                  setScannerOpen('batch');
+                }}
+                style={[styles.batchScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+              >
+                <Ionicons name="qr-code-outline" size={18} color={tokens.primaryForeground} />
+                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan to Verify</Text>
+              </Pressable>
+            ) : null}
             <View style={styles.skuPanelFooter}>
               <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
@@ -383,15 +525,18 @@ export function RackViewScreen() {
         onClose={() => setScannerOpen(null)}
       />
       <BarcodeScannerModal
-        visible={scannerOpen === 'sku'}
-        title="Scan SKU"
-        hint="Point at the SKU code"
-        onScanned={handleRealSkuScanned}
-        onUseSimulated={() => {
+        visible={scannerOpen === 'batch'}
+        continuous
+        feedback={scanFeedback}
+        scanCount={batchScanCount}
+        title="Scan to Verify"
+        hint="Scan every item on the pallet — stays open for multiple scans, tap Done when finished"
+        onScanned={handleBatchScanned}
+        onUseSimulated={handleBatchSimulated}
+        onClose={() => {
           setScannerOpen(null);
-          handleSimulatedSkuScan();
+          setScanFeedback(null);
         }}
-        onClose={() => setScannerOpen(null)}
       />
       <NewAttachmentModal
         visible={attachmentTarget !== null}
@@ -415,7 +560,7 @@ function ToolbarField({ label, fixed, tag, open, onPress }: { label: string; fix
         {label}
       </Text>
       {tag ? <Pill label={tag} tone={STATUS_TONE[tag as keyof typeof STATUS_TONE] ?? 'To Do'} /> : null}
-      {!fixed ? <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={tokens.mutedForeground} /> : null}
+      {!fixed ? <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#667085" /> : null}
     </View>
   );
   return fixed ? content : <Pressable onPress={onPress}>{content}</Pressable>;
@@ -470,9 +615,15 @@ const styles = StyleSheet.create({
   primaryBtn: { flex: 1, flexDirection: 'row', height: 44, alignItems: 'center', justifyContent: 'center', gap: 6 },
   footerRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
   footerBtn: { flex: 0, paddingHorizontal: 18 },
-  backdrop: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' },
-  skuPanelSlide: { height: '100%' },
-  skuPanel: { width: 420, maxWidth: '90%', height: '100%', padding: 16 },
+  backdrop: { flex: 1, width: '100%', height: '100%', flexDirection: 'row', justifyContent: 'flex-end' },
+  skuPanelSlide: { width: 530, maxWidth: '90%', height: '100%' },
+  skuPanel: { width: '100%', height: '100%', padding: 16 },
   skuPanelHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
+  expectedBox: { borderWidth: 1, padding: 12, marginBottom: 12 },
+  expectedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  rowScanBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  unexpectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, marginBottom: 4 },
+  batchScanBtn: { flexDirection: 'row', gap: 8, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginBottom: 12 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
 });

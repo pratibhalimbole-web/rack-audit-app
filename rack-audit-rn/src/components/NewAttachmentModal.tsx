@@ -80,7 +80,7 @@ export function NewAttachmentModal({ visible, onClose, onSave }: { visible: bool
               style={[styles.photoWrap, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}
             >
               <View style={[StyleSheet.absoluteFill, styles.photoPlaceholder]}>
-                <Ionicons name="image-outline" size={40} color={tokens.slate400} />
+                <Ionicons name="image-outline" size={40} color="#667085" />
               </View>
               {canvasWidth > 0 ? (
                 <View style={StyleSheet.absoluteFill}>

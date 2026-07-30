@@ -116,7 +116,7 @@ export function AuditDetailsScreen() {
           return (
             <View key={ly.name} style={[styles.accSection, { borderBottomColor: tokens.border }]}>
               <Pressable onPress={() => toggleSection(layoutKey)} style={styles.accHeader}>
-                <Ionicons name="grid-outline" size={18} color={tokens.mutedForeground} />
+                <Ionicons name="grid-outline" size={18} color="#667085" />
                 <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
                   {ly.name}
                 </Text>
@@ -125,7 +125,7 @@ export function AuditDetailsScreen() {
                     Total Racks: {String(ly.racks.length).padStart(2, '0')}
                   </Text>
                 </View>
-                <Ionicons name={layoutOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                <Ionicons name={layoutOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
               </Pressable>
               {layoutOpen
                 ? ly.racks.map((rack) => {
@@ -135,7 +135,7 @@ export function AuditDetailsScreen() {
                     return (
                       <View key={rack.code} style={styles.accSubSection}>
                         <Pressable onPress={() => toggleSection(rackKey)} style={styles.accHeader}>
-                          <Ionicons name="server-outline" size={18} color={tokens.mutedForeground} />
+                          <Ionicons name="server-outline" size={18} color="#667085" />
                           <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
                             Rack {rack.code}
                           </Text>
@@ -144,7 +144,7 @@ export function AuditDetailsScreen() {
                               Total Bays: {String(bays.length).padStart(2, '0')}
                             </Text>
                           </View>
-                          <Ionicons name={rackOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                          <Ionicons name={rackOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
                         </Pressable>
                         {rackOpen ? <View style={styles.bayGrid}>{bays.map(renderBayPill)}</View> : null}
                       </View>

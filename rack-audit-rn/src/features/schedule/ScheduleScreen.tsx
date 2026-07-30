@@ -52,7 +52,7 @@ export function ScheduleScreen() {
         <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
           {VIEWS.find((v) => v.key === view)!.label}
         </Text>
-        <Ionicons name="chevron-down" size={14} color={tokens.mutedForeground} />
+        <Ionicons name="chevron-down" size={14} color="#667085" />
       </Pressable>
       {viewMenuOpen ? (
         <>

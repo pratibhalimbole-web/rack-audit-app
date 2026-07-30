@@ -135,7 +135,7 @@ export function DashboardTablet() {
             </Card>
           ) : (
             <Card style={[styles.overviewCard, styles.emptyCard]}>
-              <Ionicons name="cube-outline" size={26} color={tokens.slate400} />
+              <Ionicons name="cube-outline" size={26} color="#667085" />
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>
                 No audit in progress
               </Text>
@@ -217,7 +217,7 @@ function AuditListRow({ audit, locTotal }: { audit: Audit; locTotal: number }) {
       style={[styles.listRow, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
     >
       <View style={[styles.iconWrap, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-        <Ionicons name={AUDIT_TYPE_ICON[audit.audit_type]} size={16} color={tokens.mutedForeground} />
+        <Ionicons name={AUDIT_TYPE_ICON[audit.audit_type]} size={16} color="#667085" />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
@@ -231,7 +231,7 @@ function AuditListRow({ audit, locTotal }: { audit: Audit; locTotal: number }) {
         Due {fmtDate(audit.end_date)} | {locTotal} locations
       </Text>
       <Pill label={uis} tone={uis} />
-      <Ionicons name="chevron-forward" size={16} color={tokens.slate400} style={{ marginLeft: 10 }} />
+      <Ionicons name="chevron-forward" size={16} color="#667085" style={{ marginLeft: 10 }} />
     </Pressable>
   );
 }

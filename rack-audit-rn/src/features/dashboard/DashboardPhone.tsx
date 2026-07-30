@@ -151,7 +151,7 @@ function EmptyOngoingCard() {
   const { tokens } = useTheme();
   return (
     <Card style={styles.emptyCard}>
-      <Ionicons name="cube-outline" size={26} color={tokens.slate400} />
+      <Ionicons name="cube-outline" size={26} color="#667085" />
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No audit in progress</Text>
       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Open a task below to start one.</Text>
     </Card>
