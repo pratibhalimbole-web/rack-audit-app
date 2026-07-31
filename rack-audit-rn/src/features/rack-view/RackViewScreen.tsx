@@ -22,9 +22,16 @@ import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
 import { buildBayDiagram } from './buildBayDiagram';
 
-type Params = { auditId: string; layout: string; rackId: string; bay: string };
+type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string };
 
 const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Completed: 'Completed' } as const;
+
+// Pallet ID shown to the inspector — level + pallet number on that level,
+// e.g. level 5 / pallet 1 -> "P-0501" — distinct from the location's
+// internal `code` (rack/bay-scoped) used for lookups and saving records.
+function palletIdFor(loc: { level?: number; slot?: number; code: string }): string {
+  return loc.level != null && loc.slot != null ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}` : loc.code;
+}
 
 // Ports renderRackView() + buildBayDiagram + renderRackViewSkuPanel
 // (rack-audit-app.html ~2820-3223) — the tablet-only schematic elevation of
@@ -45,8 +52,8 @@ export function RackViewScreen() {
 
   const [rackCode, setRackCode] = useState(params.rackId);
   const [bayCode, setBayCode] = useState(params.bay);
-  const [pickerField, setPickerField] = useState<'rack' | 'bay' | null>(null);
-  const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
+  const [pickerField, setPickerField] = useState<'rack' | 'bay' | 'pallet' | null>(null);
+  const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   const [scanCycle, setScanCycle] = useState(0);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
@@ -94,7 +101,7 @@ export function RackViewScreen() {
   }));
 
   const seedKey = `${auditId}|${layout}|${rackCode}|${bayCode}`;
-  const seedKeyRef = useRef<string | null>(null);
+  const seedKeyRef = useRef<string | null>(seedKey);
   useEffect(() => {
     if (seedKeyRef.current !== seedKey) {
       seedKeyRef.current = seedKey;
@@ -114,6 +121,19 @@ export function RackViewScreen() {
     return () => clearTimeout(t);
   }, [scanFeedback]);
 
+  // The requested layout/rack/bay (from route params or a stale picker
+  // selection) may not exist in this audit's tree — rather than dead-ending
+  // on an error, fall back to the first rack/bay so Rack View for this
+  // task always renders something the inspector can act on.
+  const fallbackLayoutObj = tree ? (findLayoutIn(tree, layout) ?? tree.layouts[0]) : undefined;
+  const fallbackRackObj = tree && fallbackLayoutObj ? (findRackIn(tree, fallbackLayoutObj.name, rackCode) ?? fallbackLayoutObj.racks[0]) : undefined;
+  const fallbackBayObj = fallbackRackObj?.bays.find((b) => b.code === bayCode) ?? fallbackRackObj?.bays[0];
+
+  useEffect(() => {
+    if (fallbackRackObj && fallbackRackObj.code !== rackCode) setRackCode(fallbackRackObj.code);
+    if (fallbackBayObj && fallbackBayObj.code !== bayCode) setBayCode(fallbackBayObj.code);
+  }, [fallbackRackObj?.code, fallbackBayObj?.code]);
+
   if (!audit || isLoading || !tree) {
     return (
       <View style={[styles.loading, { backgroundColor: tokens.muted }]}>
@@ -122,14 +142,14 @@ export function RackViewScreen() {
     );
   }
 
-  const layoutObj = findLayoutIn(tree, layout);
-  const rackObj = findRackIn(tree, layout, rackCode);
-  const bayObj = rackObj?.bays.find((b) => b.code === bayCode);
+  const layoutObj = fallbackLayoutObj;
+  const rackObj = fallbackRackObj;
+  const bayObj = fallbackBayObj;
 
   if (!layoutObj || !rackObj || !bayObj) {
     return (
       <View style={[styles.loading, { backgroundColor: tokens.muted }]}>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>That bay isn't in your assigned scope.</Text>
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>No bays are in scope for this task yet.</Text>
         <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
           <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold }}>Go back</Text>
         </Pressable>
@@ -142,6 +162,10 @@ export function RackViewScreen() {
 
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
   const bayOptions: SheetOption[] = rackObj.bays.map((b) => ({ value: b.code, label: `Bay ${b.code}` }));
+  const palletOptions: SheetOption[] = bayObj.locations.map((l) => ({
+    value: l.code,
+    label: palletIdFor(l),
+  }));
 
   const handlePickRack = (code: string) => {
     const nextRack = findRackIn(tree, layout, code);
@@ -151,6 +175,10 @@ export function RackViewScreen() {
   };
   const handlePickBay = (code: string) => {
     setBayCode(code);
+    setPickerField(null);
+  };
+  const handlePickPallet = (code: string) => {
+    setSelectedLoc(code);
     setPickerField(null);
   };
 
@@ -247,11 +275,19 @@ export function RackViewScreen() {
             </>
           ) : null}
         </View>
-        <ToolbarField
-          label={selectedLocObj ? (selectedLocObj.slot != null ? `Pallet ${String(selectedLocObj.slot).padStart(2, '0')}` : selectedLocObj.code) : '—'}
-          fixed
-          tag={selectedLocObj?.status}
-        />
+        <View>
+          <ToolbarField
+            label={selectedLocObj ? palletIdFor(selectedLocObj) : 'Select Pallet'}
+            open={pickerField === 'pallet'}
+            onPress={() => setPickerField(pickerField === 'pallet' ? null : 'pallet')}
+          />
+          {pickerField === 'pallet' ? (
+            <>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
+              <InlineDropdown options={palletOptions} selectedValue={selectedLoc ?? ''} onSelect={handlePickPallet} />
+            </>
+          ) : null}
+        </View>
         <Pressable onPress={() => setScannerOpen('pallet')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
         </Pressable>
@@ -555,7 +591,13 @@ export function RackViewScreen() {
 function ToolbarField({ label, fixed, tag, open, onPress }: { label: string; fixed?: boolean; tag?: string; open?: boolean; onPress?: () => void }) {
   const { tokens } = useTheme();
   const content = (
-    <View style={[styles.toolbarField, { backgroundColor: fixed ? tokens.muted : tokens.card, borderColor: open ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}>
+    <View
+      style={[
+        styles.toolbarField,
+        !fixed ? styles.toolbarFieldDropdown : null,
+        { backgroundColor: fixed ? tokens.muted : tokens.card, borderColor: open ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg },
+      ]}
+    >
       <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }} numberOfLines={1}>
         {label}
       </Text>
@@ -599,8 +641,9 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   toolbarField: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, height: 36, minWidth: 70 },
+  toolbarFieldDropdown: { width: 118, justifyContent: 'space-between' },
   scanIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  inlineDropdown: { position: 'absolute', top: 40, left: 0, minWidth: 160, borderWidth: 1, zIndex: 30, elevation: 30 },
+  inlineDropdown: { position: 'absolute', top: 40, left: 0, width: 160, borderWidth: 1, zIndex: 30, elevation: 30 },
   inlineDropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
   body: { flex: 1, padding: 16 },
   diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },

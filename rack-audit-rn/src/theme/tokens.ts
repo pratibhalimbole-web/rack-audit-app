@@ -164,7 +164,7 @@ export const lightTheme: ThemeTokens = {
   tableRowHover: 'rgba(15,23,42,0.04)',
 
   shadow: { color: '#1e293b', opacity: 0.14, radius: 4, elevation: 3 },
-  shadowCard: { color: '#2563eb', opacity: 0.16, radius: 10, elevation: 2 },
+  shadowCard: { color: '#2563eb', opacity: 0.05, radius: 18, elevation: 1 },
   shadowPress: { color: '#0f172a', opacity: 0.06, radius: 1, elevation: 1 },
   scrim: 'rgba(255,255,255,.82)',
   tabbarBg: 'rgba(255,255,255,.4)',
@@ -219,7 +219,7 @@ export const darkTheme: ThemeTokens = {
   tableRowHover: 'rgba(250,250,250,.05)',
 
   shadow: { color: '#000000', opacity: 0.4, radius: 2, elevation: 4 },
-  shadowCard: { color: '#000000', opacity: 0.4, radius: 10, elevation: 3 },
+  shadowCard: { color: '#000000', opacity: 0.12, radius: 18, elevation: 2 },
   shadowPress: { color: '#000000', opacity: 0.3, radius: 1, elevation: 1 },
   scrim: 'rgba(23,23,23,.82)',
   tabbarBg: 'rgba(23,23,23,.4)',

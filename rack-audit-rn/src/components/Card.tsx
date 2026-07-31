@@ -14,8 +14,8 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
         {
           backgroundColor: tokens.card,
           borderColor: tokens.border,
-          borderRadius: tokens.radius.xl,
-          ...applyShadow(tokens.shadow),
+          borderRadius: tokens.radius.xxl,
+          ...applyShadow(tokens.shadowCard),
         },
         style,
       ]}

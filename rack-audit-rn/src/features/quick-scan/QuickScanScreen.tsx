@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
 import { mine, uiStatus } from '@/lib/auditLogic';
+import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
 import { QUICK_SCAN_POOL } from '@/lib/mockData';
 import type { QrPayload, QuickScanEntry } from '@/lib/types';
@@ -19,8 +20,24 @@ import { useAudits } from '../dashboard/hooks';
 // same as findAuditForScan(). Non-location codes (pallet/SKU) only make
 // sense inside an already-open count sheet, so they're rejected here with a
 // shortcut back to wherever counting was last in progress, if anywhere.
+function openAuditLocation(isTablet: boolean, loc: { auditId: string; layout: string; rack: string; bay: string; loc: string }) {
+  if (isTablet) {
+    router.push({
+      pathname: '/audit/[auditId]/rack/[rackId]',
+      params: { auditId: loc.auditId, rackId: loc.rack, layout: loc.layout, bay: loc.bay, loc: loc.loc },
+    } as never);
+  } else {
+    router.push({
+      pathname: '/audit/[auditId]/count-sheet',
+      params: { auditId: loc.auditId, layout: loc.layout, rack: loc.rack, bay: loc.bay, loc: loc.loc },
+    } as never);
+  }
+}
+
 export function QuickScanScreen() {
   const { tokens } = useTheme();
+  const device = useDeviceClass();
+  const isTablet = device === 'tablet';
   const { data: audits = [] } = useAudits();
   const [scanCount, setScanCount] = useState(0);
   const [code, setCode] = useState<QrPayload | null>(null);
@@ -103,15 +120,12 @@ export function QuickScanScreen() {
           <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{matched.audit_id}</Text>
         </Card>
         <Pressable
-          onPress={() =>
-            router.push({
-              pathname: '/audit/[auditId]/count-sheet',
-              params: { auditId: matched.audit_id, layout: code.layout, rack: code.rack, bay: code.bay, loc: code.loc },
-            } as never)
-          }
+          onPress={() => openAuditLocation(isTablet, { auditId: matched.audit_id, layout: code.layout, rack: code.rack, bay: code.bay, loc: code.loc })}
           style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
         >
-          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Open Count Sheet</Text>
+          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+            {isTablet ? 'Open Rack View' : 'Open Count Sheet'}
+          </Text>
           <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
         </Pressable>
         <Pressable onPress={handleScan} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
@@ -141,16 +155,13 @@ export function QuickScanScreen() {
         {ongoing && ongoingLastSaved ? (
           <Pressable
             onPress={() =>
-              router.push({
-                pathname: '/audit/[auditId]/count-sheet',
-                params: {
-                  auditId: ongoing.audit_id,
-                  layout: ongoingLastSaved.layout,
-                  rack: ongoingLastSaved.rack,
-                  bay: ongoingLastSaved.bay,
-                  loc: ongoingLastSaved.loc.code,
-                },
-              } as never)
+              openAuditLocation(isTablet, {
+                auditId: ongoing.audit_id,
+                layout: ongoingLastSaved.layout,
+                rack: ongoingLastSaved.rack,
+                bay: ongoingLastSaved.bay,
+                loc: ongoingLastSaved.loc.code,
+              })
             }
             style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
           >

@@ -315,10 +315,17 @@ export function CountSheetScreen() {
     await completeLocation(tree, ref);
     const next = nextPending(tree);
     if (next) {
-      router.push({
-        pathname: '/audit/[auditId]/count-sheet',
-        params: { auditId, layout: next.layout, rack: next.rack, bay: next.bay, loc: next.loc.code },
-      } as never);
+      if (isTablet) {
+        router.push({
+          pathname: '/audit/[auditId]/rack/[rackId]',
+          params: { auditId, rackId: next.rack, layout: next.layout, bay: next.bay, loc: next.loc.code },
+        } as never);
+      } else {
+        router.push({
+          pathname: '/audit/[auditId]/count-sheet',
+          params: { auditId, layout: next.layout, rack: next.rack, bay: next.bay, loc: next.loc.code },
+        } as never);
+      }
     } else {
       router.push({ pathname: '/audit/[auditId]/summary', params: { auditId } } as never);
     }

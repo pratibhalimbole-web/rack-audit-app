@@ -83,9 +83,16 @@ export function AuditDetailsScreen() {
   const onPressStart = () => {
     if (showCompletedState) {
       router.push({ pathname: '/audit/[auditId]/summary', params: { auditId: audit.audit_id } } as never);
-    } else {
-      router.push({ pathname: '/audit/[auditId]/count-sheet', params: { auditId: audit.audit_id } } as never);
+      return;
     }
+    if (isTablet) {
+      const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
+      if (targetBay) {
+        onPressBay(targetBay);
+        return;
+      }
+    }
+    router.push({ pathname: '/audit/[auditId]/count-sheet', params: { auditId: audit.audit_id } } as never);
   };
 
   const renderBayPill = (bay: FlatBay) => (

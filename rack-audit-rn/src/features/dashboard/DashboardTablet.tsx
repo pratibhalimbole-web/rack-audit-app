@@ -69,7 +69,7 @@ export function DashboardTablet() {
         </View>
 
         {banner ? (
-          <View style={[styles.banner, { borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+          <View style={[styles.banner, { borderColor: tokens.primary, borderRadius: tokens.radius.xl }]}>
             <BannerField label="Audit Name" value={banner.audit_name} />
             <BannerField label="Scheduled" value={`${fmtDate(banner.start_date)} to ${fmtDate(banner.end_date)}`} />
             <BannerField label="Total Locations" value={String(bannerProgress.rollup.locTotal)} />
@@ -88,23 +88,23 @@ export function DashboardTablet() {
 
         <View style={styles.overviewRow}>
           <Card style={styles.overviewCard}>
-            <View style={styles.cardHeadRow}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
-                Audit Overview
-              </Text>
+            <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
+              <View>
+                <Text style={[styles.cardTitle, { color: tokens.mutedForeground }]}>Audit Overview</Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
+                  Progress across all assigned audits
+                </Text>
+              </View>
               <OutlineButton label="See All" onPress={() => router.push('/tasks')} />
             </View>
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
-              Progress across all assigned audits
-            </Text>
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: 28, marginTop: 14 }}>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: 32, marginTop: 14, marginBottom: 8 }}>
               {overallPct}%
             </Text>
             <ProgressBar pct={overallPct} />
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
               {sumLoc.done}/{sumLoc.total} assigned locations counted
             </Text>
-            <View style={styles.statsRow}>
+            <View style={[styles.statsRow, { borderTopColor: tokens.border }]}>
               <Stat value={totalAudits} label="Total Audits" />
               <Stat value={ongoingCount} label="Ongoing" />
               <Stat value={completedCount} label="Completed" />
@@ -113,18 +113,22 @@ export function DashboardTablet() {
 
           {ongoing ? (
             <Card style={styles.overviewCard}>
-              <View style={styles.cardHeadRow}>
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
-                  Ongoing Audit
-                </Text>
+              <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
+                <View>
+                  <Text style={[styles.cardTitle, { color: tokens.mutedForeground }]}>Ongoing Audit</Text>
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
+                    Audit currently in progress
+                  </Text>
+                </View>
                 <OutlineButton
                   label="See Details"
                   onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: ongoing.audit_id } } as never)}
                 />
               </View>
-              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
-                {ongoing.audit_id} · {ongoing.audit_name}
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 12 }}>
+                {ongoing.audit_name}
               </Text>
+              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{ongoing.audit_id}</Text>
               <Text style={[styles.sectionLabel, { color: tokens.mutedForeground }]}>Inspection Details</Text>
               <View style={styles.detailGrid}>
                 <DetailField label="Warehouse" value={inspector?.warehouse ?? '—'} />
@@ -145,11 +149,9 @@ export function DashboardTablet() {
         </View>
 
         <Card>
-          <View style={styles.cardHeadRow}>
+          <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
             <View>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
-                My Audit Tasks
-              </Text>
+              <Text style={[styles.cardTitle, { color: tokens.mutedForeground }]}>My Audit Tasks</Text>
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>Total Audits : {totalAudits}</Text>
             </View>
             <OutlineButton label="View All Tasks" onPress={() => router.push('/tasks')} />
@@ -184,7 +186,7 @@ function Stat({ value, label }: { value: number; label: string }) {
   return (
     <View style={{ alignItems: 'center', flex: 1 }}>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>{value}</Text>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>{label}</Text>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{label}</Text>
     </View>
   );
 }
@@ -240,13 +242,14 @@ const styles = StyleSheet.create({
   body: { padding: 20, gap: 16 },
   syncLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   syncDot: { width: 6, height: 6, borderRadius: 3 },
-  banner: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 20, borderWidth: 1, borderStyle: 'dashed', padding: 16 },
-  bannerField: { minWidth: 120 },
+  banner: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 20, borderWidth: 1.5, borderStyle: 'dashed', padding: 16 },
+  bannerField: { flex: 1, minWidth: 120 },
   bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, height: 40, marginLeft: 'auto' },
   overviewRow: { flexDirection: 'row', gap: 16 },
   overviewCard: { flex: 1 },
-  cardHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statsRow: { flexDirection: 'row', marginTop: 16, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14 },
+  cardHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 12, marginBottom: 8 },
+  cardTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  statsRow: { flexDirection: 'row', gap: 28, marginTop: 20, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16 },
   sectionLabel: { fontSize: 11, fontWeight: '700', marginTop: 14, marginBottom: 8 },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   outlineBtn: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
