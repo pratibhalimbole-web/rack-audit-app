@@ -3,12 +3,13 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
+import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
 import { mine, uiStatus } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { QUICK_SCAN_POOL } from '@/lib/mockData';
+import { INVENTORY_POOL, QUICK_SCAN_POOL } from '@/lib/mockData';
 import type { QrPayload, QuickScanEntry } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -45,6 +46,7 @@ export function QuickScanScreen() {
   const [error, setError] = useState<string | null>(null);
   const [wrongKind, setWrongKind] = useState<'pallet' | 'sku' | null>(null);
   const [wrongLabel, setWrongLabel] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const candidates = useMemo(
     () => mine(audits).filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)),
@@ -68,22 +70,9 @@ export function QuickScanScreen() {
     return null;
   };
 
-  const handleScan = () => {
-    const item: QuickScanEntry = QUICK_SCAN_POOL[scanCount % QUICK_SCAN_POOL.length];
-    setScanCount((c) => c + 1);
-
-    if (item.kind !== 'location') {
-      setCode(null);
-      setMatchedAuditId(null);
-      setError(null);
-      setWrongKind(item.kind);
-      setWrongLabel(item.kind === 'pallet' ? item.code : `${item.code.sku} · ${item.code.name}`);
-      return;
-    }
-
+  const processLocationCode = (qrCode: QrPayload) => {
     setWrongKind(null);
     setWrongLabel(null);
-    const qrCode = item.code;
     const auditId = findAuditForScan(qrCode);
     if (auditId) {
       setCode(qrCode);
@@ -94,6 +83,52 @@ export function QuickScanScreen() {
       setMatchedAuditId(null);
       setError(`No assigned audit covers ${qrCode.layout} · Rack ${qrCode.rack} · Bay ${qrCode.bay}. It may be outside your scope.`);
     }
+  };
+
+  const processWrongKind = (kind: 'pallet' | 'sku', label: string) => {
+    setCode(null);
+    setMatchedAuditId(null);
+    setError(null);
+    setWrongKind(kind);
+    setWrongLabel(label);
+  };
+
+  // Fixture-cycle fallback ("Use test scan instead") — kept available for
+  // demoing without a printed QR code, same convention as every other real
+  // camera scan point in this app (Rack View's pallet/batch scans, Count
+  // Sheet's location/SKU scans).
+  const handleSimulatedScan = () => {
+    const item: QuickScanEntry = QUICK_SCAN_POOL[scanCount % QUICK_SCAN_POOL.length];
+    setScanCount((c) => c + 1);
+    if (item.kind !== 'location') {
+      processWrongKind(item.kind, item.kind === 'pallet' ? item.code : `${item.code.sku} · ${item.code.name}`);
+    } else {
+      processLocationCode(item.code);
+    }
+  };
+
+  // Real camera scan — storage-location QR codes encode JSON
+  // {layout,rack,bay,loc} (same shape Count Sheet's location scan expects);
+  // pallet/SKU QR codes are plain text ("P-..." / "SKU-...").
+  const handleRealScanned = (data: string) => {
+    setScannerOpen(false);
+    const trimmed = data.trim();
+    let parsed: QrPayload | null = null;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      parsed = null;
+    }
+    if (parsed && parsed.layout && parsed.rack && parsed.bay && parsed.loc) {
+      processLocationCode(parsed);
+      return;
+    }
+    if (trimmed.startsWith('P-')) {
+      processWrongKind('pallet', trimmed);
+      return;
+    }
+    const inv = INVENTORY_POOL.find((p) => p.sku === trimmed);
+    processWrongKind('sku', inv ? `${inv.sku} · ${inv.name}` : trimmed);
   };
 
   let body: React.ReactNode;
@@ -128,7 +163,7 @@ export function QuickScanScreen() {
           </Text>
           <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
         </Pressable>
-        <Pressable onPress={handleScan} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+        <Pressable onPress={() => setScannerOpen(true)} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="scan-outline" size={16} color={tokens.foreground} />
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Scan Another Location</Text>
         </Pressable>
@@ -171,7 +206,7 @@ export function QuickScanScreen() {
             <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
           </Pressable>
         ) : null}
-        <Pressable onPress={handleScan} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+        <Pressable onPress={() => setScannerOpen(true)} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="scan-outline" size={16} color={tokens.foreground} />
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Scan Again</Text>
         </Pressable>
@@ -184,7 +219,7 @@ export function QuickScanScreen() {
           <View style={[styles.glyphCircle, { backgroundColor: tokens.muted }]}>
             <Ionicons name="camera-outline" size={26} color="#667085" />
           </View>
-          <Pressable onPress={handleScan} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+          <Pressable onPress={() => setScannerOpen(true)} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
             <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Location QR</Text>
           </Pressable>
         </View>
@@ -207,6 +242,17 @@ export function QuickScanScreen() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader title="Quick Scan" sub="Jump to any assigned location" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
       <ScrollView contentContainerStyle={styles.body}>{body}</ScrollView>
+      <BarcodeScannerModal
+        visible={scannerOpen}
+        title="Scan Location QR"
+        hint="Point at a storage location QR code"
+        onScanned={handleRealScanned}
+        onUseSimulated={() => {
+          setScannerOpen(false);
+          handleSimulatedScan();
+        }}
+        onClose={() => setScannerOpen(false)}
+      />
     </View>
   );
 }

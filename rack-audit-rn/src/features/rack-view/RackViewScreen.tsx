@@ -447,74 +447,153 @@ export function RackViewScreen() {
               </ScrollView>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
-                {expectedSkus.length ? (
-                  <View style={[styles.expectedBox, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 8 }}>
-                      Expected on this Pallet · {scanLines.filter((l) => expectedSkus.some((e) => e.sku === l.sku)).length}/{expectedSkus.length} scanned
-                    </Text>
-                    {expectedSkus.map((exp) => {
-                      const foundIdx = scanLines.findIndex((l) => l.sku === exp.sku);
-                      const found = foundIdx !== -1 ? scanLines[foundIdx] : undefined;
-                      const status: 'pending' | 'matched' | 'mismatch' = !found ? 'pending' : found.qty === exp.qty ? 'matched' : 'mismatch';
-                      const statusColor = status === 'matched' ? tokens.rag.green.strong : status === 'mismatch' ? tokens.rag.red.strong : '#667085';
-                      return (
-                        <View key={exp.sku} style={styles.expectedRow}>
-                          <Ionicons
-                            name={status === 'matched' ? 'checkmark-circle' : status === 'mismatch' ? 'close-circle' : 'ellipse-outline'}
-                            size={18}
-                            color={statusColor}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{exp.sku}</Text>
-                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
-                              {exp.name} · Expected Qty {exp.qty}
-                            </Text>
-                          </View>
-                          {status === 'mismatch' ? (
-                            <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Found {found?.qty}</Text>
-                          ) : null}
-                          {issuesRaised.has(exp.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
-                          {found ? (
-                            <Pressable
-                              onPress={() => setExpandedIdx(foundIdx)}
-                              style={[styles.rowScanBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.sm }]}
-                            >
-                              <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
-                            </Pressable>
-                          ) : null}
-                        </View>
-                      );
-                    })}
-                  </View>
-                ) : null}
-
-                {/* SKUs scanned that aren't on the expected checklist at all —
-                    still reachable/editable, just called out separately. */}
-                {scanLines.map((line, idx) =>
-                  !expectedSkus.some((e) => e.sku === line.sku) ? (
-                    <View key={idx} style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.rag.amber.border ?? tokens.border, borderRadius: tokens.radius.lg }]}>
-                      <View style={[styles.unexpectedTag, { backgroundColor: tokens.rag.amber.soft, borderRadius: tokens.radius.sm }]}>
-                        <Ionicons name="alert-circle-outline" size={12} color={tokens.rag.amber.strong} />
-                        <Text style={{ color: tokens.rag.amber.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>Not on the expected list</Text>
+                {expectedSkus.length || scanLines.some((l) => !expectedSkus.some((e) => e.sku === l.sku)) ? (
+                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                    <View style={styles.expectedHeadRow}>
+                      <View style={[styles.expectedHeadIcon, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                        <Ionicons name="clipboard-outline" size={16} color={tokens.accentBlue.strong} />
                       </View>
-                      <View style={styles.expectedRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{line.sku}</Text>
-                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
-                            {line.name} · Qty {line.qty} · {line.condition}
+                      <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+                        Expected on this Pallet
+                      </Text>
+                      {expectedSkus.length ? (
+                        <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                          <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                            {scanLines.filter((l) => expectedSkus.some((e) => e.sku === l.sku)).length}/{expectedSkus.length}
                           </Text>
                         </View>
-                        {issuesRaised.has(line.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
-                        <Pressable
-                          onPress={() => setExpandedIdx(idx)}
-                          style={[styles.rowScanBtn, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.sm }]}
-                        >
-                          <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
-                        </Pressable>
-                      </View>
+                      ) : null}
                     </View>
-                  ) : null,
-                )}
+                    {(() => {
+                      const scored = expectedSkus.map((exp) => {
+                        const foundIdx = scanLines.findIndex((l) => l.sku === exp.sku);
+                        const found = foundIdx !== -1 ? scanLines[foundIdx] : undefined;
+                        const status: 'pending' | 'matched' | 'qtyMismatch' = !found ? 'pending' : found.qty === exp.qty ? 'matched' : 'qtyMismatch';
+                        return { exp, found, foundIdx, status };
+                      });
+                      const skuMismatchLines = scanLines
+                        .map((line, idx) => ({ line, idx }))
+                        .filter(({ line }) => !expectedSkus.some((e) => e.sku === line.sku));
+
+                      const groupHeader = (label: string, count: number, icon: keyof typeof Ionicons.glyphMap, rag: typeof tokens.rag.green | null) => (
+                        <View style={styles.groupHeadRow}>
+                          <Ionicons name={icon} size={13} color={rag ? rag.strong : '#667085'} />
+                          <Text
+                            style={{
+                              color: rag ? rag.strong : tokens.mutedForeground,
+                              fontWeight: tokens.fontWeight.bold,
+                              fontSize: tokens.text.xxs,
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.4,
+                            }}
+                          >
+                            {label} · {count}
+                          </Text>
+                        </View>
+                      );
+
+                      return (
+                        <>
+                          {skuMismatchLines.length ? (
+                            <View style={{ marginTop: 14 }}>
+                              {groupHeader('SKU Mismatch — Unexpected Item', skuMismatchLines.length, 'alert-circle', tokens.rag.red)}
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 3 }}>
+                                Scanned, but this SKU isn't on the expected list for this pallet at all.
+                              </Text>
+                              <View style={{ gap: 8, marginTop: 6 }}>
+                                {skuMismatchLines.map(({ line, idx }) => (
+                                  <View
+                                    key={idx}
+                                    style={[styles.expectedRow, { backgroundColor: tokens.rag.red.soft, borderColor: tokens.rag.red.border, borderRadius: tokens.radius.lg }]}
+                                  >
+                                    <Ionicons name="alert-circle" size={18} color={tokens.rag.red.strong} />
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>
+                                        {line.name} · {line.condition}
+                                      </Text>
+                                    </View>
+                                    <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: tokens.rag.red.border, borderRadius: tokens.radius.lg }]}>
+                                      <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Scanned {line.qty}</Text>
+                                    </View>
+                                    {issuesRaised.has(line.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
+                                    <Pressable
+                                      onPress={() => setExpandedIdx(idx)}
+                                      style={[styles.rowScanBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                                    >
+                                      <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
+                                    </Pressable>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          ) : null}
+
+                          {(
+                            [
+                              { key: 'qtyMismatch', label: 'Quantity Mismatch — Same SKU, Wrong Count', icon: 'swap-vertical', rag: tokens.rag.amber },
+                              { key: 'matched', label: 'Matched', icon: 'checkmark-circle', rag: tokens.rag.green },
+                              { key: 'pending', label: 'Awaiting Scan', icon: 'ellipse-outline', rag: null },
+                            ] as const
+                          ).map((group) => {
+                            const items = scored.filter((s) => s.status === group.key);
+                            if (!items.length) return null;
+                            return (
+                              <View key={group.key} style={{ marginTop: 14 }}>
+                                {groupHeader(group.label, items.length, group.icon, group.rag)}
+                                <View style={{ gap: 8, marginTop: 6 }}>
+                                  {items.map(({ exp, found, foundIdx, status }) => {
+                                    const rag = group.rag;
+                                    return (
+                                      <View
+                                        key={exp.sku}
+                                        style={[
+                                          styles.expectedRow,
+                                          { backgroundColor: rag ? rag.soft : tokens.muted, borderColor: rag ? rag.border : tokens.border, borderRadius: tokens.radius.lg },
+                                        ]}
+                                      >
+                                        <Ionicons name={status === 'matched' ? 'checkmark-circle' : status === 'qtyMismatch' ? 'swap-vertical' : 'ellipse-outline'} size={18} color={rag ? rag.strong : '#667085'} />
+                                        <View style={{ flex: 1 }}>
+                                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{exp.sku}</Text>
+                                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>{exp.name}</Text>
+                                        </View>
+                                        {status === 'pending' ? (
+                                          <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Exp {exp.qty}</Text>
+                                          </View>
+                                        ) : (
+                                          <>
+                                            <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Exp {exp.qty}</Text>
+                                            </View>
+                                            <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: rag ? rag.border : tokens.border, borderRadius: tokens.radius.lg }]}>
+                                              <Text style={{ color: rag ? rag.strong : tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>
+                                                Actual {found?.qty}
+                                              </Text>
+                                            </View>
+                                          </>
+                                        )}
+                                        {issuesRaised.has(exp.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
+                                        {found ? (
+                                          <Pressable
+                                            onPress={() => setExpandedIdx(foundIdx)}
+                                            style={[styles.rowScanBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                                          >
+                                            <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
+                                          </Pressable>
+                                        ) : null}
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </>
+                      );
+                    })()}
+                  </View>
+                ) : null}
 
                 {!expectedSkus.length && !scanLines.length ? (
                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
@@ -537,8 +616,13 @@ export function RackViewScreen() {
               </Pressable>
             ) : null}
             <View style={styles.skuPanelFooter}>
-              <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+              <Pressable
+                onPress={() => (expandedIdx !== null ? setExpandedIdx(null) : setSkuPanelOpen(false))}
+                style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+              >
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
+                  {expandedIdx !== null ? 'Back' : 'Cancel'}
+                </Text>
               </Pressable>
               <Pressable onPress={handleSaveSkuPanel} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
                 <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
@@ -662,10 +746,14 @@ const styles = StyleSheet.create({
   skuPanelSlide: { width: 530, maxWidth: '90%', height: '100%' },
   skuPanel: { width: '100%', height: '100%', padding: 16 },
   skuPanelHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
-  expectedBox: { borderWidth: 1, padding: 12, marginBottom: 12 },
-  expectedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  expectedBox: { borderWidth: 1, padding: 14, marginBottom: 12 },
+  expectedHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  groupHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  expectedHeadIcon: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  countBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  expectedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 10, borderWidth: 1 },
+  qtyBadge: { paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
   rowScanBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  unexpectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, marginBottom: 4 },
   batchScanBtn: { flexDirection: 'row', gap: 8, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginBottom: 12 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
