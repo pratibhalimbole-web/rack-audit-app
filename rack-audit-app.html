@@ -31,7 +31,7 @@
        xl/2xl have no Figma equivalent yet, left as-is. */
     --radius:4px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:20px;
     --shadow: 0px 2px 4px 0px rgba(30,41,59,.14), 0 8px 22px rgba(15,23,42,.08);
-    --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 24px -8px rgba(37,99,235,.16);
+    --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 42px -4px rgba(37,99,235,.05);
     --shadow-press: 0 1px 2px rgba(15,23,42,.06);
     --scrim: rgba(255,255,255,.82);
     --tabbar-bg: rgba(255,255,255,.4);
@@ -92,7 +92,7 @@
       --slate-400:#737373; --slate-300:#525252;
       --table-surface:var(--muted); --table-row-hover:rgba(250,250,250,.05);
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
-      --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -8px rgba(0,0,0,.4);
+      --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 10px 38px -4px rgba(0,0,0,.2);
       --shadow-press: 0 1px 2px rgba(0,0,0,.3);
       --scrim: rgba(23,23,23,.82);
       --tabbar-bg: rgba(23,23,23,.4);
@@ -112,7 +112,7 @@
     --accent-purple:#a78bfa; --accent-purple-strong:#c4b5fd; --accent-purple-soft:rgba(124,58,237,.20); --accent-purple-border:rgba(124,58,237,.45);
     --slate-400:#737373; --slate-300:#525252; --table-surface:var(--muted); --table-row-hover:rgba(250,250,250,.05);
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
-      --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -8px rgba(0,0,0,.4);
+      --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 10px 38px -4px rgba(0,0,0,.2);
       --shadow-press: 0 1px 2px rgba(0,0,0,.3);
     --scrim: rgba(23,23,23,.82);
     --tabbar-bg: rgba(23,23,23,.4);
@@ -131,7 +131,7 @@
     --accent-purple:#7c3aed; --accent-purple-strong:#6d28d9; --accent-purple-soft:#ede9fe; --accent-purple-border:#ddd6fe;
     --slate-400:#94a3b8; --slate-300:#cbd5e1; --table-surface:var(--card); --table-row-hover:rgba(15,23,42,.04);
     --shadow: 0px 2px 4px 0px rgba(30,41,59,.14), 0 8px 22px rgba(15,23,42,.08);
-    --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 24px -8px rgba(37,99,235,.16);
+    --shadow-card: 0 1px 2px rgba(15,23,42,.05), 0 10px 42px -4px rgba(37,99,235,.05);
     --shadow-press: 0 1px 2px rgba(15,23,42,.06);
     --scrim: rgba(255,255,255,.82);
     --tabbar-bg: rgba(255,255,255,.4);
@@ -414,7 +414,7 @@
   .issue-card-grid .todo-field .v{font-size:13.5px; font-weight:700; color:var(--foreground);}
 
   /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
-  .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--accent-blue-strong); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
+  .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--primary); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
   .audit-banner-field{display:flex; flex-direction:column; gap:8px; flex:1; min-width:140px;}
   .audit-banner-field .l{font-size:var(--text-xs); font-weight:700; color:var(--foreground);}
   .audit-banner-field .v{font-size:var(--text-sm); font-weight:600; color:var(--muted-foreground); display:flex; align-items:center; gap:6px;}
@@ -1400,6 +1400,34 @@ function seedEvidenceForFlaggedLines(){
 }
 seedEvidenceForFlaggedLines();
 
+// Demo "expected on this pallet" checklist data for the Rack View
+// Reconciliation Form — seeded from whatever's already recorded at each
+// location (so most pallets show as fully matched once the inspector
+// re-scans the same items), plus deterministic extra/adjusted lines so the
+// checklist's SKU Mismatch / Quantity Mismatch groups have real, inspectable
+// cases rather than everything landing on "Matched".
+const EXPECTED_SKUS = {};
+function buildExpectedSkus(){
+  let idx = 0;
+  Object.keys(LOCATIONS).forEach(auditId => {
+    allLocations(auditId).forEach(({ loc }) => {
+      const found = loc.pallets[0] && loc.pallets[0].lines[0];
+      if (!found) { idx++; return; }
+      const lineCount = idx % 5 === 0 ? 4 : idx % 3 === 0 ? 2 : 1;
+      const lines = [{ sku: found.sku, name: found.name, lot: found.lot, qty: found.qty }];
+      for (let i = 1; i < lineCount; i++) {
+        const extra = INVENTORY_POOL[(idx + i) % INVENTORY_POOL.length];
+        if (lines.some(l => l.sku === extra.sku)) continue;
+        lines.push({ sku: extra.sku, name: extra.name, lot: extra.lot, qty: 4 + ((idx + i * 3) % 16) });
+      }
+      if (idx % 6 === 0) lines[0] = { ...lines[0], qty: lines[0].qty + 2 };
+      EXPECTED_SKUS[loc.code] = lines;
+      idx++;
+    });
+  });
+}
+buildExpectedSkus();
+
 function findLayoutIn(auditId, layoutName){ return ((LOCATIONS[auditId]||{}).layouts||[]).find(l => l.name === layoutName); }
 function layoutsOf(auditId){ return (LOCATIONS[auditId]||{}).layouts || []; }
 
@@ -1965,8 +1993,10 @@ function renderDashboardTablet(){
       <div class="card">
         <div class="card-header">
           <div class="card-title-row"><h2>Ongoing Audit</h2><button class="btn outline small" onclick="push('auditDetails', {auditId:'${ongoing.audit_id}'})">See Details</button></div>
-          <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${ongoing.audit_id} · ${ongoing.audit_name}</div>
+          <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">Audit currently in progress</div>
         </div>
+        <div style="font-weight:700; font-size:var(--text-sm); color:var(--foreground); margin-top:12px;">${ongoing.audit_name}</div>
+        <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${ongoing.audit_id}</div>
         <div class="op-section-label" style="margin-top:14px; border-top:none; padding-top:0;">Inspection Details</div>
         <div class="op-detail-grid">
           <div><div class="l">Warehouse</div><div class="v">${INSPECTOR.warehouse}</div></div>
@@ -2527,9 +2557,16 @@ function renderAuditDetails(){
   `;
 
   const startLabel = isSubmitted ? 'View Audit Summary' : isFullyCounted ? 'View Audit Summary' : (a.status === 'In Progress' ? 'Resume Audit' : 'Start Audit');
+  // Tablet: same destination a bay pill uses (Rack View) rather than jumping
+  // straight to Count Sheet — picks the first pending bay (or the first bay
+  // if everything's already done) so Start/Resume Audit always lands
+  // somewhere actionable, mirroring bayPill()'s per-device routing above.
+  const startTargetBay = isTablet ? (flatBays.find(b => !b.done) || flatBays[0]) : null;
   const startAction = showCompletedState
     ? `push('auditSummary', {auditId:'${a.audit_id}'})`
-    : `push('countSheet', {auditId:'${a.audit_id}'})`;
+    : startTargetBay
+      ? `push('rackView', {auditId:'${a.audit_id}', layout:'${startTargetBay.layout}', rack:'${startTargetBay.rack}', bay:'${startTargetBay.code}', loc:'${startTargetBay.openLoc}'})`
+      : `push('countSheet', {auditId:'${a.audit_id}'})`;
 
   return `
     ${headerBlock({ title:'Audit Details', sub:`${a.audit_id} · ${INSPECTOR.warehouse}`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
@@ -2614,7 +2651,55 @@ function openQuickScan(){
   STATE.quickScan = { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null };
   railTo('scan');
 }
+// Tablet routes into Rack View (same destination a bay pill / Start Audit
+// use) instead of jumping straight to Count Sheet — mirrors every other
+// "enter an audit task" entry point's per-device routing.
+function quickScanOpenLocation(auditId, layout, rack, bay, loc){
+  if (STATE.device === 'tablet') push('rackView', { auditId, layout, rack, bay, loc });
+  else push('countSheet', { auditId, layout, rack, bay, loc });
+}
+function applyQuickScanLocation(code){
+  const qs = STATE.quickScan;
+  qs.wrongKind = null; qs.wrongLabel = null;
+  const audit = findAuditForScan(code);
+  if (audit) {
+    qs.code = code; qs.error = null; qs.matchedAuditId = audit.audit_id;
+    toast(`Matched to ${audit.audit_id}`);
+  } else {
+    qs.code = null; qs.error = `No assigned audit covers ${code.layout} · Rack ${code.rack} · Bay ${code.bay}. It may be outside your scope.`; qs.matchedAuditId = null;
+    toast('No matching audit for this location', 'error');
+  }
+  render();
+}
+// Real camera scan — storage-location QR codes encode JSON
+// {layout,rack,bay,loc} (same shape scanLocationQR expects); pallet/SKU QR
+// codes are plain text ("P-..." / "SKU-...").
+function applyQuickScanResult(text){
+  const qs = STATE.quickScan;
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch(e) { parsed = null; }
+  if (parsed && parsed.layout && parsed.rack && parsed.bay && parsed.loc) {
+    applyQuickScanLocation(parsed);
+    return;
+  }
+  qs.code = null; qs.matchedAuditId = null; qs.error = null;
+  if (text.indexOf('P-') === 0) {
+    qs.wrongKind = 'pallet'; qs.wrongLabel = text;
+  } else {
+    const inv = INVENTORY_POOL.find(p => p.sku === text);
+    qs.wrongKind = 'sku'; qs.wrongLabel = inv ? `${inv.sku} · ${inv.name}` : text;
+  }
+  toast(`That's a ${qs.wrongKind === 'pallet' ? 'pallet' : 'SKU'} code, not a location`, 'error');
+  render();
+}
 function quickScan(){
+  if (!IS_REAL_MOBILE) return quickScanSimulated();
+  openCameraScan('Point at a storage location QR code', (text) => applyQuickScanResult(text.trim()));
+}
+// Desktop web preview has no camera — cycles through a fixture pool
+// (including pallet/SKU entries, to exercise the reject/rescan path too)
+// instead of a real decoded QR payload.
+function quickScanSimulated(){
   const qs = STATE.quickScan;
   const item = QUICK_SCAN_POOL[qs.scanCount % QUICK_SCAN_POOL.length];
   qs.scanCount++;
@@ -2632,17 +2717,7 @@ function quickScan(){
     return;
   }
 
-  qs.wrongKind = null; qs.wrongLabel = null;
-  const code = item.code;
-  const audit = findAuditForScan(code);
-  if (audit) {
-    qs.code = code; qs.error = null; qs.matchedAuditId = audit.audit_id;
-    toast(`Matched to ${audit.audit_id}`);
-  } else {
-    qs.code = null; qs.error = `No assigned audit covers ${code.layout} · Rack ${code.rack} · Bay ${code.bay}. It may be outside your scope.`; qs.matchedAuditId = null;
-    toast('No matching audit for this location', 'error');
-  }
-  render();
+  applyQuickScanLocation(item.code);
 }
 
 // Switching location while a pallet count is mid-entry (scanned but not yet
@@ -2866,6 +2941,114 @@ function renderScanLinesAccordion(scan, { withEvidence } = {}){
     </div>
   `).join('');
 }
+
+// Rack View's Reconciliation Form checklist — splits results into SKU
+// Mismatch / Quantity Mismatch / Matched / Awaiting Scan (instead of one
+// generic mixed list) so the two different kinds of "doesn't match" are
+// never confused for each other. Only used here; Count Sheet keeps
+// renderScanLinesAccordion's plain collapsed-row/edit-card list untouched.
+function expectedGroupHeadHtml(label, count, iconSvg, ragVar){
+  const color = ragVar ? `var(--rag-${ragVar}-strong)` : 'var(--muted-foreground)';
+  return `<div style="display:flex; align-items:center; gap:6px; margin-top:14px;">
+    <span style="color:${color}; display:inline-flex;">${iconSvg}</span>
+    <span style="color:${color}; font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.4px;">${label} · ${count}</span>
+  </div>`;
+}
+function expectedQtyBadgeHtml(label, ragVar){
+  const border = ragVar ? `var(--rag-${ragVar}-border)` : 'var(--border)';
+  const color = ragVar ? `var(--rag-${ragVar}-strong)` : 'var(--muted-foreground)';
+  return `<span style="border:1px solid ${border}; border-radius:var(--radius-lg); padding:4px 8px; font-size:var(--text-xs); font-weight:700; color:${color}; background:var(--card); flex-shrink:0; white-space:nowrap;">${label}</span>`;
+}
+function expectedRowHtml({ icon, sku, sub, ragVar, badgesHtml, idx }){
+  const bg = ragVar ? `var(--rag-${ragVar}-soft)` : 'var(--muted)';
+  const border = ragVar ? `var(--rag-${ragVar}-border)` : 'var(--border)';
+  const iconColor = ragVar ? `var(--rag-${ragVar}-strong)` : '#667085';
+  return `
+    <div style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid ${border}; background:${bg}; border-radius:var(--radius-lg); margin-top:8px;">
+      <span style="color:${iconColor}; display:inline-flex; flex-shrink:0;">${icon}</span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:var(--text-sm); color:var(--foreground);">${sku}</div>
+        <div style="font-size:10.5px; color:var(--muted-foreground); margin-top:1px;">${sub}</div>
+      </div>
+      ${badgesHtml}
+      ${idx != null ? `<button type="button" class="icon-action-btn" onclick="editLine(${idx})" aria-label="Edit ${sku}">${ICON.pencil}</button>` : ''}
+    </div>
+  `;
+}
+function renderRackViewExpectedChecklist(scan){
+  const expectedSkus = EXPECTED_SKUS[scan.loc] || [];
+  const skuMismatchLines = scan.lines
+    .map((line, idx) => ({ line, idx }))
+    .filter(({ line }) => !expectedSkus.some(e => e.sku === line.sku));
+
+  if (!expectedSkus.length && !skuMismatchLines.length) {
+    return `<div style="color:var(--muted-foreground); font-size:var(--text-sm); text-align:center; padding:20px 0;">No SKUs scanned yet — use the scanner above.</div>`;
+  }
+
+  const scored = expectedSkus.map(exp => {
+    const foundIdx = scan.lines.findIndex(l => l.sku === exp.sku);
+    const found = foundIdx !== -1 ? scan.lines[foundIdx] : null;
+    const status = !found ? 'pending' : found.qty === exp.qty ? 'matched' : 'qtyMismatch';
+    return { exp, found, foundIdx, status };
+  });
+  const scannedCount = expectedSkus.length ? scan.lines.filter(l => expectedSkus.some(e => e.sku === l.sku)).length : 0;
+
+  let html = `
+    <div style="border:1px solid var(--border); border-radius:var(--radius-xl); background:var(--card); padding:14px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="width:28px; height:28px; border-radius:var(--radius-lg); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;">${ICON.box}</span>
+        <div style="flex:1; font-weight:700; font-size:var(--text-sm); color:var(--foreground);">Expected on this Pallet</div>
+        ${expectedSkus.length ? `<span style="background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-weight:700; font-size:var(--text-xs); padding:4px 10px; border-radius:var(--radius-lg);">${scannedCount}/${expectedSkus.length}</span>` : ''}
+      </div>
+  `;
+
+  if (skuMismatchLines.length) {
+    html += expectedGroupHeadHtml('SKU Mismatch — Unexpected Item', skuMismatchLines.length, ICON.close, 'red');
+    html += `<div style="font-size:10.5px; color:var(--muted-foreground); margin-top:3px;">Scanned, but this SKU isn't on the expected list for this pallet at all.</div>`;
+    skuMismatchLines.forEach(({ line, idx }) => {
+      html += expectedRowHtml({
+        icon: ICON.close, sku: line.sku, sub: `${line.name} · ${line.condition}`, ragVar: 'red', idx,
+        badgesHtml: expectedQtyBadgeHtml(`Scanned ${line.qty}`, 'red'),
+      });
+    });
+  }
+
+  const groupDefs = [
+    { key:'qtyMismatch', label:'Quantity Mismatch — Same SKU, Wrong Count', rag:'amber', icon: ICON.sync },
+    { key:'matched', label:'Matched', rag:'green', icon: ICON.check },
+    { key:'pending', label:'Awaiting Scan', rag:null, icon: ICON.dot },
+  ];
+  groupDefs.forEach(g => {
+    const items = scored.filter(s => s.status === g.key);
+    if (!items.length) return;
+    html += expectedGroupHeadHtml(g.label, items.length, g.icon, g.rag);
+    items.forEach(({ exp, found, foundIdx, status }) => {
+      const badgesHtml = status === 'pending'
+        ? expectedQtyBadgeHtml(`Exp ${exp.qty}`, null)
+        : `${expectedQtyBadgeHtml(`Exp ${exp.qty}`, null)}${expectedQtyBadgeHtml(`Actual ${found.qty}`, g.rag)}`;
+      html += expectedRowHtml({ icon: g.icon, sku: exp.sku, sub: exp.name, ragVar: g.rag, idx: found ? foundIdx : null, badgesHtml });
+    });
+  });
+
+  html += `</div>`;
+  return html;
+}
+// The single expanded line's own edit card (skuEditCardBody + evidence +
+// Save/Delete footer) — same markup renderScanLinesAccordion's active branch
+// uses, factored out so Rack View can show it standalone (replacing the
+// checklist entirely while a line is open) instead of alongside a full
+// collapsed-row list of every other line.
+function renderRackViewActiveLineCard(scan, idx){
+  const line = scan.lines[idx];
+  if (!line) return '';
+  return `
+    <div class="sku-card active">
+      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
+      ${renderEvidenceBlock(idx, line)}
+      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
+    </div>
+  `;
+}
 /* ================= RACK VIEW (tablet-only) =================
    Reached from a bay pill on Audit Details — shows a schematic elevation of
    the tapped bay (levels stacked bottom-up, a fixed count of slots per
@@ -2994,6 +3177,30 @@ function rackViewPickerBayListHtml(auditId, search){
     return `<button type="button" class="rvpick-item ${isSelected?'selected':''}" onclick="chooseRackViewBay('${b.code}')"><span>Bay ${b.code}</span>${isSelected ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>`;
   }).join('');
 }
+// Pallet ID shown to the inspector — level + pallet number on that level,
+// e.g. level 5 / pallet 1 -> "P-0501" — distinct from the location's
+// internal `code` (rack/bay-scoped) used for lookups and saving records.
+function palletIdFor(loc){
+  return (loc.level != null && loc.slot != null) ? `P-${String(loc.level).padStart(2,'0')}${String(loc.slot).padStart(2,'0')}` : loc.code;
+}
+function rackViewPickerPalletListHtml(auditId, search){
+  const rackObj = findRackIn(auditId, STATE.params.layout, STATE.params.rack);
+  const bayObj = rackObj ? rackObj.bays.find(b => b.code === STATE.params.bay) : null;
+  const locs = bayObj ? bayObj.locations : [];
+  const q = (search || '').trim().toLowerCase();
+  const filtered = locs.filter(l => !q || palletIdFor(l).toLowerCase().includes(q));
+  if (!filtered.length) return `<div class="rvpick-empty">No pallets match "${search}"</div>`;
+  return filtered.map(l => {
+    const isSelected = l.code === STATE.rackViewClickedLoc;
+    return `<button type="button" class="rvpick-item ${isSelected?'selected':''}" onclick="chooseRackViewPallet('${l.code}')"><span>${palletIdFor(l)}</span>${isSelected ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>`;
+  }).join('');
+}
+function chooseRackViewPallet(locCode){
+  STATE.rackViewClickedLoc = locCode;
+  STATE.params.loc = locCode;
+  STATE.rackViewPicker = null;
+  render();
+}
 function openRackViewPicker(field){ STATE.rackViewPicker = { field, search:'' }; render(); }
 function closeRackViewPicker(){ STATE.rackViewPicker = null; render(); }
 // Search only replaces the list (not the whole panel) so the input's focus
@@ -3002,7 +3209,8 @@ function filterRackViewPicker(auditId, value){
   STATE.rackViewPicker.search = value;
   const list = document.getElementById('rvpick-list');
   if (!list) return;
-  list.innerHTML = STATE.rackViewPicker.field === 'rack' ? rackViewPickerRackListHtml(auditId, value) : rackViewPickerBayListHtml(auditId, value);
+  const field = STATE.rackViewPicker.field;
+  list.innerHTML = field === 'rack' ? rackViewPickerRackListHtml(auditId, value) : field === 'bay' ? rackViewPickerBayListHtml(auditId, value) : rackViewPickerPalletListHtml(auditId, value);
 }
 function chooseRackViewRack(layoutName, rackCode){
   const rackObj = findRackIn(STATE.params.auditId, layoutName, rackCode);
@@ -3250,6 +3458,13 @@ function renderEvidenceBlock(idx, line){
 function renderRackViewSkuPanel(){
   if (!STATE.rackViewSkuPanelOpen || !STATE.scan || !STATE.scan.lines.length) return '';
   const scan = STATE.scan;
+  // Same activeIdx rule renderScanLinesAccordion uses — while a specific
+  // line is expanded for editing, the footer's left button should just back
+  // out to the checklist (like the line's own Save/collapseLine), not close
+  // the whole Reconciliation Form the way "Cancel" implies.
+  const activeIdx = scan.expandedIdx === -1 ? -1
+    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
+  const isEditingLine = activeIdx !== -1;
   return `
     <button type="button" class="rv-sku-panel-backdrop" onclick="cancelRackViewSkuScan()" aria-label="Close"></button>
     <div class="rv-sku-panel" onclick="event.stopPropagation()">
@@ -3261,10 +3476,10 @@ function renderRackViewSkuPanel(){
         <button type="button" class="card-icon-btn" onclick="scanSku()" title="Scan another SKU" aria-label="Scan another SKU">${ICON.qr}</button>
       </div>
       <div class="rv-sku-panel-body">
-        <div class="rv-sku-list">${renderScanLinesAccordion(scan, { withEvidence: true })}</div>
+        <div class="rv-sku-list">${isEditingLine ? renderRackViewActiveLineCard(scan, activeIdx) : renderRackViewExpectedChecklist(scan)}</div>
       </div>
       <div class="rv-sku-panel-footer">
-        <button type="button" class="btn outline" onclick="cancelRackViewSkuScan()">Cancel</button>
+        <button type="button" class="btn outline" onclick="${isEditingLine ? 'collapseLine()' : 'cancelRackViewSkuScan()'}">${isEditingLine ? 'Back' : 'Cancel'}</button>
         <button type="button" class="btn primary" onclick="saveRackViewSkuScan()">Save</button>
       </div>
     </div>
@@ -3275,16 +3490,27 @@ function renderRackView(){
   const { auditId, layout, rack, bay } = STATE.params;
   const a = AUDITS.find(x => x.audit_id === auditId);
   if (!a) return renderTasks();
-  const layoutObj = findLayoutIn(auditId, layout);
-  const rackObj = findRackIn(auditId, layout, rack);
-  const bayObj = rackObj ? rackObj.bays.find(b => b.code === bay) : null;
+  // The requested layout/rack/bay (route params, or a stale picker selection)
+  // may not exist in this audit's tree — rather than dead-ending back to
+  // Audit Details, fall back to the first rack/bay so Rack View for this
+  // task always renders something the inspector can act on.
+  const layouts = layoutsOf(auditId);
+  const layoutObj = findLayoutIn(auditId, layout) || layouts[0];
+  const rackObj = (layoutObj && findRackIn(auditId, layoutObj.name, rack)) || (layoutObj && layoutObj.racks[0]);
+  const bayObj = (rackObj && rackObj.bays.find(b => b.code === bay)) || (rackObj && rackObj.bays[0]);
   if (!layoutObj || !rackObj || !bayObj) return renderAuditDetails();
+  // Keep STATE.params in sync with whatever was actually resolved above —
+  // the Rack/Bay picker list functions (rackViewPickerBayListHtml etc.) read
+  // STATE.params directly, so a fallback here must be reflected there too.
+  STATE.params.layout = layoutObj.name;
+  STATE.params.rack = rackObj.code;
+  STATE.params.bay = bayObj.code;
 
   // Nothing is highlighted until the inspector actually taps a cell — no
   // auto-picked "first open location" default. Landing on this bay fresh
   // (a new auditId/layout/rack/bay combo, e.g. via a bay pill elsewhere)
   // clears any selection left over from a previously viewed bay.
-  const seedKey = `${auditId}|${layout}|${rack}|${bay}`;
+  const seedKey = `${auditId}|${layoutObj.name}|${rackObj.code}|${bayObj.code}`;
   if (STATE._rackViewSeedKey !== seedKey) {
     STATE._rackViewSeedKey = seedKey;
     STATE.rackViewClickedLoc = null;
@@ -3307,6 +3533,13 @@ function renderRackView(){
       <div id="rvpick-list">${rackViewPickerBayListHtml(auditId, picker.search)}</div>
     </div>
   ` : '';
+  const palletDropdown = picker && picker.field === 'pallet' ? `
+    <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
+    <div class="rvpick-panel" onclick="event.stopPropagation()">
+      <div class="rvpick-search">${ICON.search}<input autofocus placeholder="Search" value="${picker.search}" oninput="filterRackViewPicker('${auditId}', this.value)" /></div>
+      <div id="rvpick-list">${rackViewPickerPalletListHtml(auditId, picker.search)}</div>
+    </div>
+  ` : '';
 
   const topFields = `
     <div class="loc-picker-toprow rv-no-labels">
@@ -3325,11 +3558,12 @@ function renderRackView(){
         </button>
         ${bayDropdown}
       </div>
-      <div class="field">
-        <div class="picker-btn fixed">
-          <span class="mono">${selectedLoc ? (selectedLoc.slot != null ? `Pallet ${String(selectedLoc.slot).padStart(2,'0')}` : selectedLoc.code) : '—'}</span>
-          ${selectedLoc ? `<span class="pill ${locStatusPillClass(selectedLoc.status)}">${selectedLoc.status}</span>` : ''}
-        </div>
+      <div class="field rvpick-wrap">
+        <button type="button" class="picker-btn" onclick="openRackViewPicker('pallet')">
+          <span class="mono">${selectedLoc ? palletIdFor(selectedLoc) : 'Select Pallet'}</span>
+          <span class="chevronDown">${ICON.chevronDown}</span>
+        </button>
+        ${palletDropdown}
       </div>
       <div class="rv-scan-qr">
         <span>OR Scan the QR</span>
@@ -3993,7 +4227,7 @@ function renderQuickScan(){
         <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground);">${matched.audit_name}</div>
         <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${matched.audit_id}</div>
       </div>
-      <button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${matched.audit_id}', layout:'${qs.code.layout}', rack:'${qs.code.rack}', bay:'${qs.code.bay}', loc:'${qs.code.loc}'})">Open Count Sheet ${ICON.chevron}</button>
+      <button class="btn primary btn-pill" onclick="quickScanOpenLocation('${matched.audit_id}', '${qs.code.layout}', '${qs.code.rack}', '${qs.code.bay}', '${qs.code.loc}')">${STATE.device === 'tablet' ? 'Open Rack View' : 'Open Count Sheet'} ${ICON.chevron}</button>
       <button class="btn outline small" style="width:100%;" onclick="quickScan()">${ICON.scan} Scan Another Location</button>
     `;
   } else if (qs.wrongKind) {
@@ -4010,7 +4244,7 @@ function renderQuickScan(){
         <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground);">${qs.wrongLabel}</div>
       </div>
       <div class="banner info"><span class="dot"></span> Pallet and SKU codes only make sense inside an already-open location's count sheet. Scan the storage location QR first.</div>
-      ${ls ? `<button class="btn primary btn-pill" onclick="push('countSheet', {auditId:'${ongoing.audit_id}', layout:'${ls.layout}', rack:'${ls.rack}', bay:'${ls.bay}', loc:'${ls.loc.code}'})">Continue at ${ls.loc.code} ${ICON.chevron}</button>` : ''}
+      ${ls ? `<button class="btn primary btn-pill" onclick="quickScanOpenLocation('${ongoing.audit_id}', '${ls.layout}', '${ls.rack}', '${ls.bay}', '${ls.loc.code}')">Continue at ${ls.loc.code} ${ICON.chevron}</button>` : ''}
       <button class="btn outline small" style="width:100%;" onclick="quickScan()">${ICON.scan} Scan Again</button>
     `;
   } else {
