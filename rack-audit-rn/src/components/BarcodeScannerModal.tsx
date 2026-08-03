@@ -44,9 +44,19 @@ export function BarcodeScannerModal({
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pulsing, setPulsing] = useState(false);
   const pulseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A code stays in frame for as long as the camera is pointed at it, so
+  // expo-camera keeps re-firing onBarcodeScanned for it every cooldown
+  // tick. A time-based cooldown only delays the re-count, it doesn't stop
+  // it — so instead track every code already scanned this session and
+  // permanently ignore repeats of it until the modal is reopened. 4 QR
+  // codes on a page tally to 4, no matter how long the scanner stays open.
+  const scannedCodesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (visible) handledRef.current = false;
+    if (visible) {
+      handledRef.current = false;
+      scannedCodesRef.current = new Set();
+    }
   }, [visible]);
 
   useEffect(
@@ -67,7 +77,9 @@ export function BarcodeScannerModal({
 
   const handleBarcodeScanned = ({ data }: { data: string }) => {
     if (handledRef.current) return;
+    if (continuous && scannedCodesRef.current.has(data)) return;
     handledRef.current = true;
+    if (continuous) scannedCodesRef.current.add(data);
     onScanned(data);
     rearm();
     if (continuous) {

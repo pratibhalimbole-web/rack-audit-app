@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SlideInRight, SlideOutRight, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -69,7 +69,36 @@ export function RackViewScreen() {
   // already makes the line show up in Reported Audits once saved.
   const [issuesRaised, setIssuesRaised] = useState<Set<string>>(new Set());
   const [attachmentTarget, setAttachmentTarget] = useState<number | null>(null);
+  const [matchInfoOpen, setMatchInfoOpen] = useState(false);
   const confirm = useConfirmDialog();
+
+  // Reconciliation summary — a scanned SKU counts as "Matched" only when
+  // all three checks pass: it's the SKU we expected, the quantity is
+  // right, and the condition is Good. Each of the three is scored
+  // individually (skuOk/qtyOk/conditionOk) so the UI can show exactly
+  // which check(s) failed instead of a single opaque status.
+  const reconciliation = useMemo(() => {
+    const scored = expectedSkus.map((exp) => {
+      const foundIdx = scanLines.findIndex((l) => l.sku === exp.sku);
+      const found = foundIdx !== -1 ? scanLines[foundIdx] : undefined;
+      const qtyOk = !!found && found.qty === exp.qty;
+      const conditionOk = !!found && found.condition === 'Good';
+      const status: 'pending' | 'matched' | 'mismatch' = !found ? 'pending' : qtyOk && conditionOk ? 'matched' : 'mismatch';
+      return { exp, found, foundIdx, status, qtyOk, conditionOk };
+    });
+    const skuMismatchLines = scanLines.map((line, idx) => ({ line, idx })).filter(({ line }) => !expectedSkus.some((e) => e.sku === line.sku));
+    const matchedCount = scored.filter((s) => s.status === 'matched').length;
+    const mismatchCount = scored.filter((s) => s.status === 'mismatch').length;
+    const pendingCount = scored.filter((s) => s.status === 'pending').length;
+    return {
+      scored,
+      skuMismatchLines,
+      matchedCount,
+      mismatchCount,
+      notMatchedCount: mismatchCount + skuMismatchLines.length,
+      pendingCount,
+    };
+  }, [expectedSkus, scanLines]);
 
   // Figma-style canvas: pinch to zoom, drag to pan, the toolbar/footer stay
   // put since only this transformed layer moves — not the whole screen.
@@ -456,24 +485,63 @@ export function RackViewScreen() {
                       <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
                         Expected on this Pallet
                       </Text>
-                      {expectedSkus.length ? (
-                        <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-                          <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                            {scanLines.filter((l) => expectedSkus.some((e) => e.sku === l.sku)).length}/{expectedSkus.length}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <Pressable onPress={() => setMatchInfoOpen((o) => !o)} hitSlop={8}>
+                        <Ionicons name="information-circle-outline" size={19} color={tokens.mutedForeground} />
+                      </Pressable>
                     </View>
+
+                    {matchInfoOpen ? (
+                      <View style={[styles.matchInfoBox, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                          What counts as "Matched"?
+                        </Text>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 3, lineHeight: 16 }}>
+                          A line is Matched only when all three checks pass: it's the expected SKU, the scanned Quantity equals
+                          the expected quantity, and the Condition is Good. If any one of those is off, it lands in Mismatch
+                          below instead — with the exact check(s) that failed marked.
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.summaryStatsRow}>
+                      <View style={styles.summaryStat}>
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>
+                          {expectedSkus.length}
+                        </Text>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold, textTransform: 'uppercase' }}>
+                          Expected
+                        </Text>
+                      </View>
+                      <View style={styles.summaryStat}>
+                        <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>
+                          {reconciliation.matchedCount}
+                        </Text>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold, textTransform: 'uppercase' }}>
+                          Matched
+                        </Text>
+                      </View>
+                      <View style={styles.summaryStat}>
+                        <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>
+                          {reconciliation.notMatchedCount}
+                        </Text>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold, textTransform: 'uppercase' }}>
+                          Not Matched
+                        </Text>
+                      </View>
+                      <View style={styles.summaryStat}>
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>
+                          {reconciliation.pendingCount}
+                        </Text>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold, textTransform: 'uppercase' }}>
+                          Remaining
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
+
                     {(() => {
-                      const scored = expectedSkus.map((exp) => {
-                        const foundIdx = scanLines.findIndex((l) => l.sku === exp.sku);
-                        const found = foundIdx !== -1 ? scanLines[foundIdx] : undefined;
-                        const status: 'pending' | 'matched' | 'qtyMismatch' = !found ? 'pending' : found.qty === exp.qty ? 'matched' : 'qtyMismatch';
-                        return { exp, found, foundIdx, status };
-                      });
-                      const skuMismatchLines = scanLines
-                        .map((line, idx) => ({ line, idx }))
-                        .filter(({ line }) => !expectedSkus.some((e) => e.sku === line.sku));
+                      const scored = reconciliation.scored;
+                      const skuMismatchLines = reconciliation.skuMismatchLines;
 
                       const groupHeader = (label: string, count: number, icon: keyof typeof Ionicons.glyphMap, rag: typeof tokens.rag.green | null) => (
                         <View style={styles.groupHeadRow}>
@@ -492,8 +560,89 @@ export function RackViewScreen() {
                         </View>
                       );
 
+                      const criteriaChip = (label: string, ok: boolean) => (
+                        <View
+                          key={label}
+                          style={[
+                            styles.criteriaChip,
+                            { backgroundColor: ok ? tokens.rag.green.soft : tokens.rag.red.soft, borderColor: ok ? tokens.rag.green.border : tokens.rag.red.border, borderRadius: tokens.radius.lg },
+                          ]}
+                        >
+                          <Ionicons name={ok ? 'checkmark' : 'close'} size={11} color={ok ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                          <Text style={{ color: ok ? tokens.rag.green.strong : tokens.rag.red.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{label}</Text>
+                        </View>
+                      );
+
+                      // Matched first, then Mismatch (right SKU, wrong qty/condition — shown
+                      // with the exact check that failed), then Awaiting Scan. Unexpected
+                      // scans (not on the expected list at all) go last, their own section.
                       return (
                         <>
+                          {(
+                            [
+                              { key: 'matched', label: 'Matched', icon: 'checkmark-circle', rag: tokens.rag.green },
+                              { key: 'mismatch', label: 'Mismatch — Expected SKU, Wrong Qty/Condition', icon: 'alert-circle', rag: tokens.rag.amber },
+                              { key: 'pending', label: 'Awaiting Scan', icon: 'ellipse-outline', rag: null },
+                            ] as const
+                          ).map((group) => {
+                            const items = scored.filter((s) => s.status === group.key);
+                            if (!items.length) return null;
+                            return (
+                              <View key={group.key} style={{ marginTop: 14 }}>
+                                {groupHeader(group.label, items.length, group.icon, group.rag)}
+                                <View style={{ gap: 8, marginTop: 6 }}>
+                                  {items.map(({ exp, found, foundIdx, status, qtyOk, conditionOk }) => {
+                                    const rag = group.rag;
+                                    return (
+                                      <View
+                                        key={exp.sku}
+                                        style={[
+                                          styles.expectedRow,
+                                          { alignItems: 'flex-start', backgroundColor: rag ? rag.soft : tokens.muted, borderColor: rag ? rag.border : tokens.border, borderRadius: tokens.radius.lg },
+                                        ]}
+                                      >
+                                        <Ionicons
+                                          name={status === 'matched' ? 'checkmark-circle' : status === 'mismatch' ? 'alert-circle' : 'ellipse-outline'}
+                                          size={18}
+                                          color={rag ? rag.strong : '#667085'}
+                                          style={{ marginTop: 2 }}
+                                        />
+                                        <View style={{ flex: 1 }}>
+                                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{exp.sku}</Text>
+                                            {issuesRaised.has(exp.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
+                                          </View>
+                                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>{exp.name}</Text>
+                                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                                            {status === 'pending' ? (
+                                              <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Exp {exp.qty}</Text>
+                                              </View>
+                                            ) : (
+                                              <>
+                                                {criteriaChip('SKU', true)}
+                                                {criteriaChip(`Qty ${found?.qty}/${exp.qty}`, qtyOk)}
+                                                {criteriaChip(found?.condition ?? '', conditionOk)}
+                                              </>
+                                            )}
+                                          </View>
+                                        </View>
+                                        {found ? (
+                                          <Pressable
+                                            onPress={() => setExpandedIdx(foundIdx)}
+                                            style={[styles.rowScanBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                                          >
+                                            <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
+                                          </Pressable>
+                                        ) : null}
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+                            );
+                          })}
+
                           {skuMismatchLines.length ? (
                             <View style={{ marginTop: 14 }}>
                               {groupHeader('SKU Mismatch — Unexpected Item', skuMismatchLines.length, 'alert-circle', tokens.rag.red)}
@@ -528,67 +677,6 @@ export function RackViewScreen() {
                               </View>
                             </View>
                           ) : null}
-
-                          {(
-                            [
-                              { key: 'qtyMismatch', label: 'Quantity Mismatch — Same SKU, Wrong Count', icon: 'swap-vertical', rag: tokens.rag.amber },
-                              { key: 'matched', label: 'Matched', icon: 'checkmark-circle', rag: tokens.rag.green },
-                              { key: 'pending', label: 'Awaiting Scan', icon: 'ellipse-outline', rag: null },
-                            ] as const
-                          ).map((group) => {
-                            const items = scored.filter((s) => s.status === group.key);
-                            if (!items.length) return null;
-                            return (
-                              <View key={group.key} style={{ marginTop: 14 }}>
-                                {groupHeader(group.label, items.length, group.icon, group.rag)}
-                                <View style={{ gap: 8, marginTop: 6 }}>
-                                  {items.map(({ exp, found, foundIdx, status }) => {
-                                    const rag = group.rag;
-                                    return (
-                                      <View
-                                        key={exp.sku}
-                                        style={[
-                                          styles.expectedRow,
-                                          { backgroundColor: rag ? rag.soft : tokens.muted, borderColor: rag ? rag.border : tokens.border, borderRadius: tokens.radius.lg },
-                                        ]}
-                                      >
-                                        <Ionicons name={status === 'matched' ? 'checkmark-circle' : status === 'qtyMismatch' ? 'swap-vertical' : 'ellipse-outline'} size={18} color={rag ? rag.strong : '#667085'} />
-                                        <View style={{ flex: 1 }}>
-                                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{exp.sku}</Text>
-                                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>{exp.name}</Text>
-                                        </View>
-                                        {status === 'pending' ? (
-                                          <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Exp {exp.qty}</Text>
-                                          </View>
-                                        ) : (
-                                          <>
-                                            <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Exp {exp.qty}</Text>
-                                            </View>
-                                            <View style={[styles.qtyBadge, { backgroundColor: tokens.card, borderColor: rag ? rag.border : tokens.border, borderRadius: tokens.radius.lg }]}>
-                                              <Text style={{ color: rag ? rag.strong : tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>
-                                                Actual {found?.qty}
-                                              </Text>
-                                            </View>
-                                          </>
-                                        )}
-                                        {issuesRaised.has(exp.sku) ? <Ionicons name="flag" size={16} color={tokens.rag.red.strong} /> : null}
-                                        {found ? (
-                                          <Pressable
-                                            onPress={() => setExpandedIdx(foundIdx)}
-                                            style={[styles.rowScanBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
-                                          >
-                                            <Ionicons name="pencil" size={16} color={tokens.mutedForeground} />
-                                          </Pressable>
-                                        ) : null}
-                                      </View>
-                                    );
-                                  })}
-                                </View>
-                              </View>
-                            );
-                          })}
                         </>
                       );
                     })()}
@@ -751,6 +839,11 @@ const styles = StyleSheet.create({
   groupHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   expectedHeadIcon: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   countBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  summaryStatsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  summaryStat: { alignItems: 'center', gap: 2 },
+  summaryDivider: { height: 1, marginTop: 12, marginBottom: 12 },
+  matchInfoBox: { borderWidth: 1, padding: 10, marginTop: 10 },
+  criteriaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 3 },
   expectedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 10, borderWidth: 1 },
   qtyBadge: { paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
   rowScanBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
