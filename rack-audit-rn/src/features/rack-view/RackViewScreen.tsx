@@ -81,6 +81,11 @@ export function RackViewScreen() {
   const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
   const misplaced = !!scannedLine && !skuMatched;
 
+  // Drives the bay canvas cell colors: green once a pallet's scan resolves
+  // to a clean match, red for any kind of mismatch (wrong SKU, wrong qty,
+  // wrong condition), gray for anything not yet scanned this session.
+  const [locationStatus, setLocationStatus] = useState<Record<string, 'matched' | 'mismatch'>>({});
+
   // Figma-style canvas: pinch to zoom, drag to pan, the toolbar/footer stay
   // put since only this transformed layer moves — not the whole screen.
   const scale = useSharedValue(1);
@@ -200,16 +205,38 @@ export function RackViewScreen() {
     if (match) setSelectedLoc(match.code);
   };
 
+  // Drives the bay canvas cell colors: green once a pallet's scan resolves
+  // to a clean match, red for any kind of mismatch (wrong SKU, wrong qty,
+  // wrong condition), gray (the default, just omitted from the map) for
+  // anything not yet scanned. Called from every place the scan/edit state
+  // for the open pallet can change, so the canvas behind the panel always
+  // reflects what's on screen right now.
+  const applyLocationStatus = (locCode: string, line: CountLine | null, expected: ExpectedSkuLine | null) => {
+    setLocationStatus((prev) => {
+      if (!line) {
+        if (!(locCode in prev)) return prev;
+        const next = { ...prev };
+        delete next[locCode];
+        return next;
+      }
+      const matched = !!expected && line.sku === expected.sku && line.qty === expected.qty && line.condition === 'Good';
+      const status: 'matched' | 'mismatch' = matched ? 'matched' : 'mismatch';
+      return prev[locCode] === status ? prev : { ...prev, [locCode]: status };
+    });
+  };
+
   const handleStartAudit = () => {
     if (!selectedLocObj) return;
     const existing = selectedLocObj.pallets.find((p) => !p.saved) ?? null;
     // Single-SKU pallet: only the first line of any pre-seeded data applies.
     const base = existing ? existing.lines.slice(0, 1).map((l) => ({ ...l })) : [];
+    const expected = (EXPECTED_SKUS[selectedLocObj.code] ?? []).slice(0, 1);
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
     setExpandedIdx(base.length ? 0 : null);
-    setExpectedSkus((EXPECTED_SKUS[selectedLocObj.code] ?? []).slice(0, 1));
+    setExpectedSkus(expected);
     setSkuPanelOpen(true);
+    applyLocationStatus(selectedLocObj.code, base[0] ?? null, expected[0] ?? null);
   };
 
   // One scan per pallet — a new scan replaces whatever was scanned before,
@@ -221,6 +248,7 @@ export function RackViewScreen() {
     setScanLines([line]);
     const matchesExpected = !!expectedSkus[0] && expectedSkus[0].sku === pick.sku;
     setExpandedIdx(matchesExpected ? 0 : null);
+    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null);
   };
 
   const handleSkuScanned = (data: string) => {
@@ -312,8 +340,9 @@ export function RackViewScreen() {
                           {row.cells.map((cell, i) => {
                             if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
                             const selected = cell.code === selectedLoc;
-                            const bg = cell.status === 'Completed' ? tokens.rag.green.soft : cell.status === 'In Progress' ? tokens.accentPurple.soft : tokens.muted;
-                            const border = selected ? tokens.primary : cell.status === 'Completed' ? tokens.rag.green.border : tokens.border;
+                            const status = locationStatus[cell.code];
+                            const bg = status === 'matched' ? tokens.rag.green.soft : status === 'mismatch' ? tokens.rag.red.soft : tokens.muted;
+                            const border = selected ? tokens.primary : status === 'matched' ? tokens.rag.green.border : status === 'mismatch' ? tokens.rag.red.border : tokens.border;
                             return (
                               <Pressable
                                 key={cell.code}
@@ -419,17 +448,20 @@ export function RackViewScreen() {
                     const next = scanLines.slice();
                     next[expandedIdx] = { ...next[expandedIdx], qty };
                     setScanLines(next);
+                    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next[expandedIdx], expectedSku);
                   }}
                   onConditionChange={(condition) => {
                     const next = scanLines.slice();
                     next[expandedIdx] = { ...next[expandedIdx], condition };
                     setScanLines(next);
+                    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next[expandedIdx], expectedSku);
                   }}
                   onSave={() => setExpandedIdx(null)}
                   onDelete={() =>
                     confirm.ask(`Remove ${scanLines[expandedIdx].sku} from this record?`, () => {
                       setScanLines(scanLines.filter((_, i) => i !== expandedIdx));
                       setExpandedIdx(null);
+                      if (selectedLocObj) applyLocationStatus(selectedLocObj.code, null, expectedSku);
                     })
                   }
                   onEdit={() => {}}
