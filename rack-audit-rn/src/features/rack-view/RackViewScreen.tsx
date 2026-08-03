@@ -16,7 +16,7 @@ import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
 import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, type ExpectedSkuLine } from '@/lib/mockData';
-import type { CountLine, Evidence } from '@/lib/types';
+import type { CountLine, Evidence, LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
@@ -225,18 +225,44 @@ export function RackViewScreen() {
     });
   };
 
-  const handleStartAudit = () => {
-    if (!selectedLocObj) return;
-    const existing = selectedLocObj.pallets.find((p) => !p.saved) ?? null;
+  // Shared by "Start Audit" (from the canvas) and "Scan Next SKU" (from
+  // inside an already-open panel) — loads whatever's pre-seeded for a
+  // location and resets the scan state to point at it.
+  const startAuditFor = (loc: LocationNode) => {
+    const existing = loc.pallets.find((p) => !p.saved) ?? null;
     // Single-SKU pallet: only the first line of any pre-seeded data applies.
     const base = existing ? existing.lines.slice(0, 1).map((l) => ({ ...l })) : [];
-    const expected = (EXPECTED_SKUS[selectedLocObj.code] ?? []).slice(0, 1);
+    const expected = (EXPECTED_SKUS[loc.code] ?? []).slice(0, 1);
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
     setExpandedIdx(base.length ? 0 : null);
     setExpectedSkus(expected);
+    applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null);
+  };
+
+  const handleStartAudit = () => {
+    if (!selectedLocObj) return;
+    startAuditFor(selectedLocObj);
     setSkuPanelOpen(true);
-    applyLocationStatus(selectedLocObj.code, base[0] ?? null, expected[0] ?? null);
+  };
+
+  // Persists the pallet just finished, then jumps straight to the next
+  // location in this bay — selecting it (which highlights it on the
+  // canvas behind the panel) and loading it up ready to scan, so the
+  // inspector never has to close the panel and tap the canvas by hand.
+  const handleScanNext = async () => {
+    if (selectedLocObj && scanLines.length && !misplaced) {
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCode, loc: selectedLocObj.code }, scanLines);
+    }
+    const locs = bayObj.locations;
+    const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
+    const next = idx !== -1 ? locs[idx + 1] : undefined;
+    if (!next) {
+      setSkuPanelOpen(false);
+      return;
+    }
+    setSelectedLoc(next.code);
+    startAuditFor(next);
   };
 
   // One scan per pallet — a new scan replaces whatever was scanned before,
@@ -549,6 +575,28 @@ export function RackViewScreen() {
                   </View>
                 ) : null}
 
+                {skuMatched && !misplaced && scannedLine && expectedSku ? (
+                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                    {(() => {
+                      const reviewed =
+                        scannedLine.qty === expectedSku.qty && scannedLine.condition === 'Good'
+                          ? { label: 'Matched', rag: tokens.rag.green }
+                          : scannedLine.qty !== expectedSku.qty
+                            ? { label: 'Quantity Mismatch', rag: tokens.rag.amber }
+                            : { label: 'Condition Mismatch', rag: tokens.rag.amber };
+                      return (
+                        <View style={[styles.editStatusPill, { backgroundColor: reviewed.rag.soft, borderColor: reviewed.rag.border, borderRadius: tokens.radius.lg }]}>
+                          <Text style={{ color: reviewed.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{reviewed.label}</Text>
+                        </View>
+                      );
+                    })()}
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scannedLine.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>
+                      Qty {scannedLine.qty} · {scannedLine.condition}
+                    </Text>
+                  </View>
+                ) : null}
+
                 {!expectedSku && !scannedLine ? (
                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
                     No SKU scanned yet — use the scanner below.
@@ -557,10 +605,13 @@ export function RackViewScreen() {
               </ScrollView>
             )}
             {expandedIdx === null ? (
-              <Pressable onPress={() => setScannerOpen('sku')} style={[styles.batchScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-                <Ionicons name="qr-code-outline" size={18} color={tokens.primaryForeground} />
+              <Pressable
+                onPress={() => (scannedLine ? handleScanNext() : setScannerOpen('sku'))}
+                style={[styles.batchScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+              >
+                <Ionicons name={scannedLine ? 'arrow-forward-circle-outline' : 'qr-code-outline'} size={18} color={tokens.primaryForeground} />
                 <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-                  {scannedLine ? 'Scan Again' : 'Scan SKU'}
+                  {scannedLine ? 'Scan Next SKU' : 'Scan SKU'}
                 </Text>
               </Pressable>
             ) : null}
