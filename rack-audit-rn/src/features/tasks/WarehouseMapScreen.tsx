@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import Svg, { Line, Polygon, Polyline } from 'react-native-svg';
+import Svg, { Line, Polygon } from 'react-native-svg';
 import { AppHeader } from '@/components/AppHeader';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
@@ -23,17 +23,19 @@ const ASSIGNED_WIRE_COLOR = '#5B6B82';
 const UNASSIGNED_WIRE_COLOR = '#DCE1E7';
 
 // A wireframe rack (stroke-only cuboid edges + a level/upright grid on each
-// face, like a real racking frame elevation) instead of a solid-colored
-// block — matches the reference "Rack Health" 3D view's look. Racks
-// assigned to one of my active tasks are drawn in a bold, dark wireframe so
-// they pop out of the floor; everything else (not assigned to me right now)
-// is drawn much lighter, so the eye naturally goes to what's mine. A rack
-// with an active task also gets a small colored zigzag "issue" marker on
-// the front face (in the task's due-bucket color), since we only know
-// status at rack granularity here, not per-shelf.
+// face, like a real racking frame elevation) — most of the warehouse is
+// drawn this way, in a light neutral wire so it recedes into the floor.
+// A rack that has one of my active tasks gets its three faces filled with
+// a shaded tint of the task's due-bucket color (top lightest, right face
+// darkest — like a lit cube) instead of just a tiny marker, so a task is
+// obviously visible at a glance, even zoomed out over a big floor, not
+// just discoverable by tapping around.
 function IsoRackBlock({ assigned, markerColor }: { assigned: boolean; markerColor: string | null }) {
-  const wire = assigned ? ASSIGNED_WIRE_COLOR : UNASSIGNED_WIRE_COLOR;
-  const strokeW = assigned ? 1.5 : 1;
+  const wire = markerColor ?? (assigned ? ASSIGNED_WIRE_COLOR : UNASSIGNED_WIRE_COLOR);
+  const strokeW = markerColor ? 1.75 : assigned ? 1.5 : 1;
+  const topFill = markerColor ? withOpacity(markerColor, 0.55) : 'none';
+  const leftFill = markerColor ? withOpacity(markerColor, 0.32) : 'none';
+  const rightFill = markerColor ? withOpacity(markerColor, 0.2) : 'none';
   const w = ISO_W;
   const levels = 4;
   const gridLines: React.ReactNode[] = [];
@@ -68,31 +70,30 @@ function IsoRackBlock({ assigned, markerColor }: { assigned: boolean; markerColo
     gridLines.push(<Line key={`ru${i}`} x1={rx} y1={ry0} x2={rx} y2={ry1} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.5 : 0.35} />);
   });
 
-  const markerX = w;
-  const markerTop = ISO_TOP_H + ISO_BODY_H * 0.18;
-  const markerBottom = ISO_TOP_H + ISO_BODY_H * 0.82;
-  const zigzag = markerColor
-    ? Array.from({ length: 5 }, (_, i) => {
-        const y = markerTop + ((markerBottom - markerTop) * i) / 4;
-        const x = markerX + (i % 2 === 0 ? -4 : 4);
-        return `${x},${y}`;
-      }).join(' ')
-    : null;
-
   return (
     <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 4}>
-      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill="none" stroke={wire} strokeWidth={strokeW} />
-      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill="none" stroke={wire} strokeWidth={strokeW} />
+      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill={topFill} stroke={wire} strokeWidth={strokeW} />
+      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill={leftFill} stroke={wire} strokeWidth={strokeW} />
       <Polygon
         points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`}
-        fill="none"
+        fill={rightFill}
         stroke={wire}
         strokeWidth={strokeW}
       />
       {gridLines}
-      {zigzag ? <Polyline points={zigzag} fill="none" stroke={markerColor!} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
     </Svg>
   );
+}
+
+// "#rrggbb" -> "rgba(r,g,b,alpha)", so a due-bucket tone (always solid hex
+// in this app's theme, light and dark alike) can be used as a translucent
+// SVG fill.
+function withOpacity(hex: string, alpha: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // Not a tracker of where the inspector physically is — there's no device
@@ -131,8 +132,8 @@ export function WarehouseMapScreen() {
   // Pinch-to-zoom/pan on the floor, same pattern as Rack View's canvas —
   // the isometric floor is wide, so exploring it on a phone-sized screen
   // needs zoom, not just a fixed layout.
-  const scale = useSharedValue(0.85);
-  const savedScale = useSharedValue(0.85);
+  const scale = useSharedValue(0.4);
+  const savedScale = useSharedValue(0.4);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
@@ -148,7 +149,7 @@ export function WarehouseMapScreen() {
     });
   const pinchGesture = Gesture.Pinch()
     .onUpdate((e) => {
-      scale.value = Math.min(3, Math.max(0.4, savedScale.value * e.scale));
+      scale.value = Math.min(3, Math.max(0.2, savedScale.value * e.scale));
     })
     .onEnd(() => {
       savedScale.value = scale.value;
@@ -170,6 +171,24 @@ export function WarehouseMapScreen() {
         if (!racks.has(rack)) racks.set(rack, { layout, rack });
       });
     });
+
+    // The real audit data only covers a handful of racks per aisle — nowhere
+    // near what an actual warehouse floor looks like. Pad every aisle with
+    // extra unassigned filler racks (and add a couple of aisles that are
+    // entirely filler) so the floor reads as a genuinely large warehouse,
+    // with the racks that are actually mine standing out against it.
+    const RACKS_PER_ZONE = 14;
+    const zoneNames = [...Array.from(byLayout.keys()), 'Layout D', 'Layout F'];
+    zoneNames.forEach((layout) => {
+      if (!byLayout.has(layout)) byLayout.set(layout, new Map());
+      const racks = byLayout.get(layout)!;
+      const prefix = layout.replace(/^Layout /, '');
+      for (let n = 1; racks.size < RACKS_PER_ZONE && n <= 60; n++) {
+        const code = `${prefix}-${String(n).padStart(2, '0')}`;
+        if (!racks.has(code)) racks.set(code, { layout, rack: code });
+      }
+    });
+
     return Array.from(byLayout.entries())
       .map(([layout, racks]) => ({ layout, cells: Array.from(racks.values()).sort((a, b) => a.rack.localeCompare(b.rack)) }))
       .sort((a, b) => a.layout.localeCompare(b.layout));
