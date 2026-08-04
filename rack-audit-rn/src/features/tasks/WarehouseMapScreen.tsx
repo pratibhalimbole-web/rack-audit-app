@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import Svg, { Ellipse, Line, Polygon } from 'react-native-svg';
+import Svg, { Line, Polygon, Polyline } from 'react-native-svg';
 import { AppHeader } from '@/components/AppHeader';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
@@ -13,60 +13,69 @@ import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useMyAudits } from '../dashboard/hooks';
 
-// Darkens a "#rrggbb" hex color by `amount` (0-1) — used to derive the
-// side-face shade of an isometric block from its base tone, since RagTone/
-// AccentTone only give us two solid colors (base/strong), not three.
-function darken(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.max(0, Math.round(((num >> 16) & 0xff) * (1 - amount)));
-  const g = Math.max(0, Math.round(((num >> 8) & 0xff) * (1 - amount)));
-  const b = Math.max(0, Math.round((num & 0xff) * (1 - amount)));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
-
-const ISO_W = 26;
-const ISO_TOP_H = 15;
-const ISO_BODY_H = 34;
+const ISO_W = 28;
+const ISO_TOP_H = 16;
+const ISO_BODY_H = 40;
 const ISO_TOTAL_W = ISO_W * 2;
 const ISO_TOTAL_H = ISO_TOP_H + ISO_BODY_H;
-const CELL = 72;
+const CELL = 74;
+const WIRE_COLOR = '#B6C0CC';
 
-// A real isometric cuboid (top/left/right faces as SVG parallelograms, each
-// a different shade of the same tone) plus a soft ground-shadow ellipse —
-// not a flat rounded square with a drop shadow. Thin lines across the left/
-// right faces suggest shelf levels (like a real rack elevation), matching
-// the "mesh" texture of a real rack rather than a plain solid block.
-function IsoRackBlock({ tone }: { tone: { base: string; strong: string } | null }) {
-  const topColor = tone ? tone.base : '#E4E7EC';
-  const leftColor = tone ? tone.strong : '#C6CCD3';
-  const rightColor = tone ? darken(tone.strong, 0.22) : '#A8B0B9';
-  const lineColor = tone ? darken(tone.strong, 0.38) : '#8D96A1';
+// A wireframe rack (stroke-only cuboid edges + a level/upright grid on each
+// face, like a real racking frame elevation) instead of a solid-colored
+// block — matches the reference "Rack Health" 3D view's look. Racks with an
+// active task get a small colored zigzag "issue" marker on the front face
+// (in the task's due-bucket color) rather than recoloring the whole rack,
+// since we only know status at rack granularity, not per-shelf.
+function IsoRackBlock({ markerColor }: { markerColor: string | null }) {
   const w = ISO_W;
   const levels = 4;
-  const leftLines = Array.from({ length: levels - 1 }, (_, i) => {
-    const t = (i + 1) / levels;
-    const x0 = 0;
-    const y0 = ISO_TOP_H / 2 + ISO_BODY_H * t;
-    const x1 = w;
-    const y1 = ISO_TOP_H + ISO_BODY_H * t;
-    return <Line key={`l${i}`} x1={x0} y1={y0} x2={x1} y2={y1} stroke={lineColor} strokeWidth={0.75} opacity={0.55} />;
+  const gridLines: React.ReactNode[] = [];
+  for (let i = 1; i < levels; i++) {
+    const t = i / levels;
+    gridLines.push(
+      <Line key={`l${i}`} x1={0} y1={ISO_TOP_H / 2 + ISO_BODY_H * t} x2={w} y2={ISO_TOP_H + ISO_BODY_H * t} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.7} />,
+      <Line key={`r${i}`} x1={w} y1={ISO_TOP_H + ISO_BODY_H * t} x2={ISO_TOTAL_W} y2={ISO_TOP_H / 2 + ISO_BODY_H * t} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.7} />,
+    );
+  }
+  const uprights = [0.33, 0.67];
+  uprights.forEach((t, i) => {
+    // Left-face upright: interpolate between the face's top edge (0,topH/2)-(w,topH)
+    // and bottom edge (0,topH/2+bodyH)-(w,totalH) at fraction t.
+    const lx = w * t;
+    const ly0 = ISO_TOP_H / 2 + (ISO_TOP_H / 2) * t;
+    const ly1 = ISO_TOP_H / 2 + ISO_BODY_H + (ISO_TOP_H / 2) * t;
+    gridLines.push(<Line key={`lu${i}`} x1={lx} y1={ly0} x2={lx} y2={ly1} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.5} />);
+    // Right-face upright, mirrored.
+    const rx = w + w * t;
+    const ry0 = ISO_TOP_H - (ISO_TOP_H / 2) * t;
+    const ry1 = ISO_TOP_H + ISO_BODY_H - (ISO_TOP_H / 2) * t;
+    gridLines.push(<Line key={`ru${i}`} x1={rx} y1={ry0} x2={rx} y2={ry1} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.5} />);
   });
-  const rightLines = Array.from({ length: levels - 1 }, (_, i) => {
-    const t = (i + 1) / levels;
-    const x0 = w;
-    const y0 = ISO_TOP_H + ISO_BODY_H * t;
-    const x1 = ISO_TOTAL_W;
-    const y1 = ISO_TOP_H / 2 + ISO_BODY_H * t;
-    return <Line key={`r${i}`} x1={x0} y1={y0} x2={x1} y2={y1} stroke={lineColor} strokeWidth={0.75} opacity={0.4} />;
-  });
+
+  const markerX = w;
+  const markerTop = ISO_TOP_H + ISO_BODY_H * 0.18;
+  const markerBottom = ISO_TOP_H + ISO_BODY_H * 0.82;
+  const zigzag = markerColor
+    ? Array.from({ length: 5 }, (_, i) => {
+        const y = markerTop + ((markerBottom - markerTop) * i) / 4;
+        const x = markerX + (i % 2 === 0 ? -4 : 4);
+        return `${x},${y}`;
+      }).join(' ')
+    : null;
+
   return (
-    <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 10}>
-      <Ellipse cx={w} cy={ISO_TOTAL_H + 5} rx={w * 0.85} ry={4} fill="rgba(15,23,42,0.16)" />
-      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill={topColor} />
-      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill={leftColor} />
-      <Polygon points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`} fill={rightColor} />
-      {leftLines}
-      {rightLines}
+    <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 4}>
+      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill="none" stroke={WIRE_COLOR} strokeWidth={1.25} />
+      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill="none" stroke={WIRE_COLOR} strokeWidth={1.25} />
+      <Polygon
+        points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`}
+        fill="none"
+        stroke={WIRE_COLOR}
+        strokeWidth={1.25}
+      />
+      {gridLines}
+      {zigzag ? <Polyline points={zigzag} fill="none" stroke={markerColor!} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
     </Svg>
   );
 }
@@ -93,6 +102,7 @@ export function WarehouseMapScreen() {
   const { tokens } = useTheme();
   const { data: audits = [] } = useMyAudits();
   const [filter, setFilter] = useState<FilterKey>('All');
+  const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<RackCell | null>(null);
 
   const myTasks = useMemo(() => audits.filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)), [audits]);
@@ -150,13 +160,13 @@ export function WarehouseMapScreen() {
 
   const filteredTasks = filter === 'All' ? myTasks : myTasks.filter((a) => dueBucket(a) === filter);
 
-  const colorForCell = (cell: RackCell) => {
+  const colorForCell = (cell: RackCell): string | null => {
     const touching = tasksTouching(cell, filteredTasks);
     if (!touching.length) return null;
     const buckets = touching.map(dueBucket);
     const bucket = BUCKET_PRIORITY.find((b) => buckets.includes(b))!;
     const key = BUCKET_COLOR_KEY[bucket];
-    return key === 'accentBlue' ? tokens.accentBlue : tokens.rag[key];
+    return (key === 'accentBlue' ? tokens.accentBlue : tokens.rag[key]).base;
   };
 
   const selectedTasks = selectedCell ? tasksTouching(selectedCell, myTasks) : [];
@@ -165,37 +175,45 @@ export function WarehouseMapScreen() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader title="Warehouse Map" sub={`${myTasks.length} task${myTasks.length === 1 ? '' : 's'} across the floor`} showBack />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        {(['All', ...DUE_BUCKETS.map((b) => b.key)] as FilterKey[]).map((key) => {
-          const active = filter === key;
-          const bucketColor = key !== 'All' ? BUCKET_COLOR_KEY[key as DueBucketKey] : null;
-          const tone = bucketColor ? (bucketColor === 'accentBlue' ? tokens.accentBlue : tokens.rag[bucketColor]) : null;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setFilter(key)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: active ? (tone ? tone.base : tokens.primary) : tokens.card,
-                  borderColor: active ? (tone ? tone.base : tokens.primary) : tokens.border,
-                  borderRadius: tokens.radius.lg,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: active ? tokens.primaryForeground : tokens.foreground,
-                  fontWeight: tokens.fontWeight.semibold,
-                  fontSize: tokens.text.xs,
-                }}
-              >
-                {key}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.filterBarRow}>
+        <Pressable
+          onPress={() => setFilterOpen((o) => !o)}
+          style={[styles.filterBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
+        >
+          <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>{filter}</Text>
+          <Ionicons name={filterOpen ? 'chevron-up' : 'chevron-down'} size={14} color={tokens.mutedForeground} />
+        </Pressable>
+
+        {filterOpen ? (
+          <>
+            <Pressable style={styles.filterBackdrop} onPress={() => setFilterOpen(false)} />
+            <View style={[styles.filterDropdown, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+              {(['All', ...DUE_BUCKETS.map((b) => b.key)] as FilterKey[]).map((key) => {
+                const active = filter === key;
+                const bucketColor = key !== 'All' ? BUCKET_COLOR_KEY[key as DueBucketKey] : null;
+                const tone = bucketColor ? (bucketColor === 'accentBlue' ? tokens.accentBlue : tokens.rag[bucketColor]) : null;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => {
+                      setFilter(key);
+                      setFilterOpen(false);
+                    }}
+                    style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}
+                  >
+                    {tone ? <View style={[styles.filterDot, { backgroundColor: tone.base }]} /> : <View style={styles.filterDot} />}
+                    <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm, flex: 1 }}>
+                      {key}
+                    </Text>
+                    {active ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+      </View>
 
       {zones.length ? (
         <View style={styles.stage}>
@@ -221,16 +239,17 @@ export function WarehouseMapScreen() {
                         </View>
                       </View>
                       {zone.cells.map((cell) => {
-                        const tone = colorForCell(cell);
+                        const markerColor = colorForCell(cell);
                         const touchingCount = tasksTouching(cell, filteredTasks).length;
                         return (
                           <View key={cell.rack} style={styles.isoCell}>
                             <View style={styles.isoCounterRotate}>
-                              <Pressable onPress={() => setSelectedCell(cell)} hitSlop={4} style={{ alignItems: 'center' }}>
-                                <IsoRackBlock tone={tone} />
-                                {touchingCount > 1 ? (
-                                  <View style={[styles.multiBadge, { backgroundColor: tokens.foreground }]}>
-                                    <Text style={{ color: tokens.card, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{touchingCount}</Text>
+                              <Pressable onPress={() => setSelectedCell(cell)} hitSlop={6} style={{ alignItems: 'center' }}>
+                                <IsoRackBlock markerColor={markerColor} />
+                                {touchingCount ? (
+                                  <View style={[styles.taskBadge, { backgroundColor: markerColor ?? tokens.mutedForeground, borderColor: tokens.card }]}>
+                                    <Ionicons name="flag" size={9} color="#fff" />
+                                    {touchingCount > 1 ? <Text style={styles.taskBadgeCount}>{touchingCount}</Text> : null}
                                   </View>
                                 ) : null}
                                 <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginTop: 2 }}>
@@ -311,10 +330,10 @@ export function WarehouseMapScreen() {
                               setSelectedCell(null);
                               router.push({ pathname: '/audit/[auditId]', params: { auditId: a.audit_id } } as never);
                             }}
-                            style={[styles.openTaskBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                            style={[styles.openTaskBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
                           >
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Open Task</Text>
-                            <Ionicons name="chevron-forward" size={14} color={tokens.mutedForeground} />
+                            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Start Task</Text>
+                            <Ionicons name="chevron-forward" size={14} color={tokens.primaryForeground} />
                           </Pressable>
                         </View>
                       );
@@ -339,8 +358,12 @@ export function WarehouseMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1 },
+  filterBarRow: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 12, height: 38 },
+  filterBackdrop: { position: 'absolute', top: -1000, left: -1000, right: -1000, bottom: -1000, zIndex: 5 },
+  filterDropdown: { position: 'absolute', top: 42, left: 0, width: 200, borderWidth: 1, paddingVertical: 4, zIndex: 6 },
+  filterOption: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  filterDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'transparent' },
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   isoFloor: { transform: [{ rotateZ: '45deg' }, { scaleY: 0.5 }] },
@@ -350,12 +373,27 @@ const styles = StyleSheet.create({
   isoCounterRotate: { transform: [{ scaleY: 2 }, { rotateZ: '-45deg' }] },
   zoneLabelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   zoomHint: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
-  multiBadge: { position: 'absolute', top: -6, right: 8, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, zIndex: 1 },
+  taskBadge: {
+    position: 'absolute',
+    top: -4,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    zIndex: 1,
+  },
+  taskBadgeCount: { color: '#fff', fontSize: 9, fontWeight: '700' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { padding: 16, paddingTop: 10, maxHeight: '80%' },
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#D0D5DD', marginBottom: 14 },
   taskCard: { borderWidth: 1, padding: 12 },
   bucketBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3 },
-  openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, height: 34, marginTop: 10 },
+  openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 36, marginTop: 10 },
   closeBtn: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, height: 46, marginTop: 14 },
 });
