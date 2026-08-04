@@ -176,7 +176,7 @@ export function WarehouseMapScreen() {
     if (!touching.length) return null;
     if (touching.some(isOverdue)) return tokens.rag.red.base;
     if (locs.length && locs.every((l) => l.status === 'Completed')) return tokens.rag.green.base;
-    return tokens.accentBlue.base;
+    return tokens.accentBlue.border;
   };
 
   // Horizontal-aisle zones and vertical-aisle zones are rendered as two
@@ -206,14 +206,22 @@ export function WarehouseMapScreen() {
           const cell: RackCell = { layout: zone.layout, rack: rackGroup.rack };
           const assigned = isAssigned(cell);
           const rackColor = statusColorFor(tasksTouching(cell, filteredTasks), rackLocs(cell, filteredTasks));
-          const rackBorder = rackColor ?? (assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE);
+          const isSelected = selectedCell?.layout === cell.layout && selectedCell?.rack === cell.rack;
+          // Tapping a rack always highlights it in the app's default (solid)
+          // blue, regardless of its status color — a clear "this is the one
+          // you just picked" cue distinct from the lighter blue "Assigned"
+          // fill/border used passively everywhere else.
+          const rackBorder = isSelected ? tokens.accentBlue.base : (rackColor ?? (assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE));
           const bayCount = rackGroup.bays.length;
           return (
             <Pressable
               key={rackGroup.rack}
               onPress={() => setSelectedCell(cell)}
               hitSlop={4}
-              style={[styles.rackCard, { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card }]}
+              style={[
+                styles.rackCard,
+                { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card, borderWidth: isSelected ? 2.5 : 1.5 },
+              ]}
             >
               <Text
                 numberOfLines={1}
@@ -289,7 +297,7 @@ export function WarehouseMapScreen() {
               {(
                 [
                   { label: 'Completed', color: tokens.rag.green.base },
-                  { label: 'Assigned', color: tokens.accentBlue.base },
+                  { label: 'Assigned', color: tokens.accentBlue.border },
                 ] as const
               ).map((item) => (
                 <View key={item.label} style={styles.legendItem}>
