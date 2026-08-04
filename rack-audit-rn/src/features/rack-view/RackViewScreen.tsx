@@ -352,32 +352,40 @@ export function RackViewScreen() {
               <View style={styles.diagramCenter}>
                 <Animated.View style={canvasAnimatedStyle}>
                   <View style={styles.bayColumnsRow}>
-                    {bayDiagrams.map(({ bay, rows }) => (
-                      <View key={bay.code} style={styles.bayColumn}>
-                        <View style={styles.diagram}>
-                          {rows.map((row) => (
-                            <View key={row.level} style={styles.diagramRow}>
-                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 22 }}>L{row.level}</Text>
-                              <View style={styles.diagramCells}>
-                                {row.cells.map((cell, i) => {
-                                  if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
-                                  const selected = cell.code === selectedLoc;
-                                  const status = locationStatus[cell.code];
-                                  const bg = status === 'matched' ? tokens.rag.green.soft : status === 'mismatch' ? tokens.rag.red.soft : tokens.muted;
-                                  const border = selected ? tokens.primary : status === 'matched' ? tokens.rag.green.border : status === 'mismatch' ? tokens.rag.red.border : tokens.border;
-                                  return (
-                                    <Pressable
-                                      key={cell.code}
-                                      onPress={() => setSelectedLoc(cell.code)}
-                                      style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
-                                    />
-                                  );
-                                })}
+                    {bayDiagrams.map(({ bay, rows }, bayIndex) => (
+                      <View key={bay.code} style={styles.bayColumnWrap}>
+                        {/* The upright between adjacent bays — a real rack's
+                            physical frame member — instead of repeating the
+                            level label on every single bay. */}
+                        {bayIndex > 0 ? <View style={[styles.bayUpright, { backgroundColor: tokens.border }]} /> : null}
+                        <View style={styles.bayColumn}>
+                          <View style={styles.diagram}>
+                            {rows.map((row) => (
+                              <View key={row.level} style={styles.diagramRow}>
+                                {bayIndex === 0 ? (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 22 }}>L{row.level}</Text>
+                                ) : null}
+                                <View style={styles.diagramCells}>
+                                  {row.cells.map((cell, i) => {
+                                    if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
+                                    const selected = cell.code === selectedLoc;
+                                    const status = locationStatus[cell.code];
+                                    const bg = status === 'matched' ? tokens.rag.green.soft : status === 'mismatch' ? tokens.rag.red.soft : tokens.muted;
+                                    const border = selected ? tokens.primary : status === 'matched' ? tokens.rag.green.border : status === 'mismatch' ? tokens.rag.red.border : tokens.border;
+                                    return (
+                                      <Pressable
+                                        key={cell.code}
+                                        onPress={() => setSelectedLoc(cell.code)}
+                                        style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
+                                      />
+                                    );
+                                  })}
+                                </View>
                               </View>
-                            </View>
-                          ))}
+                            ))}
+                          </View>
+                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bay.code}</Text>
                         </View>
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bay.code}</Text>
                       </View>
                     ))}
                   </View>
@@ -732,7 +740,9 @@ const styles = StyleSheet.create({
   diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   diagramBody: { flex: 1, padding: 14 },
   diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 28 },
+  bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
+  bayColumnWrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
+  bayUpright: { width: 2, alignSelf: 'stretch', marginBottom: 24 },
   bayColumn: { alignItems: 'center' },
   diagram: { gap: 6 },
   diagramRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
