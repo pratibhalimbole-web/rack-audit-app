@@ -290,7 +290,6 @@ export function WarehouseMapScreen() {
                 [
                   { label: 'Completed', color: tokens.rag.green.base },
                   { label: 'Assigned', color: tokens.accentBlue.base },
-                  { label: 'Delayed', color: tokens.rag.red.base },
                 ] as const
               ).map((item) => (
                 <View key={item.label} style={styles.legendItem}>
