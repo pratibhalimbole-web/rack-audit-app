@@ -179,6 +179,73 @@ export function WarehouseMapScreen() {
     return tokens.accentBlue.base;
   };
 
+  // Horizontal-aisle zones and vertical-aisle zones are rendered as two
+  // separate grouped columns (not one interleaved wrapped row) so each
+  // orientation reads as its own clean block instead of a jumbled mix.
+  const horizontalZones = zones.filter((_, i) => i % 2 === 0);
+  const verticalZones = zones.filter((_, i) => i % 2 === 1);
+
+  const renderZone = (zone: ZoneGroup, vertical: boolean) => (
+    <View key={zone.layout} style={styles.zone}>
+      <View style={styles.zoneHeadRow}>
+        <Ionicons name={vertical ? 'swap-vertical-outline' : 'swap-horizontal-outline'} size={12} color={tokens.mutedForeground} />
+        <Text
+          style={{
+            color: tokens.mutedForeground,
+            fontWeight: tokens.fontWeight.bold,
+            fontSize: tokens.text.xxs,
+            textTransform: 'uppercase',
+            letterSpacing: 0.4,
+          }}
+        >
+          {zone.layout}
+        </Text>
+      </View>
+      <View style={[styles.zoneAisle, vertical ? styles.zoneAisleVertical : null]}>
+        {zone.racks.map((rackGroup) => {
+          const cell: RackCell = { layout: zone.layout, rack: rackGroup.rack };
+          const assigned = isAssigned(cell);
+          const rackColor = statusColorFor(tasksTouching(cell, filteredTasks), rackLocs(cell, filteredTasks));
+          const rackBorder = rackColor ?? (assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE);
+          const bayCount = rackGroup.bays.length;
+          return (
+            <Pressable
+              key={rackGroup.rack}
+              onPress={() => setSelectedCell(cell)}
+              hitSlop={4}
+              style={[styles.rackCard, { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card }]}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: assigned ? tokens.foreground : tokens.slate400,
+                  fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
+                  fontSize: 9,
+                }}
+              >
+                Rack {rackGroup.rack}
+              </Text>
+              <View style={styles.bayRow}>
+                {rackGroup.bays.map((bayCell) => {
+                  const bayColor = statusColorFor(bayTasksTouching(bayCell, filteredTasks), bayLocs(bayCell, filteredTasks));
+                  return (
+                    <View
+                      key={bayCell.bay}
+                      style={[styles.baySeg, { backgroundColor: bayColor ?? 'transparent', borderColor: bayColor ?? (assigned ? rackBorder : UNASSIGNED_WIRE) }]}
+                    />
+                  );
+                })}
+              </View>
+              <Text style={{ color: tokens.slate400, fontSize: 7, marginTop: 1 }}>
+                {bayCount} {bayCount === 1 ? 'bay' : 'bays'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   const selectedTasks = selectedCell ? tasksTouching(selectedCell, myTasks) : [];
   const totalRackCount = zones.reduce((n, z) => n + z.racks.length, 0);
   const assignedRackCount = zones.reduce((n, z) => n + z.racks.filter((r) => isAssigned({ layout: z.layout, rack: r.rack })).length, 0);
@@ -187,35 +254,36 @@ export function WarehouseMapScreen() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader title="Warehouse Map" sub={`${assignedRackCount} of ${totalRackCount} racks assigned to you`} showBack />
 
+      <View style={styles.filterBarRow}>
+        {filter !== 'All' ? (
+          <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{filter}</Text>
+            <Pressable onPress={() => setFilter('All')} hitSlop={6}>
+              <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+            </Pressable>
+          </View>
+        ) : null}
+        {typeFilter !== 'All' ? (
+          <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{typeFilter}</Text>
+            <Pressable onPress={() => setTypeFilter('All')} hitSlop={6}>
+              <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+            </Pressable>
+          </View>
+        ) : null}
+        <Pressable
+          onPress={() => setFilterOpen((o) => !o)}
+          style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
+        >
+          <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
+        </Pressable>
+      </View>
+
       {zones.length ? (
         <View style={styles.body}>
           <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
             <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Warehouse Floor — Top View</Text>
-              <View style={styles.headRightRow}>
-                {filter !== 'All' ? (
-                  <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
-                    <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{filter}</Text>
-                    <Pressable onPress={() => setFilter('All')} hitSlop={6}>
-                      <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
-                    </Pressable>
-                  </View>
-                ) : null}
-                {typeFilter !== 'All' ? (
-                  <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
-                    <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{typeFilter}</Text>
-                    <Pressable onPress={() => setTypeFilter('All')} hitSlop={6}>
-                      <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
-                    </Pressable>
-                  </View>
-                ) : null}
-                <Pressable
-                  onPress={() => setFilterOpen((o) => !o)}
-                  style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
-                >
-                  <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
-                </Pressable>
-              </View>
             </View>
             <View style={[styles.legendRow, { borderBottomColor: tokens.border }]}>
               {(
@@ -236,76 +304,8 @@ export function WarehouseMapScreen() {
                 <View style={styles.stageCenter}>
                   <Animated.View style={floorAnimatedStyle}>
                     <View style={styles.planCanvas}>
-                      {zones.map((zone, zoneIndex) => {
-                        // Alternate each aisle's orientation (racks running
-                        // left-to-right vs. stacked top-to-bottom) so the
-                        // floor doesn't read as one uniform stack of rows —
-                        // a real warehouse has aisles running both ways.
-                        const vertical = zoneIndex % 2 === 1;
-                        return (
-                        <View key={zone.layout} style={styles.zone}>
-                          <View style={styles.zoneHeadRow}>
-                            <Ionicons name={vertical ? 'swap-vertical-outline' : 'swap-horizontal-outline'} size={12} color={tokens.mutedForeground} />
-                            <Text
-                              style={{
-                                color: tokens.mutedForeground,
-                                fontWeight: tokens.fontWeight.bold,
-                                fontSize: tokens.text.xxs,
-                                textTransform: 'uppercase',
-                                letterSpacing: 0.4,
-                              }}
-                            >
-                              {zone.layout}
-                            </Text>
-                          </View>
-                          <View style={[styles.zoneAisle, vertical ? styles.zoneAisleVertical : null]}>
-                            {zone.racks.map((rackGroup) => {
-                              const cell: RackCell = { layout: zone.layout, rack: rackGroup.rack };
-                              const assigned = isAssigned(cell);
-                              const rackColor = statusColorFor(tasksTouching(cell, filteredTasks), rackLocs(cell, filteredTasks));
-                              const rackBorder = rackColor ?? (assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE);
-                              const bayCount = rackGroup.bays.length;
-                              return (
-                                <Pressable
-                                  key={rackGroup.rack}
-                                  onPress={() => setSelectedCell(cell)}
-                                  hitSlop={4}
-                                  style={[styles.rackCard, { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card }]}
-                                >
-                                  <Text
-                                    numberOfLines={1}
-                                    style={{
-                                      color: assigned ? tokens.foreground : tokens.slate400,
-                                      fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
-                                      fontSize: 9,
-                                    }}
-                                  >
-                                    Rack {rackGroup.rack}
-                                  </Text>
-                                  <View style={styles.bayRow}>
-                                    {rackGroup.bays.map((bayCell) => {
-                                      const bayColor = statusColorFor(bayTasksTouching(bayCell, filteredTasks), bayLocs(bayCell, filteredTasks));
-                                      return (
-                                        <View
-                                          key={bayCell.bay}
-                                          style={[
-                                            styles.baySeg,
-                                            { backgroundColor: bayColor ?? 'transparent', borderColor: bayColor ?? (assigned ? rackBorder : UNASSIGNED_WIRE) },
-                                          ]}
-                                        />
-                                      );
-                                    })}
-                                  </View>
-                                  <Text style={{ color: tokens.slate400, fontSize: 7, marginTop: 1 }}>
-                                    {bayCount} {bayCount === 1 ? 'bay' : 'bays'}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        </View>
-                        );
-                      })}
+                      <View style={styles.zoneGroupCol}>{horizontalZones.map((zone) => renderZone(zone, false))}</View>
+                      <View style={styles.zoneGroupCol}>{verticalZones.map((zone) => renderZone(zone, true))}</View>
                     </View>
                   </Animated.View>
                 </View>
@@ -460,7 +460,7 @@ export function WarehouseMapScreen() {
 
 const styles = StyleSheet.create({
   filterIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  headRightRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterBarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, paddingHorizontal: 16, paddingTop: 12 },
   activeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
   legendRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 14, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -474,10 +474,11 @@ const styles = StyleSheet.create({
   diagramHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  planCanvas: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 40, padding: 10 },
+  planCanvas: { flexDirection: 'row', alignItems: 'flex-start', gap: 40, padding: 10 },
+  zoneGroupCol: { flexDirection: 'column', gap: 24 },
   zone: { gap: 6 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   zoneAisleVertical: { flexDirection: 'column', flexWrap: 'nowrap' },
   rackCard: { alignItems: 'center', width: 66, borderWidth: 1.5, borderRadius: 5, paddingVertical: 5, paddingHorizontal: 4, gap: 3 },
   bayRow: { flexDirection: 'row', gap: BAY_GAP },
