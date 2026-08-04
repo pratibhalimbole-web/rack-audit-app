@@ -13,52 +13,82 @@ import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits, useMyAudits } from '../dashboard/hooks';
 
-// A rack elevation is much taller than it is wide (real racking is tall
-// vertical shelving, not a squat cube) — RACK_W/RACK_H below reflect that
-// ~1:3 ratio, matching what an actual rack front elevation looks like.
-const RACK_W = 22;
-const RACK_H = 62;
-const CELL_W = 60;
-// Taller than the rack's own render height (rack + ground shadow + label
-// text below it) so adjacent aisle rows don't visually overlap once the
-// floor's scaleY(0.5) isometric squash is applied.
-const CELL_H = 92;
+const ISO_W = 28;
+const ISO_TOP_H = 16;
+const ISO_BODY_H = 40;
+const ISO_TOTAL_W = ISO_W * 2;
+const ISO_TOTAL_H = ISO_TOP_H + ISO_BODY_H;
+const CELL = 74;
 const ASSIGNED_WIRE_COLOR = '#5B6B82';
 const UNASSIGNED_WIRE_COLOR = '#DCE1E7';
 
-// Rendered as a flat, upright wireframe rack elevation (uprights + shelf-
-// level beams) — NOT its own little isometric cuboid. An earlier version
-// drew each rack as a mini 3D box, which combined with the floor's own
-// rotate+scaleY isometric transform made every rack look tilted/leaning
-// sideways instead of standing up straight. A flat 2D "elevation" sprite
-// placed on the rotated floor grid (the same trick isometric game maps use
-// for buildings/props) reads correctly as a rack standing on the floor.
+// A wireframe rack (stroke-only cuboid edges + a level/upright grid on each
+// face, like a real racking frame elevation) instead of a solid-colored
+// block — matches the reference "Rack Health" 3D view's look. Racks
+// assigned to one of my active tasks are drawn in a bold, dark wireframe so
+// they pop out of the floor; everything else (not assigned to me right now)
+// is drawn much lighter, so the eye naturally goes to what's mine. A rack
+// with an active task also gets a small colored zigzag "issue" marker on
+// the front face (in the task's due-bucket color), since we only know
+// status at rack granularity here, not per-shelf.
 function IsoRackBlock({ assigned, markerColor }: { assigned: boolean; markerColor: string | null }) {
   const wire = assigned ? ASSIGNED_WIRE_COLOR : UNASSIGNED_WIRE_COLOR;
   const strokeW = assigned ? 1.5 : 1;
+  const w = ISO_W;
   const levels = 4;
   const gridLines: React.ReactNode[] = [];
-  // Shelf-level beams (horizontal).
   for (let i = 1; i < levels; i++) {
-    const y = (RACK_H * i) / levels;
-    gridLines.push(<Line key={`beam${i}`} x1={0} y1={y} x2={RACK_W} y2={y} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.7 : 0.5} />);
+    const t = i / levels;
+    gridLines.push(
+      <Line key={`l${i}`} x1={0} y1={ISO_TOP_H / 2 + ISO_BODY_H * t} x2={w} y2={ISO_TOP_H + ISO_BODY_H * t} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.7 : 0.5} />,
+      <Line
+        key={`r${i}`}
+        x1={w}
+        y1={ISO_TOP_H + ISO_BODY_H * t}
+        x2={ISO_TOTAL_W}
+        y2={ISO_TOP_H / 2 + ISO_BODY_H * t}
+        stroke={wire}
+        strokeWidth={strokeW * 0.7}
+        opacity={assigned ? 0.7 : 0.5}
+      />,
+    );
   }
-  // A center upright, splitting the frame into two bays.
-  gridLines.push(<Line key="upright" x1={RACK_W / 2} y1={0} x2={RACK_W / 2} y2={RACK_H} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.6 : 0.4} />);
+  const uprights = [0.33, 0.67];
+  uprights.forEach((t, i) => {
+    // Left-face upright: interpolate between the face's top edge (0,topH/2)-(w,topH)
+    // and bottom edge (0,topH/2+bodyH)-(w,totalH) at fraction t.
+    const lx = w * t;
+    const ly0 = ISO_TOP_H / 2 + (ISO_TOP_H / 2) * t;
+    const ly1 = ISO_TOP_H / 2 + ISO_BODY_H + (ISO_TOP_H / 2) * t;
+    gridLines.push(<Line key={`lu${i}`} x1={lx} y1={ly0} x2={lx} y2={ly1} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.5 : 0.35} />);
+    // Right-face upright, mirrored.
+    const rx = w + w * t;
+    const ry0 = ISO_TOP_H - (ISO_TOP_H / 2) * t;
+    const ry1 = ISO_TOP_H + ISO_BODY_H - (ISO_TOP_H / 2) * t;
+    gridLines.push(<Line key={`ru${i}`} x1={rx} y1={ry0} x2={rx} y2={ry1} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.5 : 0.35} />);
+  });
 
+  const markerX = w;
+  const markerTop = ISO_TOP_H + ISO_BODY_H * 0.18;
+  const markerBottom = ISO_TOP_H + ISO_BODY_H * 0.82;
   const zigzag = markerColor
     ? Array.from({ length: 5 }, (_, i) => {
-        const y = RACK_H * 0.15 + (RACK_H * 0.7 * i) / 4;
-        const x = RACK_W / 2 + (i % 2 === 0 ? -5 : 5);
+        const y = markerTop + ((markerBottom - markerTop) * i) / 4;
+        const x = markerX + (i % 2 === 0 ? -4 : 4);
         return `${x},${y}`;
       }).join(' ')
     : null;
 
   return (
-    <Svg width={RACK_W} height={RACK_H + 6}>
-      {/* Ground shadow, so the rack reads as standing on the floor. */}
-      <Polygon points={`${RACK_W * 0.15},${RACK_H + 4} ${RACK_W * 0.85},${RACK_H + 4} ${RACK_W},${RACK_H} 0,${RACK_H}`} fill="rgba(15,23,42,0.08)" />
-      <Polygon points={`0,0 ${RACK_W},0 ${RACK_W},${RACK_H} 0,${RACK_H}`} fill="none" stroke={wire} strokeWidth={strokeW} />
+    <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 4}>
+      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill="none" stroke={wire} strokeWidth={strokeW} />
+      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill="none" stroke={wire} strokeWidth={strokeW} />
+      <Polygon
+        points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`}
+        fill="none"
+        stroke={wire}
+        strokeWidth={strokeW}
+      />
       {gridLines}
       {zigzag ? <Polyline points={zigzag} fill="none" stroke={markerColor!} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
     </Svg>
@@ -225,7 +255,6 @@ export function WarehouseMapScreen() {
                     upright and readable while still sitting in its grid
                     slot on the diamond. */}
                 <View style={styles.isoFloor}>
-                <View style={[styles.warehouseBoundary, { borderColor: tokens.border, backgroundColor: tokens.card }]}>
                   {zones.map((zone) => (
                     <View key={zone.layout} style={styles.isoRow}>
                       <View style={styles.isoLabelCell}>
@@ -269,7 +298,6 @@ export function WarehouseMapScreen() {
                       })}
                     </View>
                   ))}
-                </View>
                 </View>
               </Animated.View>
             </View>
@@ -377,10 +405,9 @@ const styles = StyleSheet.create({
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   isoFloor: { transform: [{ rotateZ: '45deg' }, { scaleY: 0.5 }] },
-  warehouseBoundary: { borderWidth: 3, padding: 18 },
   isoRow: { flexDirection: 'row' },
-  isoLabelCell: { width: CELL_W, height: CELL_H, alignItems: 'center', justifyContent: 'center' },
-  isoCell: { width: CELL_W, height: CELL_H, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 8 },
+  isoLabelCell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center' },
+  isoCell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center' },
   isoCounterRotate: { transform: [{ scaleY: 2 }, { rotateZ: '-45deg' }] },
   zoneLabelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   zoomHint: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
