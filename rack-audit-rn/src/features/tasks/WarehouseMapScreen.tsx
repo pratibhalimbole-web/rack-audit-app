@@ -417,7 +417,16 @@ export function WarehouseMapScreen() {
                           <Pressable
                             onPress={() => {
                               setSelectedCell(null);
-                              router.push({ pathname: '/audit/[auditId]', params: { auditId: a.audit_id } } as never);
+                              // Straight into the Rack View canvas for the exact
+                              // rack tapped on the floor — not the Audit Details
+                              // page — showing that rack's full bay diagram with
+                              // it already selected. No specific bay came from the
+                              // floor (only rack-level), so `bay` is left blank;
+                              // Rack View self-heals to that rack's first bay.
+                              router.push({
+                                pathname: '/audit/[auditId]/rack/[rackId]',
+                                params: { auditId: a.audit_id, layout: selectedCell.layout, rackId: selectedCell.rack, bay: '' },
+                              } as never);
                             }}
                             style={[styles.openTaskBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
                           >
