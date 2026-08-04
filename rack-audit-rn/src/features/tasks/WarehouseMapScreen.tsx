@@ -440,7 +440,9 @@ export function WarehouseMapScreen() {
                               <Text style={{ color: bucketTone.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{bucket}</Text>
                             </View>
 
-                            <View style={{ marginTop: 10 }}>
+                            <View style={[styles.cardDivider, { backgroundColor: tokens.border }]} />
+
+                            <View>
                               <Text style={styles.rackChipsLabel}>
                                 {otherRacks.length ? `Also on this task (${otherRacks.length})` : 'Only location on this task'}
                               </Text>
@@ -549,6 +551,7 @@ const styles = StyleSheet.create({
   sheet: { width: '100%', maxWidth: 520, maxHeight: '88%', padding: 20 },
   sheetHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
   sheetDivider: { height: 1, marginBottom: 14 },
+  cardDivider: { height: 1, marginTop: 10, marginBottom: 10 },
   taskCard: { borderWidth: 1, padding: 12 },
   sheetSectionLabel: { fontSize: 11, fontWeight: '700', color: '#8A94A3', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
   metaDivider: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#C4CCD6' },
