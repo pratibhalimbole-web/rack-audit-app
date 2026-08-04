@@ -25,6 +25,11 @@ export type Audit = {
   end_date: string; // ISO date
   status: AuditStatus;
   priority?: Priority;
+  // Set from the "SKU Type" field on the admin app's Create Audit form when
+  // this audit is only checking one specific SKU across its scope (e.g. only
+  // iPhone boxes) rather than every pallet — drives which pallets Rack View
+  // highlights as relevant to scan.
+  target_sku?: string;
 };
 
 export type EvidenceStroke = { color: string; points: { x: number; y: number }[] };

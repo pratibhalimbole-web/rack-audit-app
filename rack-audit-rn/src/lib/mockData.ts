@@ -50,6 +50,7 @@ export const INVENTORY_POOL: InventoryItem[] = [
   { sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', lot: 'L-2340' },
   { sku: 'SKU-4411', name: 'Washer Pack Steel', lot: 'L-2341' },
   { sku: 'SKU-4412', name: 'Rubber Gasket Set', lot: 'L-2342' },
+  { sku: 'SKU-1001', name: 'iPhone 15 Box', lot: 'L-1090' },
 ];
 
 export const AUDITS: Audit[] = [
@@ -82,7 +83,7 @@ export const AUDITS: Audit[] = [
   {
     audit_id: 'AUD-0240', audit_name: 'Full Count — Layouts A & B', audit_type: 'Full', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout A', 'Layout B'], team_members: ['Arjun Sharma', 'Meera Kulkarni'],
-    start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled',
+    start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled', target_sku: 'SKU-1001',
   },
 ];
 
@@ -393,6 +394,26 @@ LOCATIONS['AUD-0234'].layouts[0].racks[0].bays.forEach((bay) => {
     loc.status = 'Completed';
   });
 });
+
+// AUD-0240's target_sku (SKU-1001, "iPhone 15 Box") is what its Rack View
+// should highlight — scattered across a subset of Rack A-21's pallets, on
+// every level and across all three bays, rather than one whole bay, so the
+// canvas shows a realistic "found randomly, not just in one spot" spread.
+// Runs before buildMasterInventory/buildExpectedSkus (below) so those derive
+// their SKU-1001 entries from this seed automatically, the same way every
+// other location's expected SKU is derived from its seeded pallet.
+{
+  const iphoneBox = { sku: 'SKU-1001', name: 'iPhone 15 Box', lot: 'L-1090' };
+  const rackA21 = LOCATIONS['AUD-0240'].layouts[0].racks.find((r) => r.code === 'A-21');
+  rackA21?.bays.forEach((bay) => {
+    bay.locations.forEach((loc, i) => {
+      const pallet = loc.pallets[0];
+      if (pallet?.lines[0] && i % 4 === 0) {
+        pallet.lines[0] = { ...pallet.lines[0], sku: iphoneBox.sku, name: iphoneBox.name, lot: iphoneBox.lot };
+      }
+    });
+  });
+}
 
 // The warehouse's master slotting plan — what SKU/quantity is SUPPOSED to be
 // at a location, independent of whatever an inspector actually finds there.

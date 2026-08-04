@@ -81,9 +81,10 @@ export function RackViewScreen() {
   const misplaced = !!scannedLine && !skuMatched;
 
   // Drives the bay canvas cell colors: green once a pallet's scan resolves
-  // to a clean match, red for any kind of mismatch (wrong SKU, wrong qty,
-  // wrong condition), gray for anything not yet scanned this session.
-  const [locationStatus, setLocationStatus] = useState<Record<string, 'matched' | 'mismatch'>>({});
+  // to a clean match, amber when the right SKU was found but qty/condition
+  // is off ("matched but has an issue"), red when the wrong SKU was
+  // scanned entirely, gray for anything not yet scanned this session.
+  const [locationStatus, setLocationStatus] = useState<Record<string, 'matched' | 'issue' | 'mismatch'>>({});
 
   // Figma-style canvas: pinch to zoom, drag to pan, the toolbar/footer stay
   // put since only this transformed layer moves — not the whole screen.
@@ -174,8 +175,21 @@ export function RackViewScreen() {
   // the repo looks the location up by its real bay code, not just its own.
   const bayCodeForLoc = (locCode: string) => rackObj.bays.find((b) => b.locations.some((l) => l.code === locCode))?.code ?? rackObj.bays[0].code;
 
+  // When this audit has a target_sku (the admin's "SKU Type" field), only
+  // pallets actually carrying that SKU are in scope to select/scan at all —
+  // every other pallet is disabled on the canvas, absent from the Pallet
+  // picker, and ignored by both real and simulated pallet scans. Without a
+  // target_sku every pallet in the rack stays selectable, same as before.
+  const matchesTargetSku = (locCode: string) => !!audit.target_sku && (EXPECTED_SKUS[locCode] ?? []).some((l) => l.sku === audit.target_sku);
+  const isLocSelectable = (locCode: string) => !audit.target_sku || matchesTargetSku(locCode);
+  // Canvas highlight color: with a target_sku, only the matching pallets are
+  // highlighted dark; without one, any pallet that has an assigned SKU is
+  // (as before) — this is purely cosmetic and separate from selectability.
+  const isLocHighlighted = (locCode: string) => (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
+  const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
+
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
-  const palletOptions: SheetOption[] = rackLocations.map((l) => ({
+  const palletOptions: SheetOption[] = scannableLocations.map((l) => ({
     value: l.code,
     label: palletIdFor(l),
   }));
@@ -190,8 +204,8 @@ export function RackViewScreen() {
   };
 
   const handleSimulatedPalletScan = () => {
-    if (!rackLocations.length) return;
-    const loc = rackLocations[scanCycle % rackLocations.length];
+    if (!scannableLocations.length) return;
+    const loc = scannableLocations[scanCycle % scannableLocations.length];
     setScanCycle((c) => c + 1);
     setSelectedLoc(loc.code);
   };
@@ -199,16 +213,17 @@ export function RackViewScreen() {
   const handleRealPalletScanned = (data: string) => {
     setScannerOpen(null);
     const code = data.trim();
-    const match = rackLocations.find((l) => l.code === code);
+    const match = scannableLocations.find((l) => l.code === code);
     if (match) setSelectedLoc(match.code);
   };
 
   // Drives the bay canvas cell colors: green once a pallet's scan resolves
-  // to a clean match, red for any kind of mismatch (wrong SKU, wrong qty,
-  // wrong condition), gray (the default, just omitted from the map) for
-  // anything not yet scanned. Called from every place the scan/edit state
-  // for the open pallet can change, so the canvas behind the panel always
-  // reflects what's on screen right now.
+  // to a clean match, amber when the right SKU was found but qty/condition
+  // is off, red when the wrong SKU was scanned (misplaced), gray (the
+  // default, just omitted from the map) for anything not yet scanned.
+  // Called from every place the scan/edit state for the open pallet can
+  // change, so the canvas behind the panel always reflects what's on
+  // screen right now.
   const applyLocationStatus = (locCode: string, line: CountLine | null, expected: ExpectedSkuLine | null) => {
     setLocationStatus((prev) => {
       if (!line) {
@@ -217,8 +232,8 @@ export function RackViewScreen() {
         delete next[locCode];
         return next;
       }
-      const matched = !!expected && line.sku === expected.sku && line.qty === expected.qty && line.condition === 'Good';
-      const status: 'matched' | 'mismatch' = matched ? 'matched' : 'mismatch';
+      const skuMatches = !!expected && line.sku === expected.sku;
+      const status: 'matched' | 'issue' | 'mismatch' = !skuMatches ? 'mismatch' : line.qty === expected.qty && line.condition === 'Good' ? 'matched' : 'issue';
       return prev[locCode] === status ? prev : { ...prev, [locCode]: status };
     });
   };
@@ -254,7 +269,7 @@ export function RackViewScreen() {
     if (selectedLocObj && scanLines.length && !misplaced) {
       await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
-    const locs = rackLocations;
+    const locs = scannableLocations;
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
     const next = idx !== -1 ? locs[idx + 1] : undefined;
     if (!next) {
@@ -370,13 +385,36 @@ export function RackViewScreen() {
                                     if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
                                     const selected = cell.code === selectedLoc;
                                     const status = locationStatus[cell.code];
-                                    const bg = status === 'matched' ? tokens.rag.green.soft : status === 'mismatch' ? tokens.rag.red.soft : tokens.muted;
-                                    const border = selected ? tokens.primary : status === 'matched' ? tokens.rag.green.border : status === 'mismatch' ? tokens.rag.red.border : tokens.border;
+                                    const highlighted = isLocHighlighted(cell.code);
+                                    const selectable = isLocSelectable(cell.code);
+                                    const dimmed = !selectable;
+                                    const bg =
+                                      status === 'matched'
+                                        ? tokens.rag.green.soft
+                                        : status === 'issue'
+                                          ? tokens.rag.amber.soft
+                                          : status === 'mismatch'
+                                            ? tokens.rag.red.soft
+                                            : highlighted
+                                              ? tokens.slate300
+                                              : tokens.muted;
+                                    const border = selected
+                                      ? tokens.primary
+                                      : status === 'matched'
+                                        ? tokens.rag.green.border
+                                        : status === 'issue'
+                                          ? tokens.rag.amber.border
+                                          : status === 'mismatch'
+                                            ? tokens.rag.red.border
+                                            : highlighted
+                                              ? tokens.slate400
+                                              : tokens.border;
                                     return (
                                       <Pressable
                                         key={cell.code}
+                                        disabled={!selectable}
                                         onPress={() => setSelectedLoc(cell.code)}
-                                        style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
+                                        style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1, opacity: dimmed ? 0.45 : 1 }]}
                                       />
                                     );
                                   })}
