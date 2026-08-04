@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Ellipse, Polygon } from 'react-native-svg';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Svg, { Ellipse, Line, Polygon } from 'react-native-svg';
 import { AppHeader } from '@/components/AppHeader';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
@@ -27,22 +29,44 @@ const ISO_TOP_H = 15;
 const ISO_BODY_H = 34;
 const ISO_TOTAL_W = ISO_W * 2;
 const ISO_TOTAL_H = ISO_TOP_H + ISO_BODY_H;
+const CELL = 72;
 
 // A real isometric cuboid (top/left/right faces as SVG parallelograms, each
 // a different shade of the same tone) plus a soft ground-shadow ellipse —
-// not a flat rounded square with a drop shadow. Rendered as three faces so
-// it actually reads as a 3D rack block rather than a colored card.
+// not a flat rounded square with a drop shadow. Thin lines across the left/
+// right faces suggest shelf levels (like a real rack elevation), matching
+// the "mesh" texture of a real rack rather than a plain solid block.
 function IsoRackBlock({ tone }: { tone: { base: string; strong: string } | null }) {
   const topColor = tone ? tone.base : '#E4E7EC';
   const leftColor = tone ? tone.strong : '#C6CCD3';
   const rightColor = tone ? darken(tone.strong, 0.22) : '#A8B0B9';
+  const lineColor = tone ? darken(tone.strong, 0.38) : '#8D96A1';
   const w = ISO_W;
+  const levels = 4;
+  const leftLines = Array.from({ length: levels - 1 }, (_, i) => {
+    const t = (i + 1) / levels;
+    const x0 = 0;
+    const y0 = ISO_TOP_H / 2 + ISO_BODY_H * t;
+    const x1 = w;
+    const y1 = ISO_TOP_H + ISO_BODY_H * t;
+    return <Line key={`l${i}`} x1={x0} y1={y0} x2={x1} y2={y1} stroke={lineColor} strokeWidth={0.75} opacity={0.55} />;
+  });
+  const rightLines = Array.from({ length: levels - 1 }, (_, i) => {
+    const t = (i + 1) / levels;
+    const x0 = w;
+    const y0 = ISO_TOP_H + ISO_BODY_H * t;
+    const x1 = ISO_TOTAL_W;
+    const y1 = ISO_TOP_H / 2 + ISO_BODY_H * t;
+    return <Line key={`r${i}`} x1={x0} y1={y0} x2={x1} y2={y1} stroke={lineColor} strokeWidth={0.75} opacity={0.4} />;
+  });
   return (
     <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 10}>
       <Ellipse cx={w} cy={ISO_TOTAL_H + 5} rx={w * 0.85} ry={4} fill="rgba(15,23,42,0.16)" />
       <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill={topColor} />
       <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill={leftColor} />
       <Polygon points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`} fill={rightColor} />
+      {leftLines}
+      {rightLines}
     </Svg>
   );
 }
@@ -73,6 +97,36 @@ export function WarehouseMapScreen() {
 
   const myTasks = useMemo(() => audits.filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)), [audits]);
   const { map } = useAuditProgressMap(myTasks.map((a) => a.audit_id));
+
+  // Pinch-to-zoom/pan on the floor, same pattern as Rack View's canvas —
+  // the isometric floor is wide, so exploring it on a phone-sized screen
+  // needs zoom, not just a fixed layout.
+  const scale = useSharedValue(0.85);
+  const savedScale = useSharedValue(0.85);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = Math.min(3, Math.max(0.4, savedScale.value * e.scale));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+  const floorGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+  const floorAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
+  }));
 
   // The grid itself (which zones/racks exist) stays fixed regardless of the
   // active filter — only the highlight changes — so the map doesn't jump
@@ -143,44 +197,66 @@ export function WarehouseMapScreen() {
         })}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.canvas}>
-        {zones.length ? (
-          zones.map((zone) => (
-            <View key={zone.layout} style={styles.zone}>
-              <View style={styles.zoneHeadRow}>
-                <Ionicons name="business-outline" size={14} color={tokens.mutedForeground} />
-                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                  {zone.layout}
-                </Text>
-              </View>
-              <View style={[styles.zoneFloor, { backgroundColor: tokens.border }]} />
-              <View style={styles.zoneRacks}>
-                {zone.cells.map((cell) => {
-                  const tone = colorForCell(cell);
-                  const touchingCount = tasksTouching(cell, filteredTasks).length;
-                  return (
-                    <Pressable key={cell.rack} onPress={() => setSelectedCell(cell)} style={styles.rackWrap} hitSlop={4}>
-                      <IsoRackBlock tone={tone} />
-                      {touchingCount > 1 ? (
-                        <View style={[styles.multiBadge, { backgroundColor: tokens.foreground }]}>
-                          <Text style={{ color: tokens.card, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{touchingCount}</Text>
+      {zones.length ? (
+        <View style={styles.stage}>
+          <GestureDetector gesture={floorGesture}>
+            <View style={styles.stageCenter}>
+              <Animated.View style={floorAnimatedStyle}>
+                {/* True top-down isometric: the whole floor (ordinary stacked
+                    rows/columns) is rotated 45° then squashed vertically by
+                    half — the standard "rotate + scaleY(0.5)" trick that
+                    turns a flat grid into a diamond floor plan. Each rack
+                    inside gets the exact inverse transform so it renders
+                    upright and readable while still sitting in its grid
+                    slot on the diamond. */}
+                <View style={styles.isoFloor}>
+                  {zones.map((zone) => (
+                    <View key={zone.layout} style={styles.isoRow}>
+                      <View style={styles.isoLabelCell}>
+                        <View style={styles.isoCounterRotate}>
+                          <View style={[styles.zoneLabelChip, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                            <Ionicons name="business-outline" size={11} color={tokens.mutedForeground} />
+                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>{zone.layout}</Text>
+                          </View>
                         </View>
-                      ) : null}
-                      <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginTop: 2 }}>
-                        {cell.rack}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+                      </View>
+                      {zone.cells.map((cell) => {
+                        const tone = colorForCell(cell);
+                        const touchingCount = tasksTouching(cell, filteredTasks).length;
+                        return (
+                          <View key={cell.rack} style={styles.isoCell}>
+                            <View style={styles.isoCounterRotate}>
+                              <Pressable onPress={() => setSelectedCell(cell)} hitSlop={4} style={{ alignItems: 'center' }}>
+                                <IsoRackBlock tone={tone} />
+                                {touchingCount > 1 ? (
+                                  <View style={[styles.multiBadge, { backgroundColor: tokens.foreground }]}>
+                                    <Text style={{ color: tokens.card, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{touchingCount}</Text>
+                                  </View>
+                                ) : null}
+                                <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginTop: 2 }}>
+                                  {cell.rack}
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </Animated.View>
             </View>
-          ))
-        ) : (
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 40 }}>
-            No task locations to map yet.
-          </Text>
-        )}
-      </ScrollView>
+          </GestureDetector>
+          <View style={[styles.zoomHint, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+            <Ionicons name="resize-outline" size={13} color={tokens.mutedForeground} />
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Pinch to zoom · drag to pan</Text>
+          </View>
+        </View>
+      ) : (
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 40 }}>
+          No task locations to map yet.
+        </Text>
+      )}
 
       <Modal visible={!!selectedCell} transparent animationType="slide" onRequestClose={() => setSelectedCell(null)}>
         <Pressable style={styles.backdrop} onPress={() => setSelectedCell(null)}>
@@ -265,13 +341,16 @@ export function WarehouseMapScreen() {
 const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1 },
-  canvas: { padding: 16, paddingBottom: 40, gap: 22 },
-  zone: { gap: 10 },
-  zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  zoneFloor: { height: 2, borderRadius: 1, opacity: 0.6 },
-  zoneRacks: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, paddingTop: 4 },
-  rackWrap: { width: ISO_TOTAL_W + 6, alignItems: 'center' },
-  multiBadge: { position: 'absolute', top: -6, right: 0, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, zIndex: 1 },
+  stage: { flex: 1, overflow: 'hidden' },
+  stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  isoFloor: { transform: [{ rotateZ: '45deg' }, { scaleY: 0.5 }] },
+  isoRow: { flexDirection: 'row' },
+  isoLabelCell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center' },
+  isoCell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center' },
+  isoCounterRotate: { transform: [{ scaleY: 2 }, { rotateZ: '-45deg' }] },
+  zoneLabelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  zoomHint: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  multiBadge: { position: 'absolute', top: -6, right: 8, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, zIndex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { padding: 16, paddingTop: 10, maxHeight: '80%' },
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#D0D5DD', marginBottom: 14 },
