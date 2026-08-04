@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Ellipse, Polygon } from 'react-native-svg';
 import { AppHeader } from '@/components/AppHeader';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
@@ -9,6 +10,42 @@ import { useAuditProgressMap } from '@/hooks/useLocationsTree';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useMyAudits } from '../dashboard/hooks';
+
+// Darkens a "#rrggbb" hex color by `amount` (0-1) — used to derive the
+// side-face shade of an isometric block from its base tone, since RagTone/
+// AccentTone only give us two solid colors (base/strong), not three.
+function darken(hex: string, amount: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.max(0, Math.round(((num >> 16) & 0xff) * (1 - amount)));
+  const g = Math.max(0, Math.round(((num >> 8) & 0xff) * (1 - amount)));
+  const b = Math.max(0, Math.round((num & 0xff) * (1 - amount)));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+const ISO_W = 26;
+const ISO_TOP_H = 15;
+const ISO_BODY_H = 34;
+const ISO_TOTAL_W = ISO_W * 2;
+const ISO_TOTAL_H = ISO_TOP_H + ISO_BODY_H;
+
+// A real isometric cuboid (top/left/right faces as SVG parallelograms, each
+// a different shade of the same tone) plus a soft ground-shadow ellipse —
+// not a flat rounded square with a drop shadow. Rendered as three faces so
+// it actually reads as a 3D rack block rather than a colored card.
+function IsoRackBlock({ tone }: { tone: { base: string; strong: string } | null }) {
+  const topColor = tone ? tone.base : '#E4E7EC';
+  const leftColor = tone ? tone.strong : '#C6CCD3';
+  const rightColor = tone ? darken(tone.strong, 0.22) : '#A8B0B9';
+  const w = ISO_W;
+  return (
+    <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 10}>
+      <Ellipse cx={w} cy={ISO_TOTAL_H + 5} rx={w * 0.85} ry={4} fill="rgba(15,23,42,0.16)" />
+      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill={topColor} />
+      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill={leftColor} />
+      <Polygon points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`} fill={rightColor} />
+    </Svg>
+  );
+}
 
 // Not a tracker of where the inspector physically is — there's no device
 // location signal here — this is a visual "where do my tasks actually sit"
@@ -116,28 +153,22 @@ export function WarehouseMapScreen() {
                   {zone.layout}
                 </Text>
               </View>
+              <View style={[styles.zoneFloor, { backgroundColor: tokens.border }]} />
               <View style={styles.zoneRacks}>
                 {zone.cells.map((cell) => {
                   const tone = colorForCell(cell);
                   const touchingCount = tasksTouching(cell, filteredTasks).length;
                   return (
-                    <Pressable key={cell.rack} onPress={() => setSelectedCell(cell)} style={styles.rackWrap}>
-                      <View style={[styles.rackShadow, { backgroundColor: tone ? tone.strong : tokens.border, borderRadius: tokens.radius.lg }]} />
-                      <View
-                        style={[
-                          styles.rackFace,
-                          { backgroundColor: tone ? tone.base : tokens.card, borderColor: tone ? tone.strong : tokens.border, borderRadius: tokens.radius.lg },
-                        ]}
-                      >
-                        <Text numberOfLines={1} style={{ color: tone ? '#fff' : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                          {cell.rack}
-                        </Text>
-                      </View>
+                    <Pressable key={cell.rack} onPress={() => setSelectedCell(cell)} style={styles.rackWrap} hitSlop={4}>
+                      <IsoRackBlock tone={tone} />
                       {touchingCount > 1 ? (
                         <View style={[styles.multiBadge, { backgroundColor: tokens.foreground }]}>
                           <Text style={{ color: tokens.card, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{touchingCount}</Text>
                         </View>
                       ) : null}
+                      <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginTop: 2 }}>
+                        {cell.rack}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -237,11 +268,10 @@ const styles = StyleSheet.create({
   canvas: { padding: 16, paddingBottom: 40, gap: 22 },
   zone: { gap: 10 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  zoneRacks: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  rackWrap: { width: 66, height: 60 },
-  rackShadow: { position: 'absolute', top: 6, left: 6, width: 60, height: 54 },
-  rackFace: { position: 'absolute', top: 0, left: 0, width: 60, height: 54, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  multiBadge: { position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  zoneFloor: { height: 2, borderRadius: 1, opacity: 0.6 },
+  zoneRacks: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, paddingTop: 4 },
+  rackWrap: { width: ISO_TOTAL_W + 6, alignItems: 'center' },
+  multiBadge: { position: 'absolute', top: -6, right: 0, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, zIndex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { padding: 16, paddingTop: 10, maxHeight: '80%' },
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#D0D5DD', marginBottom: 14 },
