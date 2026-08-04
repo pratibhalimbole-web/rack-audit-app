@@ -51,8 +51,7 @@ export function RackViewScreen() {
   const { saveRecord } = useCountSheetMutations(auditId);
 
   const [rackCode, setRackCode] = useState(params.rackId);
-  const [bayCode, setBayCode] = useState(params.bay);
-  const [pickerField, setPickerField] = useState<'rack' | 'bay' | 'pallet' | null>(null);
+  const [pickerField, setPickerField] = useState<'rack' | 'pallet' | null>(null);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   const [scanCycle, setScanCycle] = useState(0);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
@@ -115,7 +114,9 @@ export function RackViewScreen() {
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
-  const seedKey = `${auditId}|${layout}|${rackCode}|${bayCode}`;
+  // Bay is no longer a pickable dimension — the whole rack's bays render
+  // together, so only the rack (and layout) identify what's on screen.
+  const seedKey = `${auditId}|${layout}|${rackCode}`;
   const seedKeyRef = useRef<string | null>(seedKey);
   useEffect(() => {
     if (seedKeyRef.current !== seedKey) {
@@ -130,18 +131,16 @@ export function RackViewScreen() {
     }
   }, [seedKey]);
 
-  // The requested layout/rack/bay (from route params or a stale picker
+  // The requested layout/rack (from route params or a stale picker
   // selection) may not exist in this audit's tree — rather than dead-ending
-  // on an error, fall back to the first rack/bay so Rack View for this
-  // task always renders something the inspector can act on.
+  // on an error, fall back to the first rack so Rack View for this task
+  // always renders something the inspector can act on.
   const fallbackLayoutObj = tree ? (findLayoutIn(tree, layout) ?? tree.layouts[0]) : undefined;
   const fallbackRackObj = tree && fallbackLayoutObj ? (findRackIn(tree, fallbackLayoutObj.name, rackCode) ?? fallbackLayoutObj.racks[0]) : undefined;
-  const fallbackBayObj = fallbackRackObj?.bays.find((b) => b.code === bayCode) ?? fallbackRackObj?.bays[0];
 
   useEffect(() => {
     if (fallbackRackObj && fallbackRackObj.code !== rackCode) setRackCode(fallbackRackObj.code);
-    if (fallbackBayObj && fallbackBayObj.code !== bayCode) setBayCode(fallbackBayObj.code);
-  }, [fallbackRackObj?.code, fallbackBayObj?.code]);
+  }, [fallbackRackObj?.code]);
 
   if (!audit || isLoading || !tree) {
     return (
@@ -153,9 +152,8 @@ export function RackViewScreen() {
 
   const layoutObj = fallbackLayoutObj;
   const rackObj = fallbackRackObj;
-  const bayObj = fallbackBayObj;
 
-  if (!layoutObj || !rackObj || !bayObj) {
+  if (!layoutObj || !rackObj || !rackObj.bays.length) {
     return (
       <View style={[styles.loading, { backgroundColor: tokens.muted }]}>
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>No bays are in scope for this task yet.</Text>
@@ -166,24 +164,24 @@ export function RackViewScreen() {
     );
   }
 
-  const selectedLocObj = selectedLoc ? bayObj.locations.find((l) => l.code === selectedLoc) ?? null : null;
-  const rows = buildBayDiagram(bayObj);
+  // The whole rack's locations, flattened across every one of its bays —
+  // used for selection lookup, the Pallet picker, and scan progression,
+  // since a rack can now be worked end to end without switching bays.
+  const rackLocations = rackObj.bays.flatMap((b) => b.locations);
+  const selectedLocObj = selectedLoc ? rackLocations.find((l) => l.code === selectedLoc) ?? null : null;
+  const bayDiagrams = rackObj.bays.map((b) => ({ bay: b, rows: buildBayDiagram(b) }));
+  // Which bay a location actually belongs to — needed when saving, since
+  // the repo looks the location up by its real bay code, not just its own.
+  const bayCodeForLoc = (locCode: string) => rackObj.bays.find((b) => b.locations.some((l) => l.code === locCode))?.code ?? rackObj.bays[0].code;
 
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
-  const bayOptions: SheetOption[] = rackObj.bays.map((b) => ({ value: b.code, label: `Bay ${b.code}` }));
-  const palletOptions: SheetOption[] = bayObj.locations.map((l) => ({
+  const palletOptions: SheetOption[] = rackLocations.map((l) => ({
     value: l.code,
     label: palletIdFor(l),
   }));
 
   const handlePickRack = (code: string) => {
-    const nextRack = findRackIn(tree, layout, code);
     setRackCode(code);
-    setBayCode(nextRack?.bays[0]?.code ?? '');
-    setPickerField(null);
-  };
-  const handlePickBay = (code: string) => {
-    setBayCode(code);
     setPickerField(null);
   };
   const handlePickPallet = (code: string) => {
@@ -192,8 +190,8 @@ export function RackViewScreen() {
   };
 
   const handleSimulatedPalletScan = () => {
-    if (!bayObj.locations.length) return;
-    const loc = bayObj.locations[scanCycle % bayObj.locations.length];
+    if (!rackLocations.length) return;
+    const loc = rackLocations[scanCycle % rackLocations.length];
     setScanCycle((c) => c + 1);
     setSelectedLoc(loc.code);
   };
@@ -201,7 +199,7 @@ export function RackViewScreen() {
   const handleRealPalletScanned = (data: string) => {
     setScannerOpen(null);
     const code = data.trim();
-    const match = bayObj.locations.find((l) => l.code === code);
+    const match = rackLocations.find((l) => l.code === code);
     if (match) setSelectedLoc(match.code);
   };
 
@@ -247,14 +245,16 @@ export function RackViewScreen() {
   };
 
   // Persists the pallet just finished, then jumps straight to the next
-  // location in this bay — selecting it (which highlights it on the
+  // location on this rack — selecting it (which highlights it on the
   // canvas behind the panel) and loading it up ready to scan, so the
   // inspector never has to close the panel and tap the canvas by hand.
+  // Progresses across all of the rack's bays in sequence, not just the one
+  // the current location happens to be in.
   const handleScanNext = async () => {
     if (selectedLocObj && scanLines.length && !misplaced) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCode, loc: selectedLocObj.code }, scanLines);
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
-    const locs = bayObj.locations;
+    const locs = rackLocations;
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
     const next = idx !== -1 ? locs[idx + 1] : undefined;
     if (!next) {
@@ -302,7 +302,7 @@ export function RackViewScreen() {
 
   const handleSaveSkuPanel = async () => {
     if (selectedLocObj && scanLines.length) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCode, loc: selectedLocObj.code }, scanLines);
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
     setSkuPanelOpen(false);
   };
@@ -319,15 +319,6 @@ export function RackViewScreen() {
             <>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
               <InlineDropdown options={rackOptions} selectedValue={rackCode} onSelect={handlePickRack} />
-            </>
-          ) : null}
-        </View>
-        <View>
-          <ToolbarField label={`Bay ${bayObj.code}`} open={pickerField === 'bay'} onPress={() => setPickerField(pickerField === 'bay' ? null : 'bay')} />
-          {pickerField === 'bay' ? (
-            <>
-              <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
-              <InlineDropdown options={bayOptions} selectedValue={bayCode} onSelect={handlePickBay} />
             </>
           ) : null}
         </View>
@@ -352,36 +343,44 @@ export function RackViewScreen() {
       <View style={styles.body}>
         <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
           <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Front View</Text>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+              Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
+            </Text>
           </View>
           <View style={styles.diagramBody}>
             <GestureDetector gesture={canvasGesture}>
               <View style={styles.diagramCenter}>
                 <Animated.View style={canvasAnimatedStyle}>
-                  <View style={styles.diagram}>
-                    {rows.map((row) => (
-                      <View key={row.level} style={styles.diagramRow}>
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 30 }}>L{row.level}</Text>
-                        <View style={styles.diagramCells}>
-                          {row.cells.map((cell, i) => {
-                            if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
-                            const selected = cell.code === selectedLoc;
-                            const status = locationStatus[cell.code];
-                            const bg = status === 'matched' ? tokens.rag.green.soft : status === 'mismatch' ? tokens.rag.red.soft : tokens.muted;
-                            const border = selected ? tokens.primary : status === 'matched' ? tokens.rag.green.border : status === 'mismatch' ? tokens.rag.red.border : tokens.border;
-                            return (
-                              <Pressable
-                                key={cell.code}
-                                onPress={() => setSelectedLoc(cell.code)}
-                                style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
-                              />
-                            );
-                          })}
+                  <View style={styles.bayColumnsRow}>
+                    {bayDiagrams.map(({ bay, rows }) => (
+                      <View key={bay.code} style={styles.bayColumn}>
+                        <View style={styles.diagram}>
+                          {rows.map((row) => (
+                            <View key={row.level} style={styles.diagramRow}>
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 22 }}>L{row.level}</Text>
+                              <View style={styles.diagramCells}>
+                                {row.cells.map((cell, i) => {
+                                  if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
+                                  const selected = cell.code === selectedLoc;
+                                  const status = locationStatus[cell.code];
+                                  const bg = status === 'matched' ? tokens.rag.green.soft : status === 'mismatch' ? tokens.rag.red.soft : tokens.muted;
+                                  const border = selected ? tokens.primary : status === 'matched' ? tokens.rag.green.border : status === 'mismatch' ? tokens.rag.red.border : tokens.border;
+                                  return (
+                                    <Pressable
+                                      key={cell.code}
+                                      onPress={() => setSelectedLoc(cell.code)}
+                                      style={[styles.cell, { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1 }]}
+                                    />
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          ))}
                         </View>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bay.code}</Text>
                       </View>
                     ))}
                   </View>
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bayObj.code}</Text>
                 </Animated.View>
               </View>
             </GestureDetector>
@@ -733,6 +732,8 @@ const styles = StyleSheet.create({
   diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   diagramBody: { flex: 1, padding: 14 },
   diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 28 },
+  bayColumn: { alignItems: 'center' },
   diagram: { gap: 6 },
   diagramRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   diagramCells: { flexDirection: 'row', gap: 8 },
