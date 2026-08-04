@@ -381,6 +381,19 @@ export function seedEvidenceForFlaggedLines(locationsMap: Record<string, AuditLo
 fillAllBaysToFullLevels(LOCATIONS);
 seedEvidenceForFlaggedLines(LOCATIONS);
 
+// Gives the demo a genuinely, fully complete rack (every location in every
+// bay marked Completed) to show off the Warehouse Map's green "Completed"
+// state — fillAllBaysToFullLevels above pads every bay with extra Not
+// Started locations regardless of genRacks' fullyDoneRacks intent, so
+// without this explicit override no rack could ever actually read as fully
+// done. AUD-0234 (Scheduled, not overdue as of TODAY) touches this rack, so
+// it renders green rather than red/blue on the map.
+LOCATIONS['AUD-0234'].layouts[0].racks[0].bays.forEach((bay) => {
+  bay.locations.forEach((loc) => {
+    loc.status = 'Completed';
+  });
+});
+
 // The warehouse's master slotting plan — what SKU/quantity is SUPPOSED to be
 // at a location, independent of whatever an inspector actually finds there.
 // Keyed by location code, since a location's slot assignment doesn't vary
