@@ -9,7 +9,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import type { Audit } from '@/lib/types';
+import type { Audit, AuditType } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits, useMyAudits } from '../dashboard/hooks';
 
@@ -105,6 +105,7 @@ function withOpacity(hex: string, alpha: number): string {
 // has — there's no real x/y floor-plan coordinate anywhere in this app.
 type RackCell = { layout: string; rack: string };
 type FilterKey = 'All' | DueBucketKey;
+type TypeFilterKey = 'All' | AuditType;
 
 const BUCKET_PRIORITY: DueBucketKey[] = ['Delayed', 'Today', 'This Week', 'This Month'];
 const BUCKET_COLOR_KEY: Record<DueBucketKey, 'red' | 'green' | 'accentBlue' | 'amber'> = {
@@ -112,6 +113,12 @@ const BUCKET_COLOR_KEY: Record<DueBucketKey, 'red' | 'green' | 'accentBlue' | 'a
   Today: 'green',
   'This Week': 'accentBlue',
   'This Month': 'amber',
+};
+const TASK_TYPES: AuditType[] = ['Full', 'Cycle Count', 'Spot Check'];
+const TASK_TYPE_ICON: Record<AuditType, keyof typeof Ionicons.glyphMap> = {
+  Full: 'layers-outline',
+  'Cycle Count': 'refresh-outline',
+  'Spot Check': 'locate-outline',
 };
 
 export function WarehouseMapScreen() {
@@ -123,6 +130,7 @@ export function WarehouseMapScreen() {
   // as part of some audit's scope.
   const { data: allAudits = [] } = useAudits();
   const [filter, setFilter] = useState<FilterKey>('All');
+  const [typeFilter, setTypeFilter] = useState<TypeFilterKey>('All');
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<RackCell | null>(null);
 
@@ -202,7 +210,8 @@ export function WarehouseMapScreen() {
   // the (dimmed) warehouse, separate from which color it's highlighted in.
   const isAssigned = (cell: RackCell) => tasksTouching(cell, myTasks).length > 0;
 
-  const filteredTasks = filter === 'All' ? myTasks : myTasks.filter((a) => dueBucket(a) === filter);
+  const filteredTasks = myTasks.filter((a) => (filter === 'All' || dueBucket(a) === filter) && (typeFilter === 'All' || a.audit_type === typeFilter));
+  const anyFilterActive = filter !== 'All' || typeFilter !== 'All';
 
   const colorForCell = (cell: RackCell): string | null => {
     const touching = tasksTouching(cell, filteredTasks);
@@ -224,31 +233,42 @@ export function WarehouseMapScreen() {
       <View style={styles.filterBarRow}>
         <Pressable
           onPress={() => setFilterOpen((o) => !o)}
-          style={[styles.filterBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
+          style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
         >
-          <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>{filter}</Text>
-          <Ionicons name={filterOpen ? 'chevron-up' : 'chevron-down'} size={14} color={tokens.mutedForeground} />
+          <Ionicons name="filter-outline" size={18} color={tokens.foreground} />
+          {anyFilterActive ? <View style={[styles.filterActiveDot, { backgroundColor: tokens.primary, borderColor: tokens.card }]} /> : null}
         </Pressable>
 
         {filterOpen ? (
           <>
             <Pressable style={styles.filterBackdrop} onPress={() => setFilterOpen(false)} />
             <View style={[styles.filterDropdown, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+              <Text style={[styles.filterSectionLabel, { color: tokens.mutedForeground }]}>Due Date</Text>
               {(['All', ...DUE_BUCKETS.map((b) => b.key)] as FilterKey[]).map((key) => {
                 const active = filter === key;
                 const bucketColor = key !== 'All' ? BUCKET_COLOR_KEY[key as DueBucketKey] : null;
                 const tone = bucketColor ? (bucketColor === 'accentBlue' ? tokens.accentBlue : tokens.rag[bucketColor]) : null;
                 return (
-                  <Pressable
-                    key={key}
-                    onPress={() => {
-                      setFilter(key);
-                      setFilterOpen(false);
-                    }}
-                    style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}
-                  >
+                  <Pressable key={key} onPress={() => setFilter(key)} style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}>
                     {tone ? <View style={[styles.filterDot, { backgroundColor: tone.base }]} /> : <View style={styles.filterDot} />}
+                    <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm, flex: 1 }}>
+                      {key}
+                    </Text>
+                    {active ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+
+              <Text style={[styles.filterSectionLabel, { color: tokens.mutedForeground, marginTop: 8 }]}>Task Type</Text>
+              {(['All', ...TASK_TYPES] as TypeFilterKey[]).map((key) => {
+                const active = typeFilter === key;
+                return (
+                  <Pressable key={key} onPress={() => setTypeFilter(key)} style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}>
+                    <Ionicons
+                      name={key === 'All' ? 'apps-outline' : TASK_TYPE_ICON[key as AuditType]}
+                      size={15}
+                      color={active ? tokens.primary : tokens.mutedForeground}
+                    />
                     <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm, flex: 1 }}>
                       {key}
                     </Text>
@@ -415,10 +435,12 @@ export function WarehouseMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  filterBarRow: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 12, height: 38 },
+  filterBarRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  filterIconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  filterActiveDot: { position: 'absolute', top: -3, right: -3, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
   filterBackdrop: { position: 'absolute', top: -1000, left: -1000, right: -1000, bottom: -1000, zIndex: 5 },
-  filterDropdown: { position: 'absolute', top: 42, left: 0, width: 200, borderWidth: 1, paddingVertical: 4, zIndex: 6 },
+  filterDropdown: { position: 'absolute', top: 42, right: 0, width: 220, borderWidth: 1, paddingVertical: 6, zIndex: 6 },
+  filterSectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   filterOption: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   filterDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'transparent' },
   stage: { flex: 1, overflow: 'hidden' },
