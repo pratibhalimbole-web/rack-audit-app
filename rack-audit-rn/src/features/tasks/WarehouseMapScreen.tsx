@@ -285,7 +285,7 @@ export function WarehouseMapScreen() {
             <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Warehouse Floor — Top View</Text>
             </View>
-            <View style={[styles.legendRow, { borderBottomColor: tokens.border }]}>
+            <View style={styles.legendRow}>
               {(
                 [
                   { label: 'Completed', color: tokens.rag.green.base },
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   filterIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   filterBarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, paddingHorizontal: 16, paddingTop: 12 },
   activeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
-  legendRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 14, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
+  legendRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 14, paddingHorizontal: 14, paddingVertical: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   filterBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 24 },
