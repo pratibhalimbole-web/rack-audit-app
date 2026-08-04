@@ -397,6 +397,12 @@ export function WarehouseMapScreen() {
                   </Pressable>
                 </View>
 
+                {selectedTasks.length ? (
+                  <Text style={styles.sheetSectionLabel}>
+                    Part of {selectedTasks.length} task{selectedTasks.length === 1 ? '' : 's'}
+                  </Text>
+                ) : null}
+
                 <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 10 }}>
                   {selectedTasks.length ? (
                     selectedTasks.map((a) => {
@@ -411,48 +417,66 @@ export function WarehouseMapScreen() {
                         ).values(),
                       );
                       return (
-                        <View key={a.audit_id} style={[styles.taskCard, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1, marginRight: 8 }}>
-                              {a.audit_name}
-                            </Text>
-                            <Pill label={uiStatus(a)} tone={uiStatus(a)} />
+                        <View
+                          key={a.audit_id}
+                          style={[
+                            styles.taskCard,
+                            { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg, borderLeftWidth: 4, borderLeftColor: bucketTone.base },
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }} numberOfLines={1}>
+                                {a.audit_name}
+                              </Text>
+                              <Pill label={uiStatus(a)} tone={uiStatus(a)} />
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{a.audit_id}</Text>
+                              <View style={styles.metaDivider} />
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{a.audit_type}</Text>
+                              <View style={styles.metaDivider} />
+                              <Text style={{ color: bucketTone.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{bucket}</Text>
+                            </View>
+
+                            <View style={{ marginTop: 10 }}>
+                              <Text style={styles.rackChipsLabel}>
+                                {otherRacks.length ? `Also on this task (${otherRacks.length})` : 'Only location on this task'}
+                              </Text>
+                              {otherRacks.length ? (
+                                <View style={styles.rackChipsRow}>
+                                  {otherRacks.map((l) => (
+                                    <View key={`${l.layout}|${l.rack}`} style={[styles.rackChip, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                                      <Text style={{ color: tokens.foreground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
+                                        {l.rack}
+                                      </Text>
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>{l.layout}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              ) : null}
+                            </View>
+
+                            <Pressable
+                              onPress={() => {
+                                setSelectedCell(null);
+                                // Straight into the Rack View canvas for the exact
+                                // rack tapped on the floor — not the Audit Details
+                                // page — showing that rack's full bay diagram with
+                                // it already selected. No specific bay came from the
+                                // floor (only rack-level), so `bay` is left blank;
+                                // Rack View self-heals to that rack's first bay.
+                                router.push({
+                                  pathname: '/audit/[auditId]/rack/[rackId]',
+                                  params: { auditId: a.audit_id, layout: selectedCell.layout, rackId: selectedCell.rack, bay: '' },
+                                } as never);
+                              }}
+                              style={[styles.openTaskBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+                            >
+                              <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Start Task</Text>
+                              <Ionicons name="chevron-forward" size={14} color={tokens.primaryForeground} />
+                            </Pressable>
                           </View>
-                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 3 }}>
-                            {a.audit_id} · {a.audit_type}
-                          </Text>
-                          <View style={[styles.bucketBadge, { backgroundColor: bucketTone.soft, borderRadius: tokens.radius.sm, marginTop: 8 }]}>
-                            <Text style={{ color: bucketTone.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{bucket}</Text>
-                          </View>
-                          {otherRacks.length ? (
-                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 8, lineHeight: 16 }}>
-                              Also spans {otherRacks.length} more location{otherRacks.length === 1 ? '' : 's'} on this task —{' '}
-                              {otherRacks.map((l) => `${l.layout} · Rack ${l.rack}`).join(', ')}. Worth weighing how far that is before committing to this one.
-                            </Text>
-                          ) : (
-                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 8 }}>
-                              This is the only location on this task.
-                            </Text>
-                          )}
-                          <Pressable
-                            onPress={() => {
-                              setSelectedCell(null);
-                              // Straight into the Rack View canvas for the exact
-                              // rack tapped on the floor — not the Audit Details
-                              // page — showing that rack's full bay diagram with
-                              // it already selected. No specific bay came from the
-                              // floor (only rack-level), so `bay` is left blank;
-                              // Rack View self-heals to that rack's first bay.
-                              router.push({
-                                pathname: '/audit/[auditId]/rack/[rackId]',
-                                params: { auditId: a.audit_id, layout: selectedCell.layout, rackId: selectedCell.rack, bay: '' },
-                              } as never);
-                            }}
-                            style={[styles.openTaskBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
-                          >
-                            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Start Task</Text>
-                            <Ionicons name="chevron-forward" size={14} color={tokens.primaryForeground} />
-                          </Pressable>
                         </View>
                       );
                     })
@@ -502,6 +526,10 @@ const styles = StyleSheet.create({
   sheet: { width: '100%', maxWidth: 440, maxHeight: '80%', padding: 18 },
   sheetHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   taskCard: { borderWidth: 1, padding: 12 },
-  bucketBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3 },
+  sheetSectionLabel: { fontSize: 11, fontWeight: '700', color: '#8A94A3', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
+  metaDivider: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#C4CCD6' },
+  rackChipsLabel: { fontSize: 10, fontWeight: '600', color: '#8A94A3', marginBottom: 5 },
+  rackChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  rackChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4, alignItems: 'center' },
   openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 36, marginTop: 10 },
 });
