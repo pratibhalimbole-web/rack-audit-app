@@ -11,7 +11,7 @@ import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/audit
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useMyAudits } from '../dashboard/hooks';
+import { useAudits, useMyAudits } from '../dashboard/hooks';
 
 const ISO_W = 28;
 const ISO_TOP_H = 16;
@@ -19,23 +19,38 @@ const ISO_BODY_H = 40;
 const ISO_TOTAL_W = ISO_W * 2;
 const ISO_TOTAL_H = ISO_TOP_H + ISO_BODY_H;
 const CELL = 74;
-const WIRE_COLOR = '#B6C0CC';
+const ASSIGNED_WIRE_COLOR = '#5B6B82';
+const UNASSIGNED_WIRE_COLOR = '#DCE1E7';
 
 // A wireframe rack (stroke-only cuboid edges + a level/upright grid on each
 // face, like a real racking frame elevation) instead of a solid-colored
-// block — matches the reference "Rack Health" 3D view's look. Racks with an
-// active task get a small colored zigzag "issue" marker on the front face
-// (in the task's due-bucket color) rather than recoloring the whole rack,
-// since we only know status at rack granularity, not per-shelf.
-function IsoRackBlock({ markerColor }: { markerColor: string | null }) {
+// block — matches the reference "Rack Health" 3D view's look. Racks
+// assigned to one of my active tasks are drawn in a bold, dark wireframe so
+// they pop out of the floor; everything else (not assigned to me right now)
+// is drawn much lighter, so the eye naturally goes to what's mine. A rack
+// with an active task also gets a small colored zigzag "issue" marker on
+// the front face (in the task's due-bucket color), since we only know
+// status at rack granularity here, not per-shelf.
+function IsoRackBlock({ assigned, markerColor }: { assigned: boolean; markerColor: string | null }) {
+  const wire = assigned ? ASSIGNED_WIRE_COLOR : UNASSIGNED_WIRE_COLOR;
+  const strokeW = assigned ? 1.5 : 1;
   const w = ISO_W;
   const levels = 4;
   const gridLines: React.ReactNode[] = [];
   for (let i = 1; i < levels; i++) {
     const t = i / levels;
     gridLines.push(
-      <Line key={`l${i}`} x1={0} y1={ISO_TOP_H / 2 + ISO_BODY_H * t} x2={w} y2={ISO_TOP_H + ISO_BODY_H * t} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.7} />,
-      <Line key={`r${i}`} x1={w} y1={ISO_TOP_H + ISO_BODY_H * t} x2={ISO_TOTAL_W} y2={ISO_TOP_H / 2 + ISO_BODY_H * t} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.7} />,
+      <Line key={`l${i}`} x1={0} y1={ISO_TOP_H / 2 + ISO_BODY_H * t} x2={w} y2={ISO_TOP_H + ISO_BODY_H * t} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.7 : 0.5} />,
+      <Line
+        key={`r${i}`}
+        x1={w}
+        y1={ISO_TOP_H + ISO_BODY_H * t}
+        x2={ISO_TOTAL_W}
+        y2={ISO_TOP_H / 2 + ISO_BODY_H * t}
+        stroke={wire}
+        strokeWidth={strokeW * 0.7}
+        opacity={assigned ? 0.7 : 0.5}
+      />,
     );
   }
   const uprights = [0.33, 0.67];
@@ -45,12 +60,12 @@ function IsoRackBlock({ markerColor }: { markerColor: string | null }) {
     const lx = w * t;
     const ly0 = ISO_TOP_H / 2 + (ISO_TOP_H / 2) * t;
     const ly1 = ISO_TOP_H / 2 + ISO_BODY_H + (ISO_TOP_H / 2) * t;
-    gridLines.push(<Line key={`lu${i}`} x1={lx} y1={ly0} x2={lx} y2={ly1} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.5} />);
+    gridLines.push(<Line key={`lu${i}`} x1={lx} y1={ly0} x2={lx} y2={ly1} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.5 : 0.35} />);
     // Right-face upright, mirrored.
     const rx = w + w * t;
     const ry0 = ISO_TOP_H - (ISO_TOP_H / 2) * t;
     const ry1 = ISO_TOP_H + ISO_BODY_H - (ISO_TOP_H / 2) * t;
-    gridLines.push(<Line key={`ru${i}`} x1={rx} y1={ry0} x2={rx} y2={ry1} stroke={WIRE_COLOR} strokeWidth={1} opacity={0.5} />);
+    gridLines.push(<Line key={`ru${i}`} x1={rx} y1={ry0} x2={rx} y2={ry1} stroke={wire} strokeWidth={strokeW * 0.7} opacity={assigned ? 0.5 : 0.35} />);
   });
 
   const markerX = w;
@@ -66,13 +81,13 @@ function IsoRackBlock({ markerColor }: { markerColor: string | null }) {
 
   return (
     <Svg width={ISO_TOTAL_W} height={ISO_TOTAL_H + 4}>
-      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill="none" stroke={WIRE_COLOR} strokeWidth={1.25} />
-      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill="none" stroke={WIRE_COLOR} strokeWidth={1.25} />
+      <Polygon points={`${w},0 ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${w},${ISO_TOP_H} 0,${ISO_TOP_H / 2}`} fill="none" stroke={wire} strokeWidth={strokeW} />
+      <Polygon points={`0,${ISO_TOP_H / 2} ${w},${ISO_TOP_H} ${w},${ISO_TOTAL_H} 0,${ISO_TOP_H / 2 + ISO_BODY_H}`} fill="none" stroke={wire} strokeWidth={strokeW} />
       <Polygon
         points={`${w},${ISO_TOP_H} ${ISO_TOTAL_W},${ISO_TOP_H / 2} ${ISO_TOTAL_W},${ISO_TOP_H / 2 + ISO_BODY_H} ${w},${ISO_TOTAL_H}`}
         fill="none"
-        stroke={WIRE_COLOR}
-        strokeWidth={1.25}
+        stroke={wire}
+        strokeWidth={strokeW}
       />
       {gridLines}
       {zigzag ? <Polyline points={zigzag} fill="none" stroke={markerColor!} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
@@ -100,13 +115,18 @@ const BUCKET_COLOR_KEY: Record<DueBucketKey, 'red' | 'green' | 'accentBlue' | 'a
 
 export function WarehouseMapScreen() {
   const { tokens } = useTheme();
-  const { data: audits = [] } = useMyAudits();
+  const { data: myAudits = [] } = useMyAudits();
+  // The floor itself is drawn from every audit in the warehouse (not just
+  // mine) so unassigned racks actually show up on the map — otherwise
+  // there'd be nothing to dim, since a rack only exists in this data model
+  // as part of some audit's scope.
+  const { data: allAudits = [] } = useAudits();
   const [filter, setFilter] = useState<FilterKey>('All');
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<RackCell | null>(null);
 
-  const myTasks = useMemo(() => audits.filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)), [audits]);
-  const { map } = useAuditProgressMap(myTasks.map((a) => a.audit_id));
+  const myTasks = useMemo(() => myAudits.filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)), [myAudits]);
+  const { map } = useAuditProgressMap(allAudits.map((a) => a.audit_id));
 
   // Pinch-to-zoom/pan on the floor, same pattern as Rack View's canvas —
   // the isometric floor is wide, so exploring it on a phone-sized screen
@@ -138,12 +158,12 @@ export function WarehouseMapScreen() {
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
-  // The grid itself (which zones/racks exist) stays fixed regardless of the
-  // active filter — only the highlight changes — so the map doesn't jump
-  // around every time someone taps a different filter chip.
+  // The grid itself (every rack in the warehouse, from every audit) stays
+  // fixed regardless of the active filter — only the highlight changes —
+  // so the map doesn't jump around every time someone taps a filter option.
   const zones = useMemo(() => {
     const byLayout = new Map<string, Map<string, RackCell>>();
-    myTasks.forEach((a) => {
+    allAudits.forEach((a) => {
       (map[a.audit_id]?.allLocations ?? []).forEach(({ layout, rack }) => {
         if (!byLayout.has(layout)) byLayout.set(layout, new Map());
         const racks = byLayout.get(layout)!;
@@ -153,10 +173,15 @@ export function WarehouseMapScreen() {
     return Array.from(byLayout.entries())
       .map(([layout, racks]) => ({ layout, cells: Array.from(racks.values()).sort((a, b) => a.rack.localeCompare(b.rack)) }))
       .sort((a, b) => a.layout.localeCompare(b.layout));
-  }, [myTasks, map]);
+  }, [allAudits, map]);
 
   const tasksTouching = (cell: RackCell, pool: Audit[]) =>
     pool.filter((a) => (map[a.audit_id]?.allLocations ?? []).some((l) => l.layout === cell.layout && l.rack === cell.rack));
+
+  // Assigned = touched by one of my active tasks, regardless of the current
+  // due-bucket filter — this is what tells a rack apart from the rest of
+  // the (dimmed) warehouse, separate from which color it's highlighted in.
+  const isAssigned = (cell: RackCell) => tasksTouching(cell, myTasks).length > 0;
 
   const filteredTasks = filter === 'All' ? myTasks : myTasks.filter((a) => dueBucket(a) === filter);
 
@@ -170,10 +195,12 @@ export function WarehouseMapScreen() {
   };
 
   const selectedTasks = selectedCell ? tasksTouching(selectedCell, myTasks) : [];
+  const totalRackCount = zones.reduce((n, z) => n + z.cells.length, 0);
+  const assignedRackCount = zones.reduce((n, z) => n + z.cells.filter(isAssigned).length, 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Warehouse Map" sub={`${myTasks.length} task${myTasks.length === 1 ? '' : 's'} across the floor`} showBack />
+      <AppHeader title="Warehouse Map" sub={`${assignedRackCount} of ${totalRackCount} racks assigned to you`} showBack />
 
       <View style={styles.filterBarRow}>
         <Pressable
@@ -239,20 +266,29 @@ export function WarehouseMapScreen() {
                         </View>
                       </View>
                       {zone.cells.map((cell) => {
+                        const assigned = isAssigned(cell);
                         const markerColor = colorForCell(cell);
                         const touchingCount = tasksTouching(cell, filteredTasks).length;
                         return (
                           <View key={cell.rack} style={styles.isoCell}>
                             <View style={styles.isoCounterRotate}>
                               <Pressable onPress={() => setSelectedCell(cell)} hitSlop={6} style={{ alignItems: 'center' }}>
-                                <IsoRackBlock markerColor={markerColor} />
+                                <IsoRackBlock assigned={assigned} markerColor={markerColor} />
                                 {touchingCount ? (
                                   <View style={[styles.taskBadge, { backgroundColor: markerColor ?? tokens.mutedForeground, borderColor: tokens.card }]}>
                                     <Ionicons name="flag" size={9} color="#fff" />
                                     {touchingCount > 1 ? <Text style={styles.taskBadgeCount}>{touchingCount}</Text> : null}
                                   </View>
                                 ) : null}
-                                <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginTop: 2 }}>
+                                <Text
+                                  numberOfLines={1}
+                                  style={{
+                                    color: assigned ? tokens.foreground : tokens.slate400,
+                                    fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
+                                    fontSize: tokens.text.xxs,
+                                    marginTop: 2,
+                                  }}
+                                >
                                   {cell.rack}
                                 </Text>
                               </Pressable>
@@ -277,16 +313,22 @@ export function WarehouseMapScreen() {
         </Text>
       )}
 
-      <Modal visible={!!selectedCell} transparent animationType="slide" onRequestClose={() => setSelectedCell(null)}>
+      <Modal visible={!!selectedCell} transparent animationType="fade" onRequestClose={() => setSelectedCell(null)}>
         <Pressable style={styles.backdrop} onPress={() => setSelectedCell(null)}>
-          <Pressable style={[styles.sheet, { backgroundColor: tokens.card, borderTopLeftRadius: tokens.radius.xxl, borderTopRightRadius: tokens.radius.xxl }]} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.sheetHandle} />
+          <Pressable style={[styles.sheet, { backgroundColor: tokens.card, borderRadius: tokens.radius.xxl }]} onPress={(e) => e.stopPropagation()}>
             {selectedCell ? (
               <>
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
-                  Rack {selectedCell.rack}
-                </Text>
-                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2, marginBottom: 14 }}>{selectedCell.layout}</Text>
+                <View style={styles.sheetHeadRow}>
+                  <View>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                      Rack {selectedCell.rack}
+                    </Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{selectedCell.layout}</Text>
+                  </View>
+                  <Pressable onPress={() => setSelectedCell(null)} hitSlop={8}>
+                    <Ionicons name="close" size={22} color={tokens.mutedForeground} />
+                  </Pressable>
+                </View>
 
                 <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 10 }}>
                   {selectedTasks.length ? (
@@ -344,10 +386,6 @@ export function WarehouseMapScreen() {
                     </Text>
                   )}
                 </ScrollView>
-
-                <Pressable onPress={() => setSelectedCell(null)} style={[styles.closeBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Close</Text>
-                </Pressable>
               </>
             ) : null}
           </Pressable>
@@ -389,11 +427,10 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   taskBadgeCount: { color: '#fff', fontSize: 9, fontWeight: '700' },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheet: { padding: 16, paddingTop: 10, maxHeight: '80%' },
-  sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#D0D5DD', marginBottom: 14 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  sheet: { width: '100%', maxWidth: 440, maxHeight: '80%', padding: 18 },
+  sheetHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   taskCard: { borderWidth: 1, padding: 12 },
   bucketBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3 },
   openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 36, marginTop: 10 },
-  closeBtn: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, height: 46, marginTop: 14 },
 });
