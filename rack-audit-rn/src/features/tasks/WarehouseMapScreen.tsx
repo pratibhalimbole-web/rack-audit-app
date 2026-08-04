@@ -216,7 +216,6 @@ export function WarehouseMapScreen() {
                             {zone.racks.map((rackGroup) => {
                               const cell: RackCell = { layout: zone.layout, rack: rackGroup.rack };
                               const assigned = isAssigned(cell);
-                              const touchingCount = tasksTouching(cell, filteredTasks).length;
                               const rackBorder = assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE;
                               const bayCount = rackGroup.bays.length;
                               return (
@@ -226,12 +225,6 @@ export function WarehouseMapScreen() {
                                   hitSlop={4}
                                   style={[styles.rackCard, { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card }]}
                                 >
-                                  {touchingCount ? (
-                                    <View style={[styles.taskBadge, { backgroundColor: bucketColorFor(tasksTouching(cell, filteredTasks)) ?? tokens.mutedForeground, borderColor: tokens.card }]}>
-                                      <Ionicons name="flag" size={8} color="#fff" />
-                                      {touchingCount > 1 ? <Text style={styles.taskBadgeCount}>{touchingCount}</Text> : null}
-                                    </View>
-                                  ) : null}
                                   <Text
                                     numberOfLines={1}
                                     style={{
@@ -436,22 +429,6 @@ const styles = StyleSheet.create({
   rackCard: { alignItems: 'center', width: 66, borderWidth: 1.5, borderRadius: 5, paddingVertical: 5, paddingHorizontal: 4, gap: 3 },
   bayRow: { flexDirection: 'row', gap: BAY_GAP },
   baySeg: { width: BAY_SEG_W, height: BAY_SEG_H, borderWidth: 1, borderRadius: 1.5 },
-  taskBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-    zIndex: 1,
-  },
-  taskBadgeCount: { color: '#fff', fontSize: 8, fontWeight: '700' },
   zoomHint: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheet: { width: '100%', maxWidth: 440, maxHeight: '80%', padding: 18 },
