@@ -165,7 +165,6 @@ export function WarehouseMapScreen() {
   const isAssigned = (cell: RackCell) => tasksTouching(cell, myTasks).length > 0;
 
   const filteredTasks = myTasks.filter((a) => (filter === 'All' || dueBucket(a) === filter) && (typeFilter === 'All' || a.audit_type === typeFilter));
-  const anyFilterActive = filter !== 'All' || typeFilter !== 'All';
 
   // Just three states instead of a color per due-bucket: red if any touching
   // task is overdue (delayed wins regardless of anything else), green if
@@ -193,13 +192,44 @@ export function WarehouseMapScreen() {
           <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
             <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Warehouse Floor — Top View</Text>
-              <Pressable
-                onPress={() => setFilterOpen((o) => !o)}
-                style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
-              >
-                <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
-                {anyFilterActive ? <View style={[styles.filterActiveDot, { backgroundColor: tokens.primary, borderColor: tokens.card }]} /> : null}
-              </Pressable>
+              <View style={styles.headRightRow}>
+                {filter !== 'All' ? (
+                  <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+                    <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{filter}</Text>
+                    <Pressable onPress={() => setFilter('All')} hitSlop={6}>
+                      <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+                    </Pressable>
+                  </View>
+                ) : null}
+                {typeFilter !== 'All' ? (
+                  <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+                    <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{typeFilter}</Text>
+                    <Pressable onPress={() => setTypeFilter('All')} hitSlop={6}>
+                      <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+                    </Pressable>
+                  </View>
+                ) : null}
+                <Pressable
+                  onPress={() => setFilterOpen((o) => !o)}
+                  style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
+                >
+                  <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
+                </Pressable>
+              </View>
+            </View>
+            <View style={[styles.legendRow, { borderBottomColor: tokens.border }]}>
+              {(
+                [
+                  { label: 'Completed', color: tokens.rag.green.base },
+                  { label: 'Assigned', color: tokens.accentBlue.base },
+                  { label: 'Delayed', color: tokens.rag.red.base },
+                ] as const
+              ).map((item) => (
+                <View key={item.label} style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{item.label}</Text>
+                </View>
+              ))}
             </View>
             <View style={styles.stage}>
               <GestureDetector gesture={floorGesture}>
@@ -430,7 +460,11 @@ export function WarehouseMapScreen() {
 
 const styles = StyleSheet.create({
   filterIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  filterActiveDot: { position: 'absolute', top: -3, right: -3, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
+  headRightRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  activeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
+  legendRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 14, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
   filterBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 24 },
   filterDropdown: { width: 220, borderWidth: 1, paddingVertical: 6 },
   filterSectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
