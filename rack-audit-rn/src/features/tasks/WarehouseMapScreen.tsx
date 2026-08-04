@@ -211,7 +211,7 @@ export function WarehouseMapScreen() {
                         // left-to-right vs. stacked top-to-bottom) so the
                         // floor doesn't read as one uniform stack of rows —
                         // a real warehouse has aisles running both ways.
-                        const vertical = zoneIndex % 2 === 1;
+                        const vertical = zoneIndex % 2 === 0;
                         return (
                         <View key={zone.layout} style={styles.zone}>
                           <View style={styles.zoneHeadRow}>
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   diagramHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  planCanvas: { gap: 20, padding: 10 },
+  planCanvas: { gap: 40, padding: 10 },
   zone: { gap: 6 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
