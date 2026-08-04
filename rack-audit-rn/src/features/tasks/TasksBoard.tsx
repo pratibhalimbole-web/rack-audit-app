@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { TodoCard } from '@/components/TodoCard';
 import { DUE_BUCKETS, dueBucket, type DueBucketKey } from '@/lib/auditLogic';
@@ -65,6 +65,13 @@ export function TasksBoard() {
             style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 10 }}
           />
         </View>
+        <Pressable
+          onPress={() => router.push('/tasks/map' as never)}
+          style={[styles.mapBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+        >
+          <Ionicons name="cube-outline" size={16} color={tokens.foreground} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>View Tasks on 3D</Text>
+        </Pressable>
       </View>
       <ScrollView horizontal contentContainerStyle={styles.board} showsHorizontalScrollIndicator={false}>
         {DUE_BUCKETS.map(({ key, color }) => {
@@ -99,8 +106,9 @@ export function TasksBoard() {
 const EMPTY_ROLLUP = { rackDone: 0, rackTotal: 0, bayDone: 0, bayTotal: 0, locDone: 0, locTotal: 0 };
 
 const styles = StyleSheet.create({
-  searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
+  mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, height: 40, paddingHorizontal: 12 },
   board: { padding: 16, gap: 12 },
   column: { width: 260 },
   columnHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
