@@ -6,6 +6,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import Svg, { Line, Polygon } from 'react-native-svg';
 import { AppHeader } from '@/components/AppHeader';
+import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
@@ -282,7 +283,12 @@ export function WarehouseMapScreen() {
       </View>
 
       {zones.length ? (
-        <View style={styles.stage}>
+        <View style={styles.body}>
+        <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
+          <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Warehouse Floor</Text>
+          </View>
+          <View style={styles.stage}>
           <GestureDetector gesture={floorGesture}>
             <View style={styles.stageCenter}>
               <Animated.View style={floorAnimatedStyle}>
@@ -345,6 +351,8 @@ export function WarehouseMapScreen() {
             <Ionicons name="resize-outline" size={13} color={tokens.mutedForeground} />
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Pinch to zoom · drag to pan</Text>
           </View>
+          </View>
+        </Card>
         </View>
       ) : (
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 40 }}>
@@ -443,6 +451,8 @@ const styles = StyleSheet.create({
   filterSectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   filterOption: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   filterDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'transparent' },
+  body: { flex: 1, padding: 16 },
+  diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   isoFloor: { transform: [{ rotateZ: '45deg' }, { scaleY: 0.5 }] },
