@@ -48,8 +48,8 @@ const TASK_TYPE_ICON: Record<AuditType, keyof typeof Ionicons.glyphMap> = {
   'Spot Check': 'locate-outline',
 };
 
-const BAY_W = 24;
-const BAY_H = 9;
+const BAY_SEG_W = 9;
+const BAY_SEG_H = 14;
 const BAY_GAP = 1.5;
 const ASSIGNED_WIRE = '#5B6B82';
 const UNASSIGNED_WIRE = '#DCE1E7';
@@ -218,15 +218,31 @@ export function WarehouseMapScreen() {
                               const assigned = isAssigned(cell);
                               const touchingCount = tasksTouching(cell, filteredTasks).length;
                               const rackBorder = assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE;
+                              const bayCount = rackGroup.bays.length;
                               return (
-                                <Pressable key={rackGroup.rack} onPress={() => setSelectedCell(cell)} hitSlop={4} style={styles.rackWrap}>
+                                <Pressable
+                                  key={rackGroup.rack}
+                                  onPress={() => setSelectedCell(cell)}
+                                  hitSlop={4}
+                                  style={[styles.rackCard, { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card }]}
+                                >
                                   {touchingCount ? (
                                     <View style={[styles.taskBadge, { backgroundColor: bucketColorFor(tasksTouching(cell, filteredTasks)) ?? tokens.mutedForeground, borderColor: tokens.card }]}>
                                       <Ionicons name="flag" size={8} color="#fff" />
                                       {touchingCount > 1 ? <Text style={styles.taskBadgeCount}>{touchingCount}</Text> : null}
                                     </View>
                                   ) : null}
-                                  <View style={[styles.rackFrame, { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : '#FAFBFC' }]}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={{
+                                      color: assigned ? tokens.foreground : tokens.slate400,
+                                      fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
+                                      fontSize: 9,
+                                    }}
+                                  >
+                                    Rack {rackGroup.rack}
+                                  </Text>
+                                  <View style={styles.bayRow}>
                                     {rackGroup.bays.map((bayCell) => {
                                       const bayColor = bucketColorFor(bayTasksTouching(bayCell, filteredTasks));
                                       return (
@@ -240,16 +256,8 @@ export function WarehouseMapScreen() {
                                       );
                                     })}
                                   </View>
-                                  <Text
-                                    numberOfLines={1}
-                                    style={{
-                                      color: assigned ? tokens.foreground : tokens.slate400,
-                                      fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
-                                      fontSize: 9,
-                                      marginTop: 2,
-                                    }}
-                                  >
-                                    Rack {rackGroup.rack}
+                                  <Text style={{ color: tokens.slate400, fontSize: 7, marginTop: 1 }}>
+                                    {bayCount} {bayCount === 1 ? 'bay' : 'bays'}
                                   </Text>
                                 </Pressable>
                               );
@@ -425,9 +433,9 @@ const styles = StyleSheet.create({
   zone: { gap: 6 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  rackWrap: { alignItems: 'center', width: 62 },
-  rackFrame: { borderWidth: 1.5, borderRadius: 3, padding: 2, gap: BAY_GAP },
-  baySeg: { width: BAY_W, height: BAY_H, borderWidth: 1, borderRadius: 1 },
+  rackCard: { alignItems: 'center', width: 66, borderWidth: 1.5, borderRadius: 5, paddingVertical: 5, paddingHorizontal: 4, gap: 3 },
+  bayRow: { flexDirection: 'row', gap: BAY_GAP },
+  baySeg: { width: BAY_SEG_W, height: BAY_SEG_H, borderWidth: 1, borderRadius: 1.5 },
   taskBadge: {
     position: 'absolute',
     top: -6,
