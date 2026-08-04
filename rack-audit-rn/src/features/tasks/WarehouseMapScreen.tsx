@@ -396,6 +396,7 @@ export function WarehouseMapScreen() {
                     <Ionicons name="close" size={22} color={tokens.mutedForeground} />
                   </Pressable>
                 </View>
+                <View style={[styles.sheetDivider, { backgroundColor: tokens.border }]} />
 
                 {selectedTasks.length ? (
                   <Text style={styles.sheetSectionLabel}>
@@ -417,8 +418,8 @@ export function WarehouseMapScreen() {
                         ).values(),
                       );
                       return (
+                        <View key={a.audit_id} style={{ gap: 8 }}>
                         <View
-                          key={a.audit_id}
                           style={[
                             styles.taskCard,
                             { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg, borderLeftWidth: 4, borderLeftColor: bucketTone.base },
@@ -474,27 +475,31 @@ export function WarehouseMapScreen() {
                                 </View>
                               ) : null}
                             </View>
-
-                            <Pressable
-                              onPress={() => {
-                                setSelectedCell(null);
-                                // Straight into the Rack View canvas for the exact
-                                // rack tapped on the floor — not the Audit Details
-                                // page — showing that rack's full bay diagram with
-                                // it already selected. No specific bay came from the
-                                // floor (only rack-level), so `bay` is left blank;
-                                // Rack View self-heals to that rack's first bay.
-                                router.push({
-                                  pathname: '/audit/[auditId]/rack/[rackId]',
-                                  params: { auditId: a.audit_id, layout: selectedCell.layout, rackId: selectedCell.rack, bay: '' },
-                                } as never);
-                              }}
-                              style={[styles.openTaskBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
-                            >
-                              <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Start Task</Text>
-                              <Ionicons name="chevron-forward" size={14} color={tokens.primaryForeground} />
-                            </Pressable>
                           </View>
+                        </View>
+
+                        {/* Outside the card box itself (per the sheet's own layout,
+                            not nested in the card) — still one per task, since each
+                            can belong to a different audit to start. */}
+                        <Pressable
+                          onPress={() => {
+                            setSelectedCell(null);
+                            // Straight into the Rack View canvas for the exact
+                            // rack tapped on the floor — not the Audit Details
+                            // page — showing that rack's full bay diagram with
+                            // it already selected. No specific bay came from the
+                            // floor (only rack-level), so `bay` is left blank;
+                            // Rack View self-heals to that rack's first bay.
+                            router.push({
+                              pathname: '/audit/[auditId]/rack/[rackId]',
+                              params: { auditId: a.audit_id, layout: selectedCell.layout, rackId: selectedCell.rack, bay: '' },
+                            } as never);
+                          }}
+                          style={[styles.openTaskBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+                        >
+                          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Start Task</Text>
+                          <Ionicons name="chevron-forward" size={14} color={tokens.primaryForeground} />
+                        </Pressable>
                         </View>
                       );
                     })
@@ -541,8 +546,9 @@ const styles = StyleSheet.create({
   baySeg: { width: BAY_SEG_W, height: BAY_SEG_H, borderWidth: 1, borderRadius: 1.5 },
   zoomHint: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  sheet: { width: '100%', maxWidth: 440, maxHeight: '80%', padding: 18 },
-  sheetHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
+  sheet: { width: '100%', maxWidth: 520, maxHeight: '88%', padding: 20 },
+  sheetHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
+  sheetDivider: { height: 1, marginBottom: 14 },
   taskCard: { borderWidth: 1, padding: 12 },
   sheetSectionLabel: { fontSize: 11, fontWeight: '700', color: '#8A94A3', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
   metaDivider: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#C4CCD6' },
@@ -550,5 +556,5 @@ const styles = StyleSheet.create({
   rackGroupLayoutLabel: { fontSize: 9, fontWeight: '700', color: '#AEB6C2', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 },
   rackChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rackChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
-  openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 36, marginTop: 10 },
+  openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 36 },
 });
