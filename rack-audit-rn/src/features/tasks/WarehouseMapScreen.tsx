@@ -206,10 +206,16 @@ export function WarehouseMapScreen() {
                 <View style={styles.stageCenter}>
                   <Animated.View style={floorAnimatedStyle}>
                     <View style={styles.planCanvas}>
-                      {zones.map((zone) => (
+                      {zones.map((zone, zoneIndex) => {
+                        // Alternate each aisle's orientation (racks running
+                        // left-to-right vs. stacked top-to-bottom) so the
+                        // floor doesn't read as one uniform stack of rows —
+                        // a real warehouse has aisles running both ways.
+                        const vertical = zoneIndex % 2 === 1;
+                        return (
                         <View key={zone.layout} style={styles.zone}>
                           <View style={styles.zoneHeadRow}>
-                            <Ionicons name="business-outline" size={12} color={tokens.mutedForeground} />
+                            <Ionicons name={vertical ? 'swap-vertical-outline' : 'swap-horizontal-outline'} size={12} color={tokens.mutedForeground} />
                             <Text
                               style={{
                                 color: tokens.mutedForeground,
@@ -222,7 +228,7 @@ export function WarehouseMapScreen() {
                               {zone.layout}
                             </Text>
                           </View>
-                          <View style={styles.zoneAisle}>
+                          <View style={[styles.zoneAisle, vertical ? styles.zoneAisleVertical : null]}>
                             {zone.racks.map((rackGroup) => {
                               const cell: RackCell = { layout: zone.layout, rack: rackGroup.rack };
                               const assigned = isAssigned(cell);
@@ -268,7 +274,8 @@ export function WarehouseMapScreen() {
                             })}
                           </View>
                         </View>
-                      ))}
+                        );
+                      })}
                     </View>
                   </Animated.View>
                 </View>
@@ -437,6 +444,7 @@ const styles = StyleSheet.create({
   zone: { gap: 6 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  zoneAisleVertical: { flexDirection: 'column', flexWrap: 'nowrap' },
   rackCard: { alignItems: 'center', width: 66, borderWidth: 1.5, borderRadius: 5, paddingVertical: 5, paddingHorizontal: 4, gap: 3 },
   bayRow: { flexDirection: 'row', gap: BAY_GAP },
   baySeg: { width: BAY_SEG_W, height: BAY_SEG_H, borderWidth: 1, borderRadius: 1.5 },
