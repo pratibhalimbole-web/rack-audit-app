@@ -7,7 +7,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanima
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
-import { DUE_BUCKETS, dueBucket, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
+import { DUE_BUCKETS, dueBucket, isOverdue, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
 import type { Audit, AuditType } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -34,7 +34,6 @@ type RackCell = { layout: string; rack: string };
 type FilterKey = 'All' | DueBucketKey;
 type TypeFilterKey = 'All' | AuditType;
 
-const BUCKET_PRIORITY: DueBucketKey[] = ['Delayed', 'Today', 'This Week', 'This Month'];
 const BUCKET_COLOR_KEY: Record<DueBucketKey, 'red' | 'green' | 'accentBlue' | 'amber'> = {
   Delayed: 'red',
   Today: 'green',
@@ -154,6 +153,12 @@ export function WarehouseMapScreen() {
   const bayTasksTouching = (cell: BayCell, pool: Audit[]) =>
     pool.filter((a) => (map[a.audit_id]?.allLocations ?? []).some((l) => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay));
 
+  const bayLocs = (cell: BayCell, pool: Audit[]) =>
+    pool.flatMap((a) => (map[a.audit_id]?.allLocations ?? []).filter((l) => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay).map((l) => l.loc));
+
+  const rackLocs = (cell: RackCell, pool: Audit[]) =>
+    pool.flatMap((a) => (map[a.audit_id]?.allLocations ?? []).filter((l) => l.layout === cell.layout && l.rack === cell.rack).map((l) => l.loc));
+
   // Assigned = touched by one of my active tasks, regardless of the current
   // due-bucket filter — this is what tells a rack apart from the rest of
   // the (dimmed) warehouse, separate from which color it's highlighted in.
@@ -162,12 +167,17 @@ export function WarehouseMapScreen() {
   const filteredTasks = myTasks.filter((a) => (filter === 'All' || dueBucket(a) === filter) && (typeFilter === 'All' || a.audit_type === typeFilter));
   const anyFilterActive = filter !== 'All' || typeFilter !== 'All';
 
-  const bucketColorFor = (touching: Audit[]): string | null => {
+  // Just three states instead of a color per due-bucket: red if any touching
+  // task is overdue (delayed wins regardless of anything else), green if
+  // every location this cell covers is actually marked Completed, blue for
+  // everything else that's simply assigned/in progress. `locs` are the
+  // specific location leaves this cell (a bay, or a whole rack) covers —
+  // completion is judged from their real status, not just "has a task."
+  const statusColorFor = (touching: Audit[], locs: { status: string }[]): string | null => {
     if (!touching.length) return null;
-    const buckets = touching.map(dueBucket);
-    const bucket = BUCKET_PRIORITY.find((b) => buckets.includes(b))!;
-    const key = BUCKET_COLOR_KEY[bucket];
-    return (key === 'accentBlue' ? tokens.accentBlue : tokens.rag[key]).base;
+    if (touching.some(isOverdue)) return tokens.rag.red.base;
+    if (locs.length && locs.every((l) => l.status === 'Completed')) return tokens.rag.green.base;
+    return tokens.accentBlue.base;
   };
 
   const selectedTasks = selectedCell ? tasksTouching(selectedCell, myTasks) : [];
@@ -216,7 +226,8 @@ export function WarehouseMapScreen() {
                             {zone.racks.map((rackGroup) => {
                               const cell: RackCell = { layout: zone.layout, rack: rackGroup.rack };
                               const assigned = isAssigned(cell);
-                              const rackBorder = assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE;
+                              const rackColor = statusColorFor(tasksTouching(cell, filteredTasks), rackLocs(cell, filteredTasks));
+                              const rackBorder = rackColor ?? (assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE);
                               const bayCount = rackGroup.bays.length;
                               return (
                                 <Pressable
@@ -237,7 +248,7 @@ export function WarehouseMapScreen() {
                                   </Text>
                                   <View style={styles.bayRow}>
                                     {rackGroup.bays.map((bayCell) => {
-                                      const bayColor = bucketColorFor(bayTasksTouching(bayCell, filteredTasks));
+                                      const bayColor = statusColorFor(bayTasksTouching(bayCell, filteredTasks), bayLocs(bayCell, filteredTasks));
                                       return (
                                         <View
                                           key={bayCell.bay}
