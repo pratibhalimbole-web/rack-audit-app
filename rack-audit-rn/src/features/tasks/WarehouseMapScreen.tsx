@@ -249,7 +249,7 @@ export function WarehouseMapScreen() {
                                       marginTop: 2,
                                     }}
                                   >
-                                    {rackGroup.rack}
+                                    Rack {rackGroup.rack}
                                   </Text>
                                 </Pressable>
                               );
@@ -424,8 +424,8 @@ const styles = StyleSheet.create({
   planCanvas: { gap: 20, padding: 10 },
   zone: { gap: 6 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  rackWrap: { alignItems: 'center', width: BAY_W + 6 },
+  zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rackWrap: { alignItems: 'center', width: 62 },
   rackFrame: { borderWidth: 1.5, borderRadius: 3, padding: 2, gap: BAY_GAP },
   baySeg: { width: BAY_W, height: BAY_H, borderWidth: 1, borderRadius: 1 },
   taskBadge: {
