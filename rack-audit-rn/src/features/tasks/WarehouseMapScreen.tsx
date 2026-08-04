@@ -305,7 +305,7 @@ export function WarehouseMapScreen() {
                   <Animated.View style={floorAnimatedStyle}>
                     <View style={styles.planCanvas}>
                       <View style={styles.zoneGroupCol}>{horizontalZones.map((zone) => renderZone(zone, false))}</View>
-                      <View style={styles.zoneGroupCol}>{verticalZones.map((zone) => renderZone(zone, true))}</View>
+                      <View style={styles.zoneGroupRow}>{verticalZones.map((zone) => renderZone(zone, true))}</View>
                     </View>
                   </Animated.View>
                 </View>
@@ -476,6 +476,7 @@ const styles = StyleSheet.create({
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   planCanvas: { flexDirection: 'row', alignItems: 'flex-start', gap: 40, padding: 10 },
   zoneGroupCol: { flexDirection: 'column', gap: 24 },
+  zoneGroupRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 24 },
   zone: { gap: 6 },
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
