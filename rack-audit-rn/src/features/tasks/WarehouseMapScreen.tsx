@@ -164,7 +164,13 @@ export function WarehouseMapScreen() {
   // the (dimmed) warehouse, separate from which color it's highlighted in.
   const isAssigned = (cell: RackCell) => tasksTouching(cell, myTasks).length > 0;
 
-  const filteredTasks = myTasks.filter((a) => (filter === 'All' || dueBucket(a) === filter) && (typeFilter === 'All' || a.audit_type === typeFilter));
+  // With no due-date filter picked, delayed tasks are hidden from the map
+  // by default — a rack only shows red once "Delayed" is explicitly
+  // selected in the filter, rather than every overdue task standing out
+  // unasked-for the moment the screen opens.
+  const filteredTasks = myTasks.filter(
+    (a) => (filter === 'All' ? !isOverdue(a) : dueBucket(a) === filter) && (typeFilter === 'All' || a.audit_type === typeFilter),
+  );
 
   // Just three states instead of a color per due-bucket: red if any touching
   // task is overdue (delayed wins regardless of anything else), green if
