@@ -444,13 +444,31 @@ export function WarehouseMapScreen() {
                                 {otherRacks.length ? `Also on this task (${otherRacks.length})` : 'Only location on this task'}
                               </Text>
                               {otherRacks.length ? (
-                                <View style={styles.rackChipsRow}>
-                                  {otherRacks.map((l) => (
-                                    <View key={`${l.layout}|${l.rack}`} style={[styles.rackChip, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-                                      <Text style={{ color: tokens.foreground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
-                                        {l.rack}
-                                      </Text>
-                                      <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>{l.layout}</Text>
+                                <View style={{ gap: 8 }}>
+                                  {/* Grouped by layout — racks from the same layout sit
+                                      together under one heading instead of a flat mixed
+                                      row, so it's clear at a glance which layout each one
+                                      belongs to (and that e.g. two racks share a layout). */}
+                                  {Array.from(
+                                    otherRacks
+                                      .reduce((byLayout, l) => {
+                                        if (!byLayout.has(l.layout)) byLayout.set(l.layout, []);
+                                        byLayout.get(l.layout)!.push(l);
+                                        return byLayout;
+                                      }, new Map<string, typeof otherRacks>())
+                                      .entries(),
+                                  ).map(([layoutName, racksInLayout]) => (
+                                    <View key={layoutName}>
+                                      <Text style={styles.rackGroupLayoutLabel}>{layoutName}</Text>
+                                      <View style={styles.rackChipsRow}>
+                                        {racksInLayout.map((l) => (
+                                          <View key={`${l.layout}|${l.rack}`} style={[styles.rackChip, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
+                                              Rack {l.rack}
+                                            </Text>
+                                          </View>
+                                        ))}
+                                      </View>
                                     </View>
                                   ))}
                                 </View>
@@ -529,7 +547,8 @@ const styles = StyleSheet.create({
   sheetSectionLabel: { fontSize: 11, fontWeight: '700', color: '#8A94A3', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
   metaDivider: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#C4CCD6' },
   rackChipsLabel: { fontSize: 10, fontWeight: '600', color: '#8A94A3', marginBottom: 5 },
+  rackGroupLayoutLabel: { fontSize: 9, fontWeight: '700', color: '#AEB6C2', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 },
   rackChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  rackChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4, alignItems: 'center' },
+  rackChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
   openTaskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 36, marginTop: 10 },
 });
