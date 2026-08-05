@@ -280,21 +280,17 @@ export function RackViewScreen() {
   // save. Scanning can be resumed from that review state at any time.
   // Stopping the camera is also the moment "still not scanned" becomes
   // "confirmed missing" — anything expected in scope that never resolved
-  // gets its own list entry (no code exists for it, so it can never be
-  // scanned) rather than just fading into the background. Each one is
-  // still selectable/highlightable on the canvas and can have evidence
-  // (photo of the empty slot, a note, etc.) attached, same as a raised
-  // issue. Locations already known up front to have no code (hasNoCode)
-  // are excluded here — those are handled by manually selecting them on
-  // the canvas (see handleAddMissingEvidence) instead of being swept in
-  // automatically. Locations added this way are excluded from future scan
-  // resolution too — the scan is genuinely over for them.
+  // gets its own list entry rather than just fading into the background.
+  // Nothing on the canvas hints in advance which locations lack a code —
+  // that would spoil the point of physically checking each pallet — so
+  // this sweep (and manual selection, see handleAddMissingEvidence) is the
+  // only way "no code here" ever actually surfaces. Each entry is still
+  // selectable/highlightable on the canvas and can have evidence (photo of
+  // the empty slot, a note, etc.) attached, same as a raised issue.
   const handleStopCamera = () => {
     setCameraActive(false);
     setExpandedScanId(null);
-    const missingLocs = scannableLocations.filter(
-      (l) => !scannedLocsRef.current.has(l.code) && !hasNoCode(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0,
-    );
+    const missingLocs = scannableLocations.filter((l) => !scannedLocsRef.current.has(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0);
     if (missingLocs.length) {
       const missingEntries: SessionScan[] = missingLocs.map((loc) => {
         scannedLocsRef.current.add(loc.code);
@@ -302,7 +298,7 @@ export function RackViewScreen() {
           id: String(scanIdRef.current++),
           locCode: loc.code,
           locLabel: `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}`,
-          sku: EXPECTED_SKUS[loc.code]?.[0]?.sku ?? '—',
+          sku: '',
           name: 'No scanner code found at this pallet',
           lot: '—',
           qty: 0,
@@ -316,12 +312,12 @@ export function RackViewScreen() {
   };
   const handleResumeCamera = () => setCameraActive(true);
 
-  // For a location known up front to have no code (hasNoCode) — the
-  // inspector taps it directly on the canvas (it's still selectable, just
-  // shown dark gray from the start) and this creates its "Missing" list
-  // entry on demand, opening the session panel straight to its evidence
-  // accordion so a reason/photo can be attached without waiting for a full
-  // scanning pass to finish.
+  // Any selected, in-scope pallet that hasn't resolved to a scan yet can be
+  // manually flagged this way — the inspector physically found nothing to
+  // scan there and taps it on the canvas themselves, rather than waiting
+  // for the whole session to finish. Creates its "Missing" list entry on
+  // demand and opens the session panel straight to its evidence accordion
+  // so a reason/photo can be attached right away.
   const handleAddMissingEvidence = (locCode: string) => {
     const loc = rackLocations.find((l) => l.code === locCode);
     if (!loc || scannedLocsRef.current.has(locCode)) return;
@@ -331,7 +327,7 @@ export function RackViewScreen() {
       id,
       locCode: loc.code,
       locLabel: `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}`,
-      sku: EXPECTED_SKUS[loc.code]?.[0]?.sku ?? '—',
+      sku: '',
       name: 'No scanner code found at this pallet',
       lot: '—',
       qty: 0,
@@ -544,20 +540,23 @@ export function RackViewScreen() {
                                       // vs. a noticeably darker gray + dashed
                                       // once Done has confirmed no code was
                                       // ever found for it (status:'missing').
-                                      // Known up front to have no scanner
-                                      // code at all — dark gray from the
-                                      // very start, same look a runtime-
-                                      // confirmed "missing" gets once Done
-                                      // is pressed, not just once pending.
-                                      const noCode = hasNoCode(cell.code);
-                                      const isPending = auditStarted && highlighted && !status && !noCode;
-                                      const isMissing = status === 'missing' || noCode || isPending;
+                                      // No hint on the canvas ahead of time
+                                      // about which pallets lack a code —
+                                      // every not-yet-scanned in-scope cell
+                                      // looks the same (plain highlighted,
+                                      // dashed once pending). The darker
+                                      // "confirmed missing" look only kicks
+                                      // in once it's actually been flagged
+                                      // (manually selected, or swept up by
+                                      // Done) — never before.
+                                      const isPending = auditStarted && highlighted && !status;
+                                      const isMissing = status === 'missing' || isPending;
                                       const bg =
                                         status === 'matched'
                                           ? tokens.rag.green.soft
                                           : status === 'mismatch'
                                             ? tokens.rag.amber.soft
-                                            : status === 'missing' || noCode
+                                            : status === 'missing'
                                               ? tokens.slate400
                                               : highlighted
                                                 ? tokens.slate300
@@ -568,7 +567,7 @@ export function RackViewScreen() {
                                           ? tokens.rag.green.border
                                           : status === 'mismatch'
                                             ? tokens.rag.amber.border
-                                            : status === 'missing' || noCode
+                                            : status === 'missing'
                                               ? tokens.mutedForeground
                                               : highlighted
                                                 ? tokens.slate400
@@ -599,10 +598,11 @@ export function RackViewScreen() {
                   </Animated.View>
                 </View>
               </GestureDetector>
-              {selectedLoc && hasNoCode(selectedLoc) && !sessionScans.some((s) => s.locCode === selectedLoc) ? (
-                // A known-no-code pallet was tapped directly on the canvas —
-                // give a direct path to document it, instead of requiring a
-                // full scanning pass first.
+              {selectedLoc && isLocHighlighted(selectedLoc) && !sessionScans.some((s) => s.locCode === selectedLoc) ? (
+                // Any in-scope, not-yet-resolved pallet tapped directly on
+                // the canvas gets this — the inspector physically found no
+                // code to scan there and is flagging it themselves, rather
+                // than waiting for a full scanning pass to finish.
                 <View style={styles.footerRow}>
                   <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
@@ -612,7 +612,7 @@ export function RackViewScreen() {
                     style={[styles.primaryBtn, styles.footerBtn, { backgroundColor: tokens.mutedForeground, borderRadius: tokens.radius.lg }]}
                   >
                     <Ionicons name="camera-outline" size={16} color={tokens.primaryForeground} />
-                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Add Evidence — No Code</Text>
+                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>No Code Found — Add Evidence</Text>
                   </Pressable>
                 </View>
               ) : !sessionOpen ? (
@@ -942,7 +942,7 @@ function ScanRow({ scan, selected, onRaiseIssue, onSelect }: { scan: SessionScan
           {scan.locLabel ?? 'No pallet left to attribute this to'}
         </Text>
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }} numberOfLines={1}>
-          {scan.sku} · {scan.name}
+          {scan.sku ? `${scan.sku} · ${scan.name}` : scan.name}
         </Text>
       </View>
       <View style={[styles.scanBadge, { backgroundColor: tone.soft, borderColor: tone.border, borderRadius: tokens.radius.sm }]}>
