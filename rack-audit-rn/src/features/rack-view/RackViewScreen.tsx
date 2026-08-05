@@ -15,7 +15,7 @@ import { SkuLineCard } from '@/components/SkuLineCard';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
+import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, NO_CODE_LOCATIONS } from '@/lib/mockData';
 import type { Condition, Evidence, EvidenceImage, LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -28,9 +28,9 @@ const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Comp
 
 // A single scanned SKU during a Start Audit session. Unlike variation-2's
 // original one-pallet-at-a-time flow, an inspector now scans freely across
-// the whole physical rack — each scan is looked up by SKU against
-// EXPECTED_SKUS to resolve which (if any) not-yet-scanned location it
-// belongs to, since there's no pre-selected pallet to key off.
+// the whole physical rack, in any order — each scanner code is unique per
+// pallet (its own location code), so a scan resolves to the exact physical
+// pallet it came from, not a guessed "next in line" location.
 type SessionScan = {
   id: string;
   locCode: string | null;
@@ -231,6 +231,12 @@ export function RackViewScreen() {
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before) — this is purely cosmetic and separate from selectability.
   const isLocHighlighted = (locCode: string) => (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
+  // Known up front to have no physical scanner code at all — still one of
+  // the in-scope/expected locations (still selectable, still counted in
+  // totalTargets), but real scanning can never resolve to it, so it's
+  // excluded from scan-claiming and shown dark gray from the start rather
+  // than only once the whole session wraps up.
+  const hasNoCode = (locCode: string) => !!NO_CODE_LOCATIONS[locCode];
   const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
   const totalTargets = scannableLocations.filter((l) => (EXPECTED_SKUS[l.code]?.length ?? 0) > 0).length;
 
@@ -278,12 +284,17 @@ export function RackViewScreen() {
   // scanned) rather than just fading into the background. Each one is
   // still selectable/highlightable on the canvas and can have evidence
   // (photo of the empty slot, a note, etc.) attached, same as a raised
-  // issue. Locations already added this way are excluded from future
-  // scan resolution too — the scan is genuinely over for them.
+  // issue. Locations already known up front to have no code (hasNoCode)
+  // are excluded here — those are handled by manually selecting them on
+  // the canvas (see handleAddMissingEvidence) instead of being swept in
+  // automatically. Locations added this way are excluded from future scan
+  // resolution too — the scan is genuinely over for them.
   const handleStopCamera = () => {
     setCameraActive(false);
     setExpandedScanId(null);
-    const missingLocs = scannableLocations.filter((l) => !scannedLocsRef.current.has(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0);
+    const missingLocs = scannableLocations.filter(
+      (l) => !scannedLocsRef.current.has(l.code) && !hasNoCode(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0,
+    );
     if (missingLocs.length) {
       const missingEntries: SessionScan[] = missingLocs.map((loc) => {
         scannedLocsRef.current.add(loc.code);
@@ -304,6 +315,36 @@ export function RackViewScreen() {
     }
   };
   const handleResumeCamera = () => setCameraActive(true);
+
+  // For a location known up front to have no code (hasNoCode) — the
+  // inspector taps it directly on the canvas (it's still selectable, just
+  // shown dark gray from the start) and this creates its "Missing" list
+  // entry on demand, opening the session panel straight to its evidence
+  // accordion so a reason/photo can be attached without waiting for a full
+  // scanning pass to finish.
+  const handleAddMissingEvidence = (locCode: string) => {
+    const loc = rackLocations.find((l) => l.code === locCode);
+    if (!loc || scannedLocsRef.current.has(locCode)) return;
+    scannedLocsRef.current.add(locCode);
+    const id = String(scanIdRef.current++);
+    const entry: SessionScan = {
+      id,
+      locCode: loc.code,
+      locLabel: `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}`,
+      sku: EXPECTED_SKUS[loc.code]?.[0]?.sku ?? '—',
+      name: 'No scanner code found at this pallet',
+      lot: '—',
+      qty: 0,
+      condition: 'Good',
+      status: 'missing',
+      issueRaised: false,
+    };
+    setSessionScans((prev) => [entry, ...prev]);
+    setSessionOpen(true);
+    setAuditStarted(true);
+    setCameraActive(false);
+    setExpandedScanId(id);
+  };
   // Every match/mismatch scan already auto-saves the moment it resolves
   // (and Raise Issue saves its own correction), so there's no batch of
   // unsaved data waiting here — Save Audit is the inspector's explicit
@@ -315,55 +356,67 @@ export function RackViewScreen() {
     setExpandedScanId(null);
   };
 
-  // Every scan claims a real physical location, whether it matches or not —
-  // the inspector is standing at some specific pallet when they scan it, so
-  // even a wrong item found there still belongs to that pallet. Claims the
-  // next not-yet-visited in-scope location in canvas order (rather than
-  // trying to guess a location purely from the scanned SKU, which can't
-  // work for a mismatch — nothing expects that SKU anywhere by definition).
-  const nextUnclaimedLocation = (): LocationNode | null => scannableLocations.find((l) => !scannedLocsRef.current.has(l.code)) ?? null;
+  // Every scanner code is unique per physical pallet — its own location
+  // code — not a shared SKU string, specifically so scanning out of order
+  // (Bay 3 right after Bay 1, skipping Bay 2) still attributes correctly
+  // to the exact pallet that was actually scanned, instead of guessing
+  // "whichever's next in some internal order." A code matching one of the
+  // in-scope target locations is a genuine find (matched); a code matching
+  // some OTHER real location on the rack means the wrong pallet was
+  // scanned (mismatch, but still a real, identifiable location) — this
+  // mirrors a real inspector always standing at one specific place.
+  const nextUnclaimedLocation = (): LocationNode | null =>
+    scannableLocations.find((l) => !scannedLocsRef.current.has(l.code) && !hasNoCode(l.code)) ?? null;
 
   const handleSessionScan = async (code: string) => {
-    const sku = code.trim();
-    if (!sku) return;
-    const target = nextUnclaimedLocation();
-    // Claim the location synchronously, before any await, so a second scan
-    // arriving a few milliseconds later (same tick, before React re-renders)
-    // sees it as already taken instead of racing to the same "next
-    // unclaimed" result.
-    if (target) scannedLocsRef.current.add(target.code);
-    const expectedLine = target ? (EXPECTED_SKUS[target.code] ?? []).find((l) => l.sku === sku) : undefined;
+    const scannedCode = code.trim();
+    if (!scannedCode || scannedLocsRef.current.has(scannedCode)) return;
+    // Claim synchronously, before any await, so a second scan arriving a
+    // few milliseconds later (same tick, before React re-renders) can't
+    // race to double-process the same code.
+    scannedLocsRef.current.add(scannedCode);
+
+    const targetLoc = scannableLocations.find(
+      (l) => l.code === scannedCode && !hasNoCode(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0,
+    );
+    const loc = targetLoc ?? rackLocations.find((l) => l.code === scannedCode) ?? null;
+    const matched = !!targetLoc;
+    const expectedLine = loc ? EXPECTED_SKUS[loc.code]?.[0] : undefined;
+    const foundLine = loc?.pallets[0]?.lines[0];
+    const sku = matched ? (expectedLine?.sku ?? scannedCode) : (foundLine?.sku ?? scannedCode);
     const known = INVENTORY_POOL.find((p) => p.sku === sku);
+
     const entry: SessionScan = {
       id: String(scanIdRef.current++),
-      locCode: target?.code ?? null,
-      locLabel: target ? `Bay ${bayCodeForLoc(target.code)} · ${palletIdFor(target)}` : null,
+      locCode: loc?.code ?? null,
+      locLabel: loc ? `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}` : null,
       sku,
-      name: expectedLine?.name ?? known?.name ?? 'Unlisted SKU',
-      lot: expectedLine?.lot ?? known?.lot ?? '—',
+      name: matched ? (expectedLine?.name ?? known?.name ?? 'iPhone 15 Box') : (foundLine?.name ?? known?.name ?? 'Unlisted item'),
+      lot: matched ? (expectedLine?.lot ?? known?.lot ?? '—') : (foundLine?.lot ?? known?.lot ?? '—'),
       qty: expectedLine?.qty ?? 1,
       condition: 'Good',
-      status: expectedLine ? 'matched' : 'mismatch',
+      status: matched ? 'matched' : 'mismatch',
       issueRaised: false,
     };
     setSessionScans((prev) => [entry, ...prev]);
-    if (target) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(target.code), loc: target.code }, [
+    if (loc) {
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(loc.code), loc: loc.code }, [
         { sku: entry.sku, name: entry.name, lot: entry.lot, qty: entry.qty, condition: entry.condition },
       ]);
     }
   };
 
   const handleSessionSimulate = () => {
-    // Mostly resolve an actual in-scope, not-yet-scanned expected SKU (the
-    // common "found it" case); occasionally simulate an unrelated SKU to
-    // demo the mismatch path too.
+    // Mostly resolve an actual in-scope, not-yet-scanned target location
+    // (the common "found it" case); occasionally simulate scanning some
+    // OTHER real rack location's code to demo the mismatch path too.
     const next = nextUnclaimedLocation();
-    const nextExpected = next ? EXPECTED_SKUS[next.code]?.[0] : undefined;
-    const useMatch = !!nextExpected && simCount % 3 !== 0;
-    const sku = useMatch && nextExpected ? nextExpected.sku : INVENTORY_POOL[simCount % INVENTORY_POOL.length].sku;
+    const useMatch = !!next && simCount % 3 !== 0;
+    const nonTargetLocs = rackLocations.filter((l) => !scannableLocations.some((sl) => sl.code === l.code) && !scannedLocsRef.current.has(l.code));
+    const wrongLoc = nonTargetLocs[simCount % Math.max(nonTargetLocs.length, 1)];
+    const code = useMatch && next ? next.code : wrongLoc ? wrongLoc.code : `UNKNOWN-${simCount}`;
     setSimCount((c) => c + 1);
-    handleSessionScan(sku);
+    handleSessionScan(code);
   };
 
   const updateScan = (id: string, patch: Partial<SessionScan>) => setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -491,14 +544,20 @@ export function RackViewScreen() {
                                       // vs. a noticeably darker gray + dashed
                                       // once Done has confirmed no code was
                                       // ever found for it (status:'missing').
-                                      const isPending = auditStarted && highlighted && !status;
-                                      const isMissing = status === 'missing' || isPending;
+                                      // Known up front to have no scanner
+                                      // code at all — dark gray from the
+                                      // very start, same look a runtime-
+                                      // confirmed "missing" gets once Done
+                                      // is pressed, not just once pending.
+                                      const noCode = hasNoCode(cell.code);
+                                      const isPending = auditStarted && highlighted && !status && !noCode;
+                                      const isMissing = status === 'missing' || noCode || isPending;
                                       const bg =
                                         status === 'matched'
                                           ? tokens.rag.green.soft
                                           : status === 'mismatch'
                                             ? tokens.rag.amber.soft
-                                            : status === 'missing'
+                                            : status === 'missing' || noCode
                                               ? tokens.slate400
                                               : highlighted
                                                 ? tokens.slate300
@@ -509,7 +568,7 @@ export function RackViewScreen() {
                                           ? tokens.rag.green.border
                                           : status === 'mismatch'
                                             ? tokens.rag.amber.border
-                                            : status === 'missing'
+                                            : status === 'missing' || noCode
                                               ? tokens.mutedForeground
                                               : highlighted
                                                 ? tokens.slate400
@@ -540,7 +599,23 @@ export function RackViewScreen() {
                   </Animated.View>
                 </View>
               </GestureDetector>
-              {!sessionOpen ? (
+              {selectedLoc && hasNoCode(selectedLoc) && !sessionScans.some((s) => s.locCode === selectedLoc) ? (
+                // A known-no-code pallet was tapped directly on the canvas —
+                // give a direct path to document it, instead of requiring a
+                // full scanning pass first.
+                <View style={styles.footerRow}>
+                  <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleAddMissingEvidence(selectedLoc)}
+                    style={[styles.primaryBtn, styles.footerBtn, { backgroundColor: tokens.mutedForeground, borderRadius: tokens.radius.lg }]}
+                  >
+                    <Ionicons name="camera-outline" size={16} color={tokens.primaryForeground} />
+                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Add Evidence — No Code</Text>
+                  </Pressable>
+                </View>
+              ) : !sessionOpen ? (
                 <View style={styles.footerRow}>
                   <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
@@ -863,9 +938,11 @@ function ScanRow({ scan, selected, onRaiseIssue, onSelect }: { scan: SessionScan
       style={[styles.scanRow, { borderColor: selected ? tokens.primary : tokens.border, borderWidth: selected ? 2 : 1, borderRadius: tokens.radius.lg, backgroundColor: tokens.card }]}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scan.sku}</Text>
+        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+          {scan.locLabel ?? 'No pallet left to attribute this to'}
+        </Text>
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }} numberOfLines={1}>
-          {scan.name} · {scan.locLabel ?? 'No pallet left to attribute this to'}
+          {scan.sku} · {scan.name}
         </Text>
       </View>
       <View style={[styles.scanBadge, { backgroundColor: tone.soft, borderColor: tone.border, borderRadius: tokens.radius.sm }]}>

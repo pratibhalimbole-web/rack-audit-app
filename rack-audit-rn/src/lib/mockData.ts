@@ -415,6 +415,20 @@ LOCATIONS['AUD-0234'].layouts[0].racks[0].bays.forEach((bay) => {
   });
 }
 
+// Of Rack A-21's 38 target-SKU locations, these 4 are known up front to
+// physically have no scanner code at all (an empty pallet, or one that was
+// never labeled) — real-world "the pick list says it should be here, but
+// there's nothing to scan." Kept separate from EXPECTED_SKUS (which still
+// lists SKU-1001 for these — that's what SHOULD be here) so Rack View can
+// still count them among the 38 in-scope locations while marking them
+// permanently unscannable rather than just "not reached yet."
+export const NO_CODE_LOCATIONS: Record<string, true> = {
+  'A-21-B-01-0303': true,
+  'A-21-B-01-1002': true,
+  'A-21-B-02-0401': true,
+  'A-21-B-02-1201': true,
+};
+
 // The warehouse's master slotting plan — what SKU/quantity is SUPPOSED to be
 // at a location, independent of whatever an inspector actually finds there.
 // Keyed by location code, since a location's slot assignment doesn't vary
