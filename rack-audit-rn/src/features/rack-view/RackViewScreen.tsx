@@ -13,7 +13,7 @@ import { SkuLineCard } from '@/components/SkuLineCard';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { EXPECTED_SKUS, INVENTORY_POOL, type ExpectedSkuLine } from '@/lib/mockData';
+import { EXPECTED_SKUS, INVENTORY_POOL } from '@/lib/mockData';
 import type { Condition, LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -32,6 +32,7 @@ const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Comp
 type SessionScan = {
   id: string;
   locCode: string | null;
+  locLabel: string | null;
   sku: string;
   name: string;
   lot: string;
@@ -76,10 +77,33 @@ export function RackViewScreen() {
 
   // The live scan session opened by "Start Audit" — no pallet needs to be
   // pre-selected, it covers the whole rack (or, with a target_sku, whatever
-  // subset of it is in scope).
+  // subset of it is in scope). Split side-by-side with the canvas rather
+  // than a small overlay, so both stay big and readable at once.
   const [sessionOpen, setSessionOpen] = useState(false);
+  // Whether the camera itself is actively scanning right now. "Done" only
+  // stops the camera — it doesn't close the split panel — so the inspector
+  // lands on a review state showing canvas + the scanned list together
+  // (camera area replaced by a "Resume Scanning" prompt) before deciding to
+  // Save Audit. Kept separate from `sessionOpen` so canvas/list stay mounted
+  // and visible the whole time regardless of camera state.
+  const [cameraActive, setCameraActive] = useState(true);
+  // Whether Start Audit has ever been tapped this visit — drives the
+  // canvas's dashed "missing" state, which should stay visible on the
+  // canvas even after the session panel is fully closed (so progress is
+  // still readable at a glance), not just while a session is active.
+  const [auditStarted, setAuditStarted] = useState(false);
   const [sessionScans, setSessionScans] = useState<SessionScan[]>([]);
-  const [scannedLocs, setScannedLocs] = useState<Set<string>>(new Set());
+  // Two physical codes scanned in quick succession (fast panning across the
+  // rack) can both reach nextUnclaimedLocation before React has re-rendered
+  // with the first one's result — component state is a snapshot from the
+  // last completed render, so both calls would see the same "next
+  // unclaimed" location and double-claim it (this was the 38-codes-become-
+  // 39-scans bug). A ref updates synchronously and is read fresh on every
+  // call, so it's the sole source of truth for resolution — the canvas and
+  // the "N matched" counter both derive from `sessionScans` instead, which
+  // already triggers a re-render on every scan, so no separate state copy
+  // of this set is needed.
+  const scannedLocsRef = useRef<Set<string>>(new Set());
   const [expandedScanId, setExpandedScanId] = useState<string | null>(null);
   const [simCount, setSimCount] = useState(0);
   const scanIdRef = useRef(0);
@@ -131,8 +155,10 @@ export function RackViewScreen() {
       seedKeyRef.current = seedKey;
       setSelectedLoc(null);
       setSessionOpen(false);
+      setCameraActive(true);
+      setAuditStarted(false);
       setSessionScans([]);
-      setScannedLocs(new Set());
+      scannedLocsRef.current = new Set();
       setExpandedScanId(null);
       setBlinkLoc(null);
       scale.value = 1;
@@ -230,51 +256,65 @@ export function RackViewScreen() {
     if (match) setSelectedLoc(match.code);
   };
 
-  const handleStartAudit = () => setSessionOpen(true);
-  // "Done" closes the session and takes the inspector back to Audit Details
-  // — the location list they tapped a bay pill from to get into Rack View —
-  // rather than leaving them stranded on the now-plain canvas. The scan
-  // icon in the toolbar (below) stays available the whole time Rack View is
-  // open, so a session can always be resumed without navigating away first.
-  const handleCloseSession = () => {
-    setSessionOpen(false);
+  const handleStartAudit = () => {
+    setSessionOpen(true);
+    setCameraActive(true);
+    setAuditStarted(true);
+  };
+  // "Done" (in the scan panel's camera area) only stops the camera — the
+  // split panel stays open, landing the inspector on canvas + the scanned
+  // list together so they can review what was found before deciding to
+  // save. Scanning can be resumed from that review state at any time.
+  const handleStopCamera = () => {
+    setCameraActive(false);
     setExpandedScanId(null);
-    router.push({ pathname: '/audit/[auditId]', params: { auditId } } as never);
+  };
+  const handleResumeCamera = () => setCameraActive(true);
+  // Every match/mismatch scan already auto-saves the moment it resolves
+  // (and Raise Issue saves its own correction), so there's no batch of
+  // unsaved data waiting here — Save Audit is the inspector's explicit
+  // "I'm done with this rack" action, closing the whole session back to
+  // the plain canvas.
+  const handleSaveAudit = () => {
+    setSessionOpen(false);
+    setCameraActive(true);
+    setExpandedScanId(null);
   };
 
-  // Resolve which not-yet-scanned in-scope location a scanned SKU belongs
-  // to, by matching against EXPECTED_SKUS — the inspector scans freely
-  // across the physical rack rather than one pre-picked pallet at a time,
-  // so the SKU itself is the only signal available to place the scan.
-  const resolveScanTarget = (sku: string): { loc: LocationNode; line: ExpectedSkuLine } | null => {
-    for (const loc of scannableLocations) {
-      if (scannedLocs.has(loc.code)) continue;
-      const line = (EXPECTED_SKUS[loc.code] ?? []).find((l) => l.sku === sku);
-      if (line) return { loc, line };
-    }
-    return null;
-  };
+  // Every scan claims a real physical location, whether it matches or not —
+  // the inspector is standing at some specific pallet when they scan it, so
+  // even a wrong item found there still belongs to that pallet. Claims the
+  // next not-yet-visited in-scope location in canvas order (rather than
+  // trying to guess a location purely from the scanned SKU, which can't
+  // work for a mismatch — nothing expects that SKU anywhere by definition).
+  const nextUnclaimedLocation = (): LocationNode | null => scannableLocations.find((l) => !scannedLocsRef.current.has(l.code)) ?? null;
 
   const handleSessionScan = async (code: string) => {
     const sku = code.trim();
     if (!sku) return;
-    const match = resolveScanTarget(sku);
+    const target = nextUnclaimedLocation();
+    // Claim the location synchronously, before any await, so a second scan
+    // arriving a few milliseconds later (same tick, before React re-renders)
+    // sees it as already taken instead of racing to the same "next
+    // unclaimed" result.
+    if (target) scannedLocsRef.current.add(target.code);
+    const expectedLine = target ? (EXPECTED_SKUS[target.code] ?? []).find((l) => l.sku === sku) : undefined;
     const known = INVENTORY_POOL.find((p) => p.sku === sku);
     const entry: SessionScan = {
       id: String(scanIdRef.current++),
-      locCode: match?.loc.code ?? null,
+      locCode: target?.code ?? null,
+      locLabel: target ? `Bay ${bayCodeForLoc(target.code)} · ${palletIdFor(target)}` : null,
       sku,
-      name: match?.line.name ?? known?.name ?? 'Unlisted SKU',
-      lot: match?.line.lot ?? known?.lot ?? '—',
-      qty: match?.line.qty ?? 1,
+      name: expectedLine?.name ?? known?.name ?? 'Unlisted SKU',
+      lot: expectedLine?.lot ?? known?.lot ?? '—',
+      qty: expectedLine?.qty ?? 1,
       condition: 'Good',
-      status: match ? 'matched' : 'mismatch',
+      status: expectedLine ? 'matched' : 'mismatch',
       issueRaised: false,
     };
     setSessionScans((prev) => [entry, ...prev]);
-    if (match) {
-      setScannedLocs((prev) => new Set(prev).add(match.loc.code));
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(match.loc.code), loc: match.loc.code }, [
+    if (target) {
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(target.code), loc: target.code }, [
         { sku: entry.sku, name: entry.name, lot: entry.lot, qty: entry.qty, condition: entry.condition },
       ]);
     }
@@ -284,9 +324,10 @@ export function RackViewScreen() {
     // Mostly resolve an actual in-scope, not-yet-scanned expected SKU (the
     // common "found it" case); occasionally simulate an unrelated SKU to
     // demo the mismatch path too.
-    const pending = scannableLocations.filter((l) => !scannedLocs.has(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0);
-    const useMatch = pending.length > 0 && simCount % 3 !== 0;
-    const sku = useMatch ? EXPECTED_SKUS[pending[simCount % pending.length].code][0].sku : INVENTORY_POOL[simCount % INVENTORY_POOL.length].sku;
+    const next = nextUnclaimedLocation();
+    const nextExpected = next ? EXPECTED_SKUS[next.code]?.[0] : undefined;
+    const useMatch = !!nextExpected && simCount % 3 !== 0;
+    const sku = useMatch && nextExpected ? nextExpected.sku : INVENTORY_POOL[simCount % INVENTORY_POOL.length].sku;
     setSimCount((c) => c + 1);
     handleSessionScan(sku);
   };
@@ -353,11 +394,10 @@ export function RackViewScreen() {
           <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
         </Pressable>
         {/* Always available while Rack View is open, not just before the
-            first Start Audit tap — "Done" closes the session and leaves
-            Rack View entirely, so this is how an inspector gets back into
-            live scanning without starting the whole task over. */}
+            first Start Audit tap, so the Live Scan overlay can be reopened
+            any time without going back through the footer button. */}
         <Pressable
-          onPress={() => setSessionOpen(true)}
+          onPress={handleStartAudit}
           style={[styles.scanIconBtn, { backgroundColor: sessionOpen ? tokens.primary : tokens.muted, borderRadius: tokens.radius.lg }]}
         >
           <Ionicons name="camera-outline" size={18} color={sessionOpen ? tokens.primaryForeground : tokens.foreground} />
@@ -365,6 +405,9 @@ export function RackViewScreen() {
       </View>
 
       <View style={styles.body}>
+        {/* Canvas and the Live Scan panel sit side by side, both big, once a
+            session is open — not a small overlay — so status on the canvas
+            and the scanned list are readable together at all times. */}
         <View style={sessionOpen ? styles.splitRow : styles.singleRow}>
           <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
             <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
@@ -401,7 +444,7 @@ export function RackViewScreen() {
                                       // session hasn't scanned it yet — flag
                                       // it as "missing" with a dashed border
                                       // rather than the plain solid look.
-                                      const isMissing = sessionOpen && highlighted && !status;
+                                      const isMissing = auditStarted && highlighted && !status;
                                       const bg =
                                         status === 'matched'
                                           ? tokens.rag.green.soft
@@ -466,8 +509,10 @@ export function RackViewScreen() {
             <ScanSessionPanel
               scans={sessionScans}
               expandedId={expandedScanId}
-              matchedCount={scannedLocs.size}
+              matchedCount={sessionScans.filter((s) => s.status === 'matched').length}
               totalCount={totalTargets}
+              cameraActive={cameraActive}
+              selectedLocCode={selectedLoc}
               onScanCode={handleSessionScan}
               onSimulate={handleSessionSimulate}
               onRaiseIssue={(id) => setExpandedScanId(id)}
@@ -475,7 +520,10 @@ export function RackViewScreen() {
               onQtyChange={(id, qty) => updateScan(id, { qty })}
               onConditionChange={(id, condition) => updateScan(id, { condition })}
               onSaveIssue={handleSaveIssue}
-              onClose={handleCloseSession}
+              onSelectLocation={setSelectedLoc}
+              onStopCamera={handleStopCamera}
+              onResumeCamera={handleResumeCamera}
+              onSaveAudit={handleSaveAudit}
             />
           ) : null}
         </View>
@@ -526,6 +574,8 @@ function ScanSessionPanel({
   expandedId,
   matchedCount,
   totalCount,
+  cameraActive,
+  selectedLocCode,
   onScanCode,
   onSimulate,
   onRaiseIssue,
@@ -533,12 +583,17 @@ function ScanSessionPanel({
   onQtyChange,
   onConditionChange,
   onSaveIssue,
-  onClose,
+  onSelectLocation,
+  onStopCamera,
+  onResumeCamera,
+  onSaveAudit,
 }: {
   scans: SessionScan[];
   expandedId: string | null;
   matchedCount: number;
   totalCount: number;
+  cameraActive: boolean;
+  selectedLocCode: string | null;
   onScanCode: (code: string) => void;
   onSimulate: () => void;
   onRaiseIssue: (id: string) => void;
@@ -546,28 +601,72 @@ function ScanSessionPanel({
   onQtyChange: (id: string, qty: number) => void;
   onConditionChange: (id: string, condition: Condition) => void;
   onSaveIssue: (id: string) => void;
-  onClose: () => void;
+  onSelectLocation: (locCode: string) => void;
+  onStopCamera: () => void;
+  onResumeCamera: () => void;
+  onSaveAudit: () => void;
 }) {
   const { tokens } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const handledRef = useRef(false);
-  const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // expo-camera calls onBarcodeScanned on every frame a code is decoded in
+  // view. Two things need to both be true at once: (1) holding on the SAME
+  // physical label too long must not double-count it (was: 38 codes
+  // registering as 39), and (2) panning across a dense sheet of codes must
+  // NOT get stuck after the first one — a naive "reset once nothing's been
+  // seen for 700ms" fails (2) whenever another code is continuously in
+  // view, since the idle window never actually opens. So: track which
+  // code's currently "claimed" — a different code arriving is processed
+  // immediately regardless of timing (the camera plainly moved to a new
+  // label), while the SAME code repeating only re-arms after it's been
+  // genuinely out of view for a bit.
+  const lastDataRef = useRef<string | null>(null);
+  const lastSeenRef = useRef(0);
 
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (handledRef.current && Date.now() - lastSeenRef.current > 700) {
+        handledRef.current = false;
+        lastDataRef.current = null;
+      }
+    }, 150);
+    return () => clearInterval(id);
+  }, []);
+
+  // Immediate visual confirmation on every scan — matched or mismatch —
+  // since a mismatch never resolves to a canvas cell (there's no location
+  // to attribute it to), so without this the only feedback for that path
+  // was the list scrolling, easy to miss while looking at the camera.
+  const [flash, setFlash] = useState<{ tone: 'matched' | 'mismatch' } | null>(null);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFlashedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const latest = scans[0];
+    if (!latest || latest.id === lastFlashedIdRef.current) return;
+    lastFlashedIdRef.current = latest.id;
+    setFlash({ tone: latest.status });
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    flashTimeoutRef.current = setTimeout(() => setFlash(null), 650);
+  }, [scans]);
   useEffect(
     () => () => {
-      if (cooldownRef.current) clearTimeout(cooldownRef.current);
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     },
     [],
   );
 
   const handleBarcodeScanned = ({ data }: { data: string }) => {
-    if (handledRef.current) return;
+    const now = Date.now();
+    if (handledRef.current && data === lastDataRef.current) {
+      // Same code still sitting in frame — note it's still visible, but
+      // don't reprocess it.
+      lastSeenRef.current = now;
+      return;
+    }
     handledRef.current = true;
+    lastDataRef.current = data;
+    lastSeenRef.current = now;
     onScanCode(data);
-    if (cooldownRef.current) clearTimeout(cooldownRef.current);
-    cooldownRef.current = setTimeout(() => {
-      handledRef.current = false;
-    }, 1200);
   };
 
   return (
@@ -576,30 +675,59 @@ function ScanSessionPanel({
         <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
           Live Scan — {matchedCount}/{totalCount} matched
         </Text>
-        <Pressable onPress={onClose} style={[styles.sessionDoneBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Done</Text>
-        </Pressable>
+        {cameraActive ? (
+          <Pressable onPress={onStopCamera} style={[styles.sessionDoneBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Done</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={onResumeCamera} style={[styles.sessionDoneBtn, { borderWidth: 1, borderColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Scan</Text>
+          </Pressable>
+        )}
       </View>
 
-      <View style={styles.sessionCameraBox}>
-        {permission?.granted ? (
-          <CameraView style={StyleSheet.absoluteFill} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={handleBarcodeScanned} />
-        ) : (
-          <View style={styles.sessionPermissionWrap}>
-            <Ionicons name="camera-outline" size={26} color="#fff" />
-            <Text style={styles.sessionPermissionText}>Camera access is needed to scan SKU codes.</Text>
-            <Pressable onPress={requestPermission} style={styles.sessionGrantBtn}>
-              <Text style={styles.sessionGrantBtnText}>Grant Camera Access</Text>
-            </Pressable>
+      {/* Done just closes this camera box — nothing else changes. The list
+          below is always there; with the camera closed it simply gets the
+          full remaining height instead of sharing it. */}
+      {cameraActive ? (
+        <View style={styles.sessionCameraBox}>
+          {permission?.granted ? (
+            <CameraView style={StyleSheet.absoluteFill} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={handleBarcodeScanned} />
+          ) : (
+            <View style={styles.sessionPermissionWrap}>
+              <Ionicons name="camera-outline" size={26} color="#fff" />
+              <Text style={styles.sessionPermissionText}>Camera access is needed to scan SKU codes.</Text>
+              <Pressable onPress={requestPermission} style={styles.sessionGrantBtn}>
+                <Text style={styles.sessionGrantBtnText}>Grant Camera Access</Text>
+              </Pressable>
+            </View>
+          )}
+          <View style={styles.sessionCountBadge}>
+            <Text style={styles.sessionCountText}>{scans.length} scanned</Text>
           </View>
-        )}
-        <View style={styles.sessionCountBadge}>
-          <Text style={styles.sessionCountText}>{scans.length} scanned</Text>
+          {flash ? (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <View
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  { borderWidth: 6, borderColor: flash.tone === 'matched' ? tokens.rag.green.strong : tokens.rag.amber.strong },
+                ]}
+              />
+              <View
+                style={[
+                  styles.sessionFlashBanner,
+                  { backgroundColor: flash.tone === 'matched' ? tokens.rag.green.strong : tokens.rag.amber.strong },
+                ]}
+              >
+                <Text style={styles.sessionFlashText}>{flash.tone === 'matched' ? 'Matched' : 'Mismatch'}</Text>
+              </View>
+            </View>
+          ) : null}
+          <Pressable onPress={onSimulate} style={styles.sessionSimBtn}>
+            <Text style={styles.sessionSimBtnText}>Use test scan</Text>
+          </Pressable>
         </View>
-        <Pressable onPress={onSimulate} style={styles.sessionSimBtn}>
-          <Text style={styles.sessionSimBtnText}>Use test scan</Text>
-        </Pressable>
-      </View>
+      ) : null}
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10 }}>
         {scans.length === 0 ? (
@@ -620,23 +748,40 @@ function ScanSessionPanel({
               onEdit={() => {}}
             />
           ) : (
-            <ScanRow key={scan.id} scan={scan} onRaiseIssue={() => onRaiseIssue(scan.id)} />
+            <ScanRow
+              key={scan.id}
+              scan={scan}
+              selected={!!scan.locCode && scan.locCode === selectedLocCode}
+              onRaiseIssue={() => onRaiseIssue(scan.id)}
+              onSelect={() => scan.locCode && onSelectLocation(scan.locCode)}
+            />
           ),
         )}
       </ScrollView>
+
+      <View style={[styles.sessionSaveRow, { borderTopColor: tokens.border }]}>
+        <Pressable onPress={onSaveAudit} style={[styles.sessionSaveBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+          <Ionicons name="checkmark-circle-outline" size={18} color={tokens.primaryForeground} />
+          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save Audit</Text>
+        </Pressable>
+      </View>
     </Card>
   );
 }
 
-function ScanRow({ scan, onRaiseIssue }: { scan: SessionScan; onRaiseIssue: () => void }) {
+function ScanRow({ scan, selected, onRaiseIssue, onSelect }: { scan: SessionScan; selected: boolean; onRaiseIssue: () => void; onSelect: () => void }) {
   const { tokens } = useTheme();
   const tone = scan.status === 'matched' ? tokens.rag.green : tokens.rag.amber;
   return (
-    <View style={[styles.scanRow, { borderColor: tokens.border, borderRadius: tokens.radius.lg, backgroundColor: tokens.card }]}>
+    <Pressable
+      disabled={!scan.locCode}
+      onPress={onSelect}
+      style={[styles.scanRow, { borderColor: selected ? tokens.primary : tokens.border, borderWidth: selected ? 2 : 1, borderRadius: tokens.radius.lg, backgroundColor: tokens.card }]}
+    >
       <View style={{ flex: 1 }}>
         <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scan.sku}</Text>
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }} numberOfLines={1}>
-          {scan.name} · {scan.locCode ?? 'Unresolved location'}
+          {scan.name} · {scan.locLabel ?? 'No pallet left to attribute this to'}
         </Text>
       </View>
       <View style={[styles.scanBadge, { backgroundColor: tone.soft, borderColor: tone.border, borderRadius: tokens.radius.sm }]}>
@@ -653,7 +798,7 @@ function ScanRow({ scan, onRaiseIssue }: { scan: SessionScan; onRaiseIssue: () =
           </Pressable>
         )
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -697,7 +842,16 @@ function RackCell({
     <Animated.View
       style={[
         styles.cell,
-        { backgroundColor: bg, borderColor: border, borderWidth: selected ? 2 : 1, borderStyle: dashed ? 'dashed' : 'solid' },
+        {
+          backgroundColor: bg,
+          borderColor: border,
+          borderWidth: selected ? 2 : 1,
+          // RN on Android drops dashes unevenly (especially at corners) when
+          // borderStyle:'dashed' is combined with borderRadius — square the
+          // corners for a dashed cell so the full dashed outline actually
+          // renders, instead of a partial/broken-looking border.
+          ...(dashed ? { borderStyle: 'dashed' as const, borderRadius: 0 } : { borderStyle: 'solid' as const }),
+        },
         animatedStyle,
       ]}
     >
@@ -792,8 +946,12 @@ const styles = StyleSheet.create({
   sessionGrantBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   sessionCountBadge: { position: 'absolute', top: 10, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 },
   sessionCountText: { color: '#fff', fontWeight: '700', fontSize: 11 },
+  sessionFlashBanner: { position: 'absolute', bottom: 50, alignSelf: 'center', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 6 },
+  sessionFlashText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   sessionSimBtn: { position: 'absolute', bottom: 10, alignSelf: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)', borderRadius: 8, paddingHorizontal: 14, height: 32, alignItems: 'center', justifyContent: 'center' },
   sessionSimBtnText: { color: '#fff', fontWeight: '600', fontSize: 12 },
+  sessionSaveRow: { padding: 12, borderTopWidth: 1 },
+  sessionSaveBtn: { flexDirection: 'row', height: 44, alignItems: 'center', justifyContent: 'center', gap: 6 },
   scanRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 10 },
   scanBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   raiseBtn: { width: 30, height: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
