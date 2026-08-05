@@ -8,13 +8,15 @@ import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat
 import { AppHeader } from '@/components/AppHeader';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
+import { EvidenceBlock } from '@/components/EvidenceBlock';
+import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import { Pill } from '@/components/Pill';
 import { SkuLineCard } from '@/components/SkuLineCard';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { EXPECTED_SKUS, INVENTORY_POOL } from '@/lib/mockData';
-import type { Condition, LocationNode } from '@/lib/types';
+import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
+import type { Condition, Evidence, EvidenceImage, LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
@@ -38,8 +40,9 @@ type SessionScan = {
   lot: string;
   qty: number;
   condition: Condition;
-  status: 'matched' | 'mismatch';
+  status: 'matched' | 'mismatch' | 'missing';
   issueRaised: boolean;
+  evidence?: Evidence;
 };
 
 // Pallet ID shown to the inspector — level + pallet number on that level,
@@ -105,6 +108,9 @@ export function RackViewScreen() {
   // of this set is needed.
   const scannedLocsRef = useRef<Set<string>>(new Set());
   const [expandedScanId, setExpandedScanId] = useState<string | null>(null);
+  // Which scan's Raise Issue accordion is currently adding a photo — routes
+  // NewAttachmentModal's saved annotation back to the right scan's evidence.
+  const [attachmentTarget, setAttachmentTarget] = useState<string | null>(null);
   const [simCount, setSimCount] = useState(0);
   const scanIdRef = useRef(0);
 
@@ -160,6 +166,7 @@ export function RackViewScreen() {
       setSessionScans([]);
       scannedLocsRef.current = new Set();
       setExpandedScanId(null);
+      setAttachmentTarget(null);
       setBlinkLoc(null);
       scale.value = 1;
       savedScale.value = 1;
@@ -265,9 +272,36 @@ export function RackViewScreen() {
   // split panel stays open, landing the inspector on canvas + the scanned
   // list together so they can review what was found before deciding to
   // save. Scanning can be resumed from that review state at any time.
+  // Stopping the camera is also the moment "still not scanned" becomes
+  // "confirmed missing" — anything expected in scope that never resolved
+  // gets its own list entry (no code exists for it, so it can never be
+  // scanned) rather than just fading into the background. Each one is
+  // still selectable/highlightable on the canvas and can have evidence
+  // (photo of the empty slot, a note, etc.) attached, same as a raised
+  // issue. Locations already added this way are excluded from future
+  // scan resolution too — the scan is genuinely over for them.
   const handleStopCamera = () => {
     setCameraActive(false);
     setExpandedScanId(null);
+    const missingLocs = scannableLocations.filter((l) => !scannedLocsRef.current.has(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0);
+    if (missingLocs.length) {
+      const missingEntries: SessionScan[] = missingLocs.map((loc) => {
+        scannedLocsRef.current.add(loc.code);
+        return {
+          id: String(scanIdRef.current++),
+          locCode: loc.code,
+          locLabel: `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}`,
+          sku: EXPECTED_SKUS[loc.code]?.[0]?.sku ?? '—',
+          name: 'No scanner code found at this pallet',
+          lot: '—',
+          qty: 0,
+          condition: 'Good',
+          status: 'missing',
+          issueRaised: false,
+        };
+      });
+      setSessionScans((prev) => [...missingEntries, ...prev]);
+    }
   };
   const handleResumeCamera = () => setCameraActive(true);
   // Every match/mismatch scan already auto-saves the moment it resolves
@@ -334,6 +368,16 @@ export function RackViewScreen() {
 
   const updateScan = (id: string, patch: Partial<SessionScan>) => setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
 
+  const ensureScanEvidence = (scan: SessionScan): Evidence => scan.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
+  const updateScanEvidence = (id: string, patch: Partial<Evidence>) =>
+    setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, evidence: { ...ensureScanEvidence(s), ...patch } } : s)));
+  const handleAddEvidenceImage = (image: EvidenceImage) => {
+    if (!attachmentTarget) return;
+    const id = attachmentTarget;
+    setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, evidence: { ...ensureScanEvidence(s), images: [...ensureScanEvidence(s).images, image] } } : s)));
+    setAttachmentTarget(null);
+  };
+
   // Raising an issue on an already-matched scan opens its accordion (Qty +
   // Condition, reusing Count Sheet's SkuLineCard); saving it persists the
   // correction and blinks the pallet on the canvas for a few seconds so
@@ -345,7 +389,7 @@ export function RackViewScreen() {
     updateScan(id, { issueRaised: true });
     if (scan.locCode) {
       await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(scan.locCode), loc: scan.locCode }, [
-        { sku: scan.sku, name: scan.name, lot: scan.lot, qty: scan.qty, condition: scan.condition },
+        { sku: scan.sku, name: scan.name, lot: scan.lot, qty: scan.qty, condition: scan.condition, evidence: scan.evidence },
       ]);
       if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
       setBlinkLoc(scan.locCode);
@@ -440,28 +484,36 @@ export function RackViewScreen() {
                                       const status = sessionScans.find((s) => s.locCode === cell.code)?.status;
                                       const highlighted = isLocHighlighted(cell.code);
                                       const selectable = isLocSelectable(cell.code);
-                                      // Expected here, in scope, but the
-                                      // session hasn't scanned it yet — flag
-                                      // it as "missing" with a dashed border
-                                      // rather than the plain solid look.
-                                      const isMissing = auditStarted && highlighted && !status;
+                                      // Two different "not resolved yet"
+                                      // looks: lightly highlighted + dashed
+                                      // while the session's still running
+                                      // (pending — might still get scanned),
+                                      // vs. a noticeably darker gray + dashed
+                                      // once Done has confirmed no code was
+                                      // ever found for it (status:'missing').
+                                      const isPending = auditStarted && highlighted && !status;
+                                      const isMissing = status === 'missing' || isPending;
                                       const bg =
                                         status === 'matched'
                                           ? tokens.rag.green.soft
                                           : status === 'mismatch'
                                             ? tokens.rag.amber.soft
-                                            : highlighted
-                                              ? tokens.slate300
-                                              : tokens.muted;
+                                            : status === 'missing'
+                                              ? tokens.slate400
+                                              : highlighted
+                                                ? tokens.slate300
+                                                : tokens.muted;
                                       const border = selected
                                         ? tokens.primary
                                         : status === 'matched'
                                           ? tokens.rag.green.border
                                           : status === 'mismatch'
                                             ? tokens.rag.amber.border
-                                            : highlighted
-                                              ? tokens.slate400
-                                              : tokens.border;
+                                            : status === 'missing'
+                                              ? tokens.mutedForeground
+                                              : highlighted
+                                                ? tokens.slate400
+                                                : tokens.border;
                                       return (
                                         <RackCell
                                           key={cell.code}
@@ -520,6 +572,8 @@ export function RackViewScreen() {
               onQtyChange={(id, qty) => updateScan(id, { qty })}
               onConditionChange={(id, condition) => updateScan(id, { condition })}
               onSaveIssue={handleSaveIssue}
+              onUpdateEvidence={updateScanEvidence}
+              onRequestImage={setAttachmentTarget}
               onSelectLocation={setSelectedLoc}
               onStopCamera={handleStopCamera}
               onResumeCamera={handleResumeCamera}
@@ -540,6 +594,8 @@ export function RackViewScreen() {
         }}
         onClose={() => setScannerOpen(null)}
       />
+
+      <NewAttachmentModal visible={attachmentTarget !== null} onClose={() => setAttachmentTarget(null)} onSave={handleAddEvidenceImage} />
 
       <Modal visible={testSheetOpen} animationType="fade" onRequestClose={() => setTestSheetOpen(false)}>
         <View style={styles.testSheetContainer}>
@@ -583,6 +639,8 @@ function ScanSessionPanel({
   onQtyChange,
   onConditionChange,
   onSaveIssue,
+  onUpdateEvidence,
+  onRequestImage,
   onSelectLocation,
   onStopCamera,
   onResumeCamera,
@@ -601,6 +659,8 @@ function ScanSessionPanel({
   onQtyChange: (id: string, qty: number) => void;
   onConditionChange: (id: string, condition: Condition) => void;
   onSaveIssue: (id: string) => void;
+  onUpdateEvidence: (id: string, patch: Partial<Evidence>) => void;
+  onRequestImage: (id: string) => void;
   onSelectLocation: (locCode: string) => void;
   onStopCamera: () => void;
   onResumeCamera: () => void;
@@ -644,6 +704,10 @@ function ScanSessionPanel({
     const latest = scans[0];
     if (!latest || latest.id === lastFlashedIdRef.current) return;
     lastFlashedIdRef.current = latest.id;
+    // Only real-time camera scans flash — "missing" entries are added in
+    // bulk once the camera's already stopped, so there's no live moment to
+    // flash for.
+    if (latest.status === 'missing') return;
     setFlash({ tone: latest.status });
     if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     flashTimeoutRef.current = setTimeout(() => setFlash(null), 650);
@@ -746,6 +810,24 @@ function ScanSessionPanel({
               onSave={() => onSaveIssue(scan.id)}
               onDelete={onCollapse}
               onEdit={() => {}}
+              evidenceSlot={
+                <EvidenceBlock
+                  evidence={scan.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] }}
+                  onOpenNote={() => onUpdateEvidence(scan.id, { noteOpen: true })}
+                  onChangeNote={(note) => onUpdateEvidence(scan.id, { note })}
+                  onRecordAudio={() => onUpdateEvidence(scan.id, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                  onToggleAudioPlay={() => {
+                    const audio = scan.evidence?.audio;
+                    if (!audio) return;
+                    onUpdateEvidence(scan.id, { audio: { ...audio, playing: !audio.playing } });
+                  }}
+                  onRemoveAudio={() => onUpdateEvidence(scan.id, { audio: null })}
+                  onAddImage={() => onRequestImage(scan.id)}
+                  onRemoveImage={(i) => onUpdateEvidence(scan.id, { images: (scan.evidence?.images ?? []).filter((_, ii) => ii !== i) })}
+                  onAddVideo={() => onUpdateEvidence(scan.id, { videos: [...(scan.evidence?.videos ?? []), { durationSec: 20 }] })}
+                  onRemoveVideo={(i) => onUpdateEvidence(scan.id, { videos: (scan.evidence?.videos ?? []).filter((_, ii) => ii !== i) })}
+                />
+              }
             />
           ) : (
             <ScanRow
@@ -771,7 +853,9 @@ function ScanSessionPanel({
 
 function ScanRow({ scan, selected, onRaiseIssue, onSelect }: { scan: SessionScan; selected: boolean; onRaiseIssue: () => void; onSelect: () => void }) {
   const { tokens } = useTheme();
-  const tone = scan.status === 'matched' ? tokens.rag.green : tokens.rag.amber;
+  const missingTone = { strong: tokens.mutedForeground, soft: tokens.muted, border: tokens.border };
+  const tone = scan.status === 'matched' ? tokens.rag.green : scan.status === 'mismatch' ? tokens.rag.amber : missingTone;
+  const badgeLabel = scan.status === 'matched' ? 'Matched' : scan.status === 'mismatch' ? 'Mismatch' : 'Missing';
   return (
     <Pressable
       disabled={!scan.locCode}
@@ -785,16 +869,22 @@ function ScanRow({ scan, selected, onRaiseIssue, onSelect }: { scan: SessionScan
         </Text>
       </View>
       <View style={[styles.scanBadge, { backgroundColor: tone.soft, borderColor: tone.border, borderRadius: tokens.radius.sm }]}>
-        <Text style={{ color: tone.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{scan.status === 'matched' ? 'Matched' : 'Mismatch'}</Text>
+        <Text style={{ color: tone.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{badgeLabel}</Text>
       </View>
-      {scan.status === 'matched' ? (
+      {scan.status === 'matched' || scan.status === 'missing' ? (
         scan.issueRaised ? (
           <View style={[styles.issuePill, { backgroundColor: tokens.rag.red.soft, borderRadius: tokens.radius.sm }]}>
-            <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>Issue Raised</Text>
+            <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
+              {scan.status === 'missing' ? 'Evidence Added' : 'Issue Raised'}
+            </Text>
           </View>
         ) : (
           <Pressable onPress={onRaiseIssue} style={[styles.raiseBtn, { borderColor: tokens.rag.red.border, borderRadius: tokens.radius.sm }]}>
-            <Ionicons name="flag-outline" size={14} color={tokens.rag.red.strong} />
+            {scan.status === 'missing' ? (
+              <Ionicons name="camera-outline" size={14} color={tokens.rag.red.strong} />
+            ) : (
+              <Ionicons name="flag-outline" size={14} color={tokens.rag.red.strong} />
+            )}
           </Pressable>
         )
       ) : null}
