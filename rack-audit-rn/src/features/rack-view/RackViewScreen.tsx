@@ -876,34 +876,38 @@ function ScanSessionPanel({
         ) : null}
         {scans.map((scan) =>
           expandedId === scan.id ? (
-            <SkuLineCard
-              key={scan.id}
-              line={scan}
-              active
-              onQtyChange={(qty) => onQtyChange(scan.id, qty)}
-              onConditionChange={(condition) => onConditionChange(scan.id, condition)}
-              onSave={() => onSaveIssue(scan.id)}
-              onDelete={onCollapse}
-              onEdit={() => {}}
-              evidenceSlot={
-                <EvidenceBlock
-                  evidence={scan.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] }}
-                  onOpenNote={() => onUpdateEvidence(scan.id, { noteOpen: true })}
-                  onChangeNote={(note) => onUpdateEvidence(scan.id, { note })}
-                  onRecordAudio={() => onUpdateEvidence(scan.id, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                  onToggleAudioPlay={() => {
-                    const audio = scan.evidence?.audio;
-                    if (!audio) return;
-                    onUpdateEvidence(scan.id, { audio: { ...audio, playing: !audio.playing } });
-                  }}
-                  onRemoveAudio={() => onUpdateEvidence(scan.id, { audio: null })}
-                  onAddImage={() => onRequestImage(scan.id)}
-                  onRemoveImage={(i) => onUpdateEvidence(scan.id, { images: (scan.evidence?.images ?? []).filter((_, ii) => ii !== i) })}
-                  onAddVideo={() => onUpdateEvidence(scan.id, { videos: [...(scan.evidence?.videos ?? []), { durationSec: 20 }] })}
-                  onRemoveVideo={(i) => onUpdateEvidence(scan.id, { videos: (scan.evidence?.videos ?? []).filter((_, ii) => ii !== i) })}
-                />
-              }
-            />
+            <View key={scan.id} style={{ gap: 6 }}>
+              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>
+                {scan.locLabel ?? 'No pallet left to attribute this to'}
+              </Text>
+              <SkuLineCard
+                line={scan}
+                active
+                onQtyChange={(qty) => onQtyChange(scan.id, qty)}
+                onConditionChange={(condition) => onConditionChange(scan.id, condition)}
+                onSave={() => onSaveIssue(scan.id)}
+                onDelete={onCollapse}
+                onEdit={() => {}}
+                evidenceSlot={
+                  <EvidenceBlock
+                    evidence={scan.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] }}
+                    onOpenNote={() => onUpdateEvidence(scan.id, { noteOpen: true })}
+                    onChangeNote={(note) => onUpdateEvidence(scan.id, { note })}
+                    onRecordAudio={() => onUpdateEvidence(scan.id, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                    onToggleAudioPlay={() => {
+                      const audio = scan.evidence?.audio;
+                      if (!audio) return;
+                      onUpdateEvidence(scan.id, { audio: { ...audio, playing: !audio.playing } });
+                    }}
+                    onRemoveAudio={() => onUpdateEvidence(scan.id, { audio: null })}
+                    onAddImage={() => onRequestImage(scan.id)}
+                    onRemoveImage={(i) => onUpdateEvidence(scan.id, { images: (scan.evidence?.images ?? []).filter((_, ii) => ii !== i) })}
+                    onAddVideo={() => onUpdateEvidence(scan.id, { videos: [...(scan.evidence?.videos ?? []), { durationSec: 20 }] })}
+                    onRemoveVideo={(i) => onUpdateEvidence(scan.id, { videos: (scan.evidence?.videos ?? []).filter((_, ii) => ii !== i) })}
+                  />
+                }
+              />
+            </View>
           ) : (
             <ScanRow
               key={scan.id}
