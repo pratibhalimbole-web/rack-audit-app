@@ -1,10 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
@@ -13,10 +12,11 @@ import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import { Pill } from '@/components/Pill';
 import { SkuLineCard } from '@/components/SkuLineCard';
 import type { SheetOption } from '@/components/BottomSheetPicker';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, NO_CODE_LOCATIONS } from '@/lib/mockData';
-import type { Condition, Evidence, EvidenceImage, LocationNode } from '@/lib/types';
+import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, type ExpectedSkuLine } from '@/lib/mockData';
+import type { CountLine, Evidence, LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
@@ -26,25 +26,6 @@ type Params = { auditId: string; layout: string; rackId: string; bay: string; lo
 
 const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Completed: 'Completed' } as const;
 
-// A single scanned SKU during a Start Audit session. Unlike variation-2's
-// original one-pallet-at-a-time flow, an inspector now scans freely across
-// the whole physical rack, in any order — each scanner code is unique per
-// pallet (its own location code), so a scan resolves to the exact physical
-// pallet it came from, not a guessed "next in line" location.
-type SessionScan = {
-  id: string;
-  locCode: string | null;
-  locLabel: string | null;
-  sku: string;
-  name: string;
-  lot: string;
-  qty: number;
-  condition: Condition;
-  status: 'matched' | 'mismatch' | 'missing';
-  issueRaised: boolean;
-  evidence?: Evidence;
-};
-
 // Pallet ID shown to the inspector — level + pallet number on that level,
 // e.g. level 5 / pallet 1 -> "P-0501" — distinct from the location's
 // internal `code` (rack/bay-scoped) used for lookups and saving records.
@@ -52,12 +33,16 @@ function palletIdFor(loc: { level?: number; slot?: number; code: string }): stri
   return loc.level != null && loc.slot != null ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}` : loc.code;
 }
 
-// Ports renderRackView() + buildBayDiagram (rack-audit-app.html ~2820-3223)
-// — the tablet-only schematic elevation of a bay (levels stacked bottom-up).
-// Start Audit opens a live scanning session split side-by-side with the
-// canvas: the inspector scans whatever pallet they physically reach, in any
-// order, and the canvas reflects matched/mismatch/missing status live as
-// scans land — no pre-selecting a single pallet first.
+// variation-3: a selection-driven flow instead of variation-2's free-scan-
+// in-any-order Live Scan session. Every in-scope pallet is directly
+// selectable — tap it on the canvas, or pick it from the toolbar dropdown,
+// both stay in sync either direction. Selecting one and tapping Start Audit
+// opens a right-side Reconciliation Form with that exact pallet's expected
+// SKU already known (from EXPECTED_SKUS) and a scan icon right at the top
+// of the form — scanning here only ever needs to answer "does the SKU
+// actually on this known pallet match what's expected," not "which pallet
+// is this." Scan Next SKU saves the current pallet and auto-advances
+// selection (and the canvas highlight) to the next one in the rack.
 export function RackViewScreen() {
   const { tokens } = useTheme();
   const params = useLocalSearchParams<Params>();
@@ -71,57 +56,41 @@ export function RackViewScreen() {
   const [pickerField, setPickerField] = useState<'rack' | 'pallet' | null>(null);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   const [scanCycle, setScanCycle] = useState(0);
-  const [scannerOpen, setScannerOpen] = useState<'pallet' | null>(null);
-  // Dev/demo aid, not an inspector-facing feature: a printable sheet of every
-  // one of Rack A-21's 38 target-SKU pallet codes, viewable in-app as an
-  // overlay so it can be held up to a second device's camera to exercise the
-  // Live Scan session without a physically printed page.
-  const [testSheetOpen, setTestSheetOpen] = useState(false);
+  const [skuPanelOpen, setSkuPanelOpen] = useState(false);
+  const [scanLines, setScanLines] = useState<CountLine[]>([]);
+  const [scanPallet, setScanPallet] = useState<string | null>(null);
+  const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [skuScanCount, setSkuScanCount] = useState(0);
+  const [scannerOpen, setScannerOpen] = useState<'pallet' | 'sku' | null>(null);
+  // Session-only flags (not persisted) — "Raise Issue" in the detail view
+  // just gives the inspector visible confirmation; the underlying condition
+  // already makes the line show up in Reported Audits once saved.
+  const [issuesRaised, setIssuesRaised] = useState<Set<string>>(new Set());
+  const [attachmentTarget, setAttachmentTarget] = useState<number | null>(null);
+  const confirm = useConfirmDialog();
 
-  // The live scan session opened by "Start Audit" — no pallet needs to be
-  // pre-selected, it covers the whole rack (or, with a target_sku, whatever
-  // subset of it is in scope). Split side-by-side with the canvas rather
-  // than a small overlay, so both stay big and readable at once.
-  const [sessionOpen, setSessionOpen] = useState(false);
-  // Whether the camera itself is actively scanning right now. "Done" only
-  // stops the camera — it doesn't close the split panel — so the inspector
-  // lands on a review state showing canvas + the scanned list together
-  // (camera area replaced by a "Resume Scanning" prompt) before deciding to
-  // Save Audit. Kept separate from `sessionOpen` so canvas/list stay mounted
-  // and visible the whole time regardless of camera state.
-  const [cameraActive, setCameraActive] = useState(true);
-  // Whether Start Audit has ever been tapped this visit — drives the
-  // canvas's dashed "missing" state, which should stay visible on the
-  // canvas even after the session panel is fully closed (so progress is
-  // still readable at a glance), not just while a session is active.
-  const [auditStarted, setAuditStarted] = useState(false);
-  const [sessionScans, setSessionScans] = useState<SessionScan[]>([]);
-  // Two physical codes scanned in quick succession (fast panning across the
-  // rack) can both reach nextUnclaimedLocation before React has re-rendered
-  // with the first one's result — component state is a snapshot from the
-  // last completed render, so both calls would see the same "next
-  // unclaimed" location and double-claim it (this was the 38-codes-become-
-  // 39-scans bug). A ref updates synchronously and is read fresh on every
-  // call, so it's the sole source of truth for resolution — the canvas and
-  // the "N matched" counter both derive from `sessionScans` instead, which
-  // already triggers a re-render on every scan, so no separate state copy
-  // of this set is needed.
-  const scannedLocsRef = useRef<Set<string>>(new Set());
-  const [expandedScanId, setExpandedScanId] = useState<string | null>(null);
-  // Which scan's Raise Issue accordion is currently adding a photo — routes
-  // NewAttachmentModal's saved annotation back to the right scan's evidence.
-  const [attachmentTarget, setAttachmentTarget] = useState<string | null>(null);
-  const [simCount, setSimCount] = useState(0);
-  const scanIdRef = useRef(0);
+  // Exactly one SKU is expected per pallet, and exactly one scan is on
+  // record for it (a new scan replaces the previous one rather than
+  // accumulating a checklist). The SKU identity check happens first — if
+  // the wrong item was scanned, that's "Misplaced" and there's nothing to
+  // reconcile at this location for it. Only once the right SKU is
+  // confirmed does the qty/condition form appear; Matched vs. Mismatch is
+  // then decided by what the inspector records there.
+  const expectedSku = expectedSkus[0] ?? null;
+  const scannedLine = scanLines[0] ?? null;
+  const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
+  const misplaced = !!scannedLine && !skuMatched;
 
-  // Which pallet is blinking on the canvas right now — set for a few
-  // seconds whenever the inspector raises an issue, so it's obvious at a
-  // glance which physical pallet that issue belongs to.
-  const [blinkLoc, setBlinkLoc] = useState<string | null>(null);
-  const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
-  }, []);
+  // Drives the bay canvas cell colors: green once a pallet's scan resolves
+  // to a clean match, amber when the right SKU was found but qty/condition
+  // is off ("matched but has an issue"), red when the wrong SKU was
+  // scanned entirely, gray for anything not yet scanned this session.
+  const [locationStatus, setLocationStatus] = useState<Record<string, 'matched' | 'issue' | 'mismatch' | 'missing'>>({});
+  // Checked when the inspector physically found no scanner code at all at
+  // the selected location — lets them resolve and move past it without a
+  // scan, instead of getting stuck waiting for a code that doesn't exist.
+  const [noScannerFound, setNoScannerFound] = useState(false);
 
   // Figma-style canvas: pinch to zoom, drag to pan, the toolbar/footer stay
   // put since only this transformed layer moves — not the whole screen.
@@ -152,7 +121,6 @@ export function RackViewScreen() {
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
-
   // Bay is no longer a pickable dimension — the whole rack's bays render
   // together, so only the rack (and layout) identify what's on screen.
   const seedKey = `${auditId}|${layout}|${rackCode}`;
@@ -161,14 +129,6 @@ export function RackViewScreen() {
     if (seedKeyRef.current !== seedKey) {
       seedKeyRef.current = seedKey;
       setSelectedLoc(null);
-      setSessionOpen(false);
-      setCameraActive(true);
-      setAuditStarted(false);
-      setSessionScans([]);
-      scannedLocsRef.current = new Set();
-      setExpandedScanId(null);
-      setAttachmentTarget(null);
-      setBlinkLoc(null);
       scale.value = 1;
       savedScale.value = 1;
       translateX.value = 0;
@@ -212,7 +172,7 @@ export function RackViewScreen() {
   }
 
   // The whole rack's locations, flattened across every one of its bays —
-  // used for selection lookup, the Pallet picker, and scan resolution,
+  // used for selection lookup, the Pallet picker, and scan progression,
   // since a rack can now be worked end to end without switching bays.
   const rackLocations = rackObj.bays.flatMap((b) => b.locations);
   const selectedLocObj = selectedLoc ? rackLocations.find((l) => l.code === selectedLoc) ?? null : null;
@@ -224,22 +184,15 @@ export function RackViewScreen() {
   // When this audit has a target_sku (the admin's "SKU Type" field), only
   // pallets actually carrying that SKU are in scope to select/scan at all —
   // every other pallet is disabled on the canvas, absent from the Pallet
-  // picker, and ignored by the scan session. Without a target_sku every
-  // pallet in the rack stays selectable, same as before.
+  // picker, and ignored by both real and simulated pallet scans. Without a
+  // target_sku every pallet in the rack stays selectable, same as before.
   const matchesTargetSku = (locCode: string) => !!audit.target_sku && (EXPECTED_SKUS[locCode] ?? []).some((l) => l.sku === audit.target_sku);
   const isLocSelectable = (locCode: string) => !audit.target_sku || matchesTargetSku(locCode);
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before) — this is purely cosmetic and separate from selectability.
   const isLocHighlighted = (locCode: string) => (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
-  // Known up front to have no physical scanner code at all — still one of
-  // the in-scope/expected locations (still selectable, still counted in
-  // totalTargets), but real scanning can never resolve to it, so it's
-  // excluded from scan-claiming and shown dark gray from the start rather
-  // than only once the whole session wraps up.
-  const hasNoCode = (locCode: string) => !!NO_CODE_LOCATIONS[locCode];
   const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
-  const totalTargets = scannableLocations.filter((l) => (EXPECTED_SKUS[l.code]?.length ?? 0) > 0).length;
 
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
   const palletOptions: SheetOption[] = scannableLocations.map((l) => ({
@@ -251,6 +204,9 @@ export function RackViewScreen() {
     setRackCode(code);
     setPickerField(null);
   };
+  // Dropdown -> canvas: picking a pallet here also becomes the canvas'
+  // selection (the cell gets the blue "selected" outline), same object of
+  // truth (`selectedLoc`) as tapping the cell directly does.
   const handlePickPallet = (code: string) => {
     setSelectedLoc(code);
     setPickerField(null);
@@ -270,195 +226,137 @@ export function RackViewScreen() {
     if (match) setSelectedLoc(match.code);
   };
 
+  // Drives the bay canvas cell colors: green once a pallet's scan resolves
+  // to a clean match, amber when the right SKU was found but qty/condition
+  // is off, red when the wrong SKU was scanned (misplaced), gray (the
+  // default, just omitted from the map) for anything not yet scanned.
+  // Called from every place the scan/edit state for the open pallet can
+  // change, so the canvas behind the panel always reflects what's on
+  // screen right now.
+  const applyLocationStatus = (locCode: string, line: CountLine | null, expected: ExpectedSkuLine | null) => {
+    setLocationStatus((prev) => {
+      if (!line) {
+        if (!(locCode in prev)) return prev;
+        const next = { ...prev };
+        delete next[locCode];
+        return next;
+      }
+      const skuMatches = !!expected && line.sku === expected.sku;
+      const status: 'matched' | 'issue' | 'mismatch' = !skuMatches ? 'mismatch' : line.qty === expected.qty && line.condition === 'Good' ? 'matched' : 'issue';
+      return prev[locCode] === status ? prev : { ...prev, [locCode]: status };
+    });
+  };
+
+  // "No Scanner Found" checkbox — the inspector is telling us the physical
+  // code just isn't there, so there's nothing left to scan at this pallet.
+  // Wipes any in-progress scan and marks the location 'missing' (dark gray,
+  // dashed on canvas) instead of leaving it stuck gray/unresolved forever.
+  const handleToggleNoScannerFound = (checked: boolean) => {
+    setNoScannerFound(checked);
+    if (!selectedLocObj) return;
+    if (checked) {
+      setScanLines([]);
+      setExpandedIdx(null);
+      setLocationStatus((prev) => ({ ...prev, [selectedLocObj.code]: 'missing' }));
+    } else {
+      applyLocationStatus(selectedLocObj.code, scanLines[0] ?? null, expectedSkus[0] ?? null);
+    }
+  };
+
+  // Shared by "Start Audit" (from the canvas) and "Scan Next SKU" (from
+  // inside an already-open panel) — resets the scan state for a location.
+  // Only a pallet the inspector genuinely already scanned and saved this
+  // audit (saved: true, written by saveRecord) counts as "existing" — the
+  // demo-seeded pallet every location starts with (saved: false/undefined)
+  // is the warehouse's actual contents, not a completed scan, so it must
+  // never pre-fill the form. Otherwise Start Audit would open straight into
+  // a resolved Matched/Mismatch state instead of the empty "Scan SKU" UI
+  // the inspector is meant to see first.
+  const startAuditFor = (loc: LocationNode) => {
+    const existing = loc.pallets.find((p) => p.saved) ?? null;
+    // Single-SKU pallet: only the first line of any prior saved scan applies.
+    const base = existing ? existing.lines.slice(0, 1).map((l) => ({ ...l })) : [];
+    const expected = (EXPECTED_SKUS[loc.code] ?? []).slice(0, 1);
+    setScanPallet(existing ? existing.pallet : null);
+    setScanLines(base);
+    setExpandedIdx(base.length ? 0 : null);
+    setExpectedSkus(expected);
+    setNoScannerFound(false);
+    applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null);
+  };
+
   const handleStartAudit = () => {
-    setSessionOpen(true);
-    setCameraActive(true);
-    setAuditStarted(true);
+    if (!selectedLocObj) return;
+    startAuditFor(selectedLocObj);
+    setSkuPanelOpen(true);
   };
-  // "Done" (in the scan panel's camera area) only stops the camera — the
-  // split panel stays open, landing the inspector on canvas + the scanned
-  // list together so they can review what was found before deciding to
-  // save. Scanning can be resumed from that review state at any time.
-  // Stopping the camera is also the moment "still not scanned" becomes
-  // "confirmed missing" — anything expected in scope that never resolved
-  // gets its own list entry rather than just fading into the background.
-  // Nothing on the canvas hints in advance which locations lack a code —
-  // that would spoil the point of physically checking each pallet — so
-  // this sweep (and manual selection, see handleAddMissingEvidence) is the
-  // only way "no code here" ever actually surfaces. Each entry is still
-  // selectable/highlightable on the canvas and can have evidence (photo of
-  // the empty slot, a note, etc.) attached, same as a raised issue.
-  const handleStopCamera = () => {
-    setCameraActive(false);
-    setExpandedScanId(null);
-    const missingLocs = scannableLocations.filter((l) => !scannedLocsRef.current.has(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0);
-    if (missingLocs.length) {
-      const missingEntries: SessionScan[] = missingLocs.map((loc) => {
-        scannedLocsRef.current.add(loc.code);
-        return {
-          id: String(scanIdRef.current++),
-          locCode: loc.code,
-          locLabel: `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}`,
-          sku: '',
-          name: 'No scanner code found at this pallet',
-          lot: '—',
-          qty: 0,
-          condition: 'Good',
-          status: 'missing',
-          issueRaised: false,
-        };
-      });
-      setSessionScans((prev) => [...missingEntries, ...prev]);
+
+  // Persists the pallet just finished, then jumps straight to the next
+  // location on this rack — selecting it (which highlights it on the
+  // canvas behind the panel) and loading it up ready to scan, so the
+  // inspector never has to close the panel and tap the canvas by hand.
+  // Progresses across all of the rack's bays in sequence, not just the one
+  // the current location happens to be in.
+  const handleScanNext = async () => {
+    if (selectedLocObj && scanLines.length && !misplaced) {
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
-  };
-  const handleResumeCamera = () => setCameraActive(true);
-
-  // Any selected, in-scope pallet that hasn't resolved to a scan yet can be
-  // manually flagged this way — the inspector physically found nothing to
-  // scan there and taps it on the canvas themselves, rather than waiting
-  // for the whole session to finish. Creates its "Missing" list entry on
-  // demand and opens the session panel straight to its evidence accordion
-  // so a reason/photo can be attached right away.
-  const handleAddMissingEvidence = (locCode: string) => {
-    const loc = rackLocations.find((l) => l.code === locCode);
-    if (!loc || scannedLocsRef.current.has(locCode)) return;
-    scannedLocsRef.current.add(locCode);
-    const id = String(scanIdRef.current++);
-    const entry: SessionScan = {
-      id,
-      locCode: loc.code,
-      locLabel: `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}`,
-      sku: '',
-      name: 'No scanner code found at this pallet',
-      lot: '—',
-      qty: 0,
-      condition: 'Good',
-      status: 'missing',
-      issueRaised: false,
-    };
-    setSessionScans((prev) => [entry, ...prev]);
-    setSessionOpen(true);
-    setAuditStarted(true);
-    setCameraActive(false);
-    setExpandedScanId(id);
-  };
-  // Every match/mismatch scan already auto-saves the moment it resolves
-  // (and Raise Issue saves its own correction), so there's no batch of
-  // unsaved data waiting here — Save Audit is the inspector's explicit
-  // "I'm done with this rack" action, closing the whole session back to
-  // the plain canvas.
-  const handleSaveAudit = () => {
-    setSessionOpen(false);
-    setCameraActive(true);
-    setExpandedScanId(null);
-  };
-
-  // Every scanner code is unique per physical pallet — its own location
-  // code — not a shared SKU string, specifically so scanning out of order
-  // (Bay 3 right after Bay 1, skipping Bay 2) still attributes correctly
-  // to the exact pallet that was actually scanned, instead of guessing
-  // "whichever's next in some internal order." A code matching one of the
-  // in-scope target locations is a genuine find (matched); a code matching
-  // some OTHER real location on the rack means the wrong pallet was
-  // scanned (mismatch, but still a real, identifiable location) — this
-  // mirrors a real inspector always standing at one specific place.
-  const nextUnclaimedLocation = (): LocationNode | null =>
-    scannableLocations.find((l) => !scannedLocsRef.current.has(l.code) && !hasNoCode(l.code)) ?? null;
-
-  const handleSessionScan = async (code: string) => {
-    const scannedCode = code.trim();
-    if (!scannedCode || scannedLocsRef.current.has(scannedCode)) return;
-    // Claim synchronously, before any await, so a second scan arriving a
-    // few milliseconds later (same tick, before React re-renders) can't
-    // race to double-process the same code.
-    scannedLocsRef.current.add(scannedCode);
-
-    const targetLoc = scannableLocations.find(
-      (l) => l.code === scannedCode && !hasNoCode(l.code) && (EXPECTED_SKUS[l.code]?.length ?? 0) > 0,
-    );
-    const loc = targetLoc ?? rackLocations.find((l) => l.code === scannedCode) ?? null;
-    const matched = !!targetLoc;
-    const expectedLine = loc ? EXPECTED_SKUS[loc.code]?.[0] : undefined;
-    const foundLine = loc?.pallets[0]?.lines[0];
-    const sku = matched ? (expectedLine?.sku ?? scannedCode) : (foundLine?.sku ?? scannedCode);
-    const known = INVENTORY_POOL.find((p) => p.sku === sku);
-
-    const entry: SessionScan = {
-      id: String(scanIdRef.current++),
-      locCode: loc?.code ?? null,
-      locLabel: loc ? `Bay ${bayCodeForLoc(loc.code)} · ${palletIdFor(loc)}` : null,
-      sku,
-      name: matched ? (expectedLine?.name ?? known?.name ?? 'iPhone 15 Box') : (foundLine?.name ?? known?.name ?? 'Unlisted item'),
-      lot: matched ? (expectedLine?.lot ?? known?.lot ?? '—') : (foundLine?.lot ?? known?.lot ?? '—'),
-      qty: expectedLine?.qty ?? 1,
-      condition: 'Good',
-      status: matched ? 'matched' : 'mismatch',
-      issueRaised: false,
-    };
-    setSessionScans((prev) => [entry, ...prev]);
-    if (loc) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(loc.code), loc: loc.code }, [
-        { sku: entry.sku, name: entry.name, lot: entry.lot, qty: entry.qty, condition: entry.condition },
-      ]);
+    const locs = scannableLocations;
+    const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
+    const next = idx !== -1 ? locs[idx + 1] : undefined;
+    if (!next) {
+      setSkuPanelOpen(false);
+      return;
     }
+    setSelectedLoc(next.code);
+    startAuditFor(next);
   };
 
-  const handleSessionSimulate = () => {
-    // Mostly resolve an actual in-scope, not-yet-scanned target location
-    // (the common "found it" case); occasionally simulate scanning some
-    // OTHER real rack location's code to demo the mismatch path too.
-    const next = nextUnclaimedLocation();
-    const useMatch = !!next && simCount % 3 !== 0;
-    const nonTargetLocs = rackLocations.filter((l) => !scannableLocations.some((sl) => sl.code === l.code) && !scannedLocsRef.current.has(l.code));
-    const wrongLoc = nonTargetLocs[simCount % Math.max(nonTargetLocs.length, 1)];
-    const code = useMatch && next ? next.code : wrongLoc ? wrongLoc.code : `UNKNOWN-${simCount}`;
-    setSimCount((c) => c + 1);
-    handleSessionScan(code);
+  // One scan per pallet — a new scan replaces whatever was scanned before,
+  // it doesn't accumulate into a list. The SKU identity check decides what
+  // happens next: right SKU opens the qty/condition form, wrong SKU is
+  // "Misplaced" with nothing further to fill in.
+  const applySkuScan = (pick: { sku: string; name: string; lot: string }) => {
+    const line: CountLine = { sku: pick.sku, name: pick.name, lot: pick.lot, qty: 1, condition: 'Good' };
+    setScanLines([line]);
+    const matchesExpected = !!expectedSkus[0] && expectedSkus[0].sku === pick.sku;
+    setExpandedIdx(matchesExpected ? 0 : null);
+    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null);
   };
 
-  const updateScan = (id: string, patch: Partial<SessionScan>) => setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-
-  const ensureScanEvidence = (scan: SessionScan): Evidence => scan.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
-  const updateScanEvidence = (id: string, patch: Partial<Evidence>) =>
-    setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, evidence: { ...ensureScanEvidence(s), ...patch } } : s)));
-  const handleAddEvidenceImage = (image: EvidenceImage) => {
-    if (!attachmentTarget) return;
-    const id = attachmentTarget;
-    setSessionScans((prev) => prev.map((s) => (s.id === id ? { ...s, evidence: { ...ensureScanEvidence(s), images: [...ensureScanEvidence(s).images, image] } } : s)));
-    setAttachmentTarget(null);
+  const handleSkuScanned = (data: string) => {
+    const code = data.trim();
+    const pick = INVENTORY_POOL.find((p) => p.sku === code) ?? { sku: code, name: 'Unlisted SKU', lot: '—' };
+    applySkuScan(pick);
   };
 
-  // Raising an issue on an already-matched scan opens its accordion (Qty +
-  // Condition, reusing Count Sheet's SkuLineCard); saving it persists the
-  // correction and blinks the pallet on the canvas for a few seconds so
-  // it's obvious which physical pallet the issue belongs to.
-  const handleSaveIssue = async (id: string) => {
-    const scan = sessionScans.find((s) => s.id === id);
-    setExpandedScanId(null);
-    if (!scan) return;
-    updateScan(id, { issueRaised: true });
-    if (scan.locCode) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(scan.locCode), loc: scan.locCode }, [
-        { sku: scan.sku, name: scan.name, lot: scan.lot, qty: scan.qty, condition: scan.condition, evidence: scan.evidence },
-      ]);
-      if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
-      setBlinkLoc(scan.locCode);
-      blinkTimeoutRef.current = setTimeout(() => setBlinkLoc(null), 2400);
+  const handleSkuSimulated = () => {
+    // Mostly scan the expected SKU (the common case), occasionally
+    // simulate a misplaced item to demo that path too.
+    const expected = expectedSkus[0];
+    const useExpected = expected && skuScanCount % 3 !== 0;
+    applySkuScan(useExpected ? expected : INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length]);
+    setSkuScanCount((c) => c + 1);
+  };
+
+  const ensureLineEvidence = (line: CountLine): Evidence => line.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
+
+  const updateLineEvidence = (idx: number, patch: Partial<Evidence>) => {
+    const next = scanLines.slice();
+    next[idx] = { ...next[idx], evidence: { ...ensureLineEvidence(next[idx]), ...patch } };
+    setScanLines(next);
+  };
+
+  const handleSaveSkuPanel = async () => {
+    if (selectedLocObj && scanLines.length) {
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
+    setSkuPanelOpen(false);
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader
-        title={audit.audit_name}
-        sub={audit.audit_id}
-        showBack
-        menuItems={[
-          { label: 'Sync Now', onPress: () => {} },
-          ...(rackCode === 'A-21' && audit.target_sku ? [{ label: 'Test Scan Sheet (Rack A-21)', onPress: () => setTestSheetOpen(true) }] : []),
-        ]}
-        backgroundColor="#F7F8FA"
-      />
+      <AppHeader title={audit.audit_name} sub={audit.audit_id} showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} backgroundColor="#F7F8FA" />
 
       <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <ToolbarField label={layoutObj.name} fixed />
@@ -484,179 +382,384 @@ export function RackViewScreen() {
             </>
           ) : null}
         </View>
-        {/* Live-scan status is a badge, not a colored icon — the camera
-            button below is purely the "open/resume scanning" action, always
-            the same neutral look regardless of session state. */}
-        {sessionOpen ? <Pill label="Scanning" tone="In Progress" /> : null}
         <Pressable onPress={() => setScannerOpen('pallet')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
-        </Pressable>
-        {/* Always available while Rack View is open, not just before the
-            first Start Audit tap, so the Live Scan overlay can be reopened
-            any time without going back through the footer button. */}
-        <Pressable onPress={handleStartAudit} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="camera-outline" size={18} color={tokens.foreground} />
         </Pressable>
       </View>
 
       <View style={styles.body}>
-        {/* Canvas and the Live Scan panel sit side by side, both big, once a
-            session is open — not a small overlay — so status on the canvas
-            and the scanned list are readable together at all times. */}
-        <View style={sessionOpen ? styles.splitRow : styles.singleRow}>
-          <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
-            <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-                Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-            <View style={styles.diagramBody}>
-              <GestureDetector gesture={canvasGesture}>
-                <View style={styles.diagramCenter}>
-                  <Animated.View style={canvasAnimatedStyle}>
-                    <View style={styles.bayColumnsRow}>
-                      {bayDiagrams.map(({ bay, rows }, bayIndex) => (
-                        <View key={bay.code} style={styles.bayColumnWrap}>
-                          {/* The upright between adjacent bays — a real rack's
-                              physical frame member — instead of repeating the
-                              level label on every single bay. */}
-                          {bayIndex > 0 ? <View style={[styles.bayUpright, { backgroundColor: tokens.border }]} /> : null}
-                          <View style={styles.bayColumn}>
-                            <View style={styles.diagram}>
-                              {rows.map((row) => (
-                                <View key={row.level} style={styles.diagramRow}>
-                                  {bayIndex === 0 ? (
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 22 }}>L{row.level}</Text>
-                                  ) : null}
-                                  <View style={styles.diagramCells}>
-                                    {row.cells.map((cell, i) => {
-                                      if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
-                                      const selected = cell.code === selectedLoc;
-                                      const status = sessionScans.find((s) => s.locCode === cell.code)?.status;
-                                      const highlighted = isLocHighlighted(cell.code);
-                                      const selectable = isLocSelectable(cell.code);
-                                      // Two different "not resolved yet"
-                                      // looks: lightly highlighted + dashed
-                                      // while the session's still running
-                                      // (pending — might still get scanned),
-                                      // vs. a noticeably darker gray + dashed
-                                      // once Done has confirmed no code was
-                                      // ever found for it (status:'missing').
-                                      // No hint on the canvas ahead of time
-                                      // about which pallets lack a code —
-                                      // every not-yet-scanned in-scope cell
-                                      // looks the same (plain highlighted,
-                                      // dashed once pending). The darker
-                                      // "confirmed missing" look only kicks
-                                      // in once it's actually been flagged
-                                      // (manually selected, or swept up by
-                                      // Done) — never before.
-                                      const isPending = auditStarted && highlighted && !status;
-                                      const isMissing = status === 'missing' || isPending;
-                                      const bg =
-                                        status === 'matched'
-                                          ? tokens.rag.green.soft
+        {/* Canvas and the Reconciliation Form sit side by side, both full
+            height, once a pallet's audit is started — not a small overlay —
+            so the canvas highlight and the form stay visible together. */}
+        <View style={skuPanelOpen ? styles.splitRow : styles.singleRow}>
+        <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
+          <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+              Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <View style={styles.diagramBody}>
+            <GestureDetector gesture={canvasGesture}>
+              <View style={styles.diagramCenter}>
+                <Animated.View style={canvasAnimatedStyle}>
+                  <View style={styles.bayColumnsRow}>
+                    {bayDiagrams.map(({ bay, rows }, bayIndex) => (
+                      <View key={bay.code} style={styles.bayColumnWrap}>
+                        {/* The upright between adjacent bays — a real rack's
+                            physical frame member — instead of repeating the
+                            level label on every single bay. */}
+                        {bayIndex > 0 ? <View style={[styles.bayUpright, { backgroundColor: tokens.border }]} /> : null}
+                        <View style={styles.bayColumn}>
+                          <View style={styles.diagram}>
+                            {rows.map((row) => (
+                              <View key={row.level} style={styles.diagramRow}>
+                                {bayIndex === 0 ? (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 22 }}>L{row.level}</Text>
+                                ) : null}
+                                <View style={styles.diagramCells}>
+                                  {row.cells.map((cell, i) => {
+                                    if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
+                                    // Canvas <-> dropdown selection is the
+                                    // same `selectedLoc` value both ways, so
+                                    // tapping a cell here updates the
+                                    // toolbar's Pallet field automatically.
+                                    const selected = cell.code === selectedLoc;
+                                    const status = locationStatus[cell.code];
+                                    const highlighted = isLocHighlighted(cell.code);
+                                    const selectable = isLocSelectable(cell.code);
+                                    const dimmed = !selectable;
+                                    const bg =
+                                      status === 'matched'
+                                        ? tokens.rag.green.soft
+                                        : status === 'issue'
+                                          ? tokens.rag.amber.soft
                                           : status === 'mismatch'
-                                            ? tokens.rag.amber.soft
+                                            ? tokens.rag.red.soft
                                             : status === 'missing'
                                               ? tokens.slate400
                                               : highlighted
                                                 ? tokens.slate300
                                                 : tokens.muted;
-                                      const border = selected
-                                        ? tokens.primary
-                                        : status === 'matched'
-                                          ? tokens.rag.green.border
+                                    const border = selected
+                                      ? tokens.primary
+                                      : status === 'matched'
+                                        ? tokens.rag.green.border
+                                        : status === 'issue'
+                                          ? tokens.rag.amber.border
                                           : status === 'mismatch'
-                                            ? tokens.rag.amber.border
+                                            ? tokens.rag.red.border
                                             : status === 'missing'
                                               ? tokens.mutedForeground
                                               : highlighted
                                                 ? tokens.slate400
                                                 : tokens.border;
-                                      return (
-                                        <RackCell
-                                          key={cell.code}
-                                          bg={bg}
-                                          border={border}
-                                          selected={selected}
-                                          selectable={selectable}
-                                          dashed={isMissing}
-                                          blinking={blinkLoc === cell.code}
-                                          flagged={sessionScans.some((s) => s.locCode === cell.code && s.issueRaised)}
-                                          onPress={() => setSelectedLoc(cell.code)}
-                                        />
-                                      );
-                                    })}
-                                  </View>
+                                    return (
+                                      <Pressable
+                                        key={cell.code}
+                                        disabled={!selectable}
+                                        onPress={() => setSelectedLoc(cell.code)}
+                                        style={[
+                                          styles.cell,
+                                          {
+                                            backgroundColor: bg,
+                                            borderColor: border,
+                                            borderWidth: selected ? 2 : 1,
+                                            borderStyle: status === 'missing' ? 'dashed' : 'solid',
+                                            borderRadius: status === 'missing' ? 0 : 4,
+                                            opacity: dimmed ? 0.45 : 1,
+                                          },
+                                        ]}
+                                      />
+                                    );
+                                  })}
                                 </View>
-                              ))}
-                            </View>
-                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bay.code}</Text>
+                              </View>
+                            ))}
                           </View>
+                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 10 }}>Bay {bay.code}</Text>
                         </View>
-                      ))}
-                    </View>
-                  </Animated.View>
-                </View>
-              </GestureDetector>
-              {selectedLoc && isLocHighlighted(selectedLoc) && !sessionScans.some((s) => s.locCode === selectedLoc) ? (
-                // Any in-scope, not-yet-resolved pallet tapped directly on
-                // the canvas gets this — the inspector physically found no
-                // code to scan there and is flagging it themselves, rather
-                // than waiting for a full scanning pass to finish.
-                <View style={styles.footerRow}>
-                  <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+                      </View>
+                    ))}
+                  </View>
+                </Animated.View>
+              </View>
+            </GestureDetector>
+            {!skuPanelOpen ? (
+              <View style={styles.footerRow}>
+                <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!selectedLoc}
+                  onPress={handleStartAudit}
+                  style={[styles.primaryBtn, styles.footerBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: selectedLoc ? 1 : 0.5 }]}
+                >
+                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Start Audit</Text>
+                  <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </Card>
+
+        {skuPanelOpen ? (
+          <Card style={styles.skuPanel}>
+            {/* Location/pallet info AND the scan actions live in the same
+                header row at the top of the form: a Scan icon (always
+                re-scans this pallet) sitting right next to a Next Scan
+                button (saves and advances to the next pallet — enabled once
+                something's scanned, or the pallet's flagged as having no
+                scanner code found at all). */}
+            <View style={styles.skuPanelHead}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Reconciliation Form</Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
+                  {selectedLocObj?.code} · {scanPallet ?? 'New Pallet'}
+                </Text>
+              </View>
+              {expandedIdx === null ? (
+                <View style={styles.headBtnRow}>
+                  <Pressable
+                    onPress={() => setScannerOpen('sku')}
+                    style={[styles.topScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+                  >
+                    <Ionicons name="qr-code-outline" size={18} color={tokens.primaryForeground} />
                   </Pressable>
                   <Pressable
-                    onPress={() => handleAddMissingEvidence(selectedLoc)}
-                    style={[styles.primaryBtn, styles.footerBtn, { backgroundColor: tokens.mutedForeground, borderRadius: tokens.radius.lg }]}
+                    disabled={!scannedLine && !noScannerFound}
+                    onPress={handleScanNext}
+                    style={[
+                      styles.nextScanBtn,
+                      { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg, opacity: scannedLine || noScannerFound ? 1 : 0.5 },
+                    ]}
                   >
-                    <Ionicons name="camera-outline" size={16} color={tokens.primaryForeground} />
-                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>No Code Found — Add Evidence</Text>
-                  </Pressable>
-                </View>
-              ) : !sessionOpen ? (
-                <View style={styles.footerRow}>
-                  <Pressable onPress={() => setSelectedLoc(null)} style={[styles.outlineBtn, styles.footerBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleStartAudit}
-                    style={[styles.primaryBtn, styles.footerBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
-                  >
-                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Start Audit</Text>
-                    <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
+                    <Ionicons name="arrow-forward-circle-outline" size={18} color={tokens.foreground} />
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Next Scan</Text>
                   </Pressable>
                 </View>
               ) : null}
             </View>
-          </Card>
 
-          {sessionOpen ? (
-            <ScanSessionPanel
-              scans={sessionScans}
-              expandedId={expandedScanId}
-              matchedCount={sessionScans.filter((s) => s.status === 'matched').length}
-              totalCount={totalTargets}
-              cameraActive={cameraActive}
-              selectedLocCode={selectedLoc}
-              onScanCode={handleSessionScan}
-              onSimulate={handleSessionSimulate}
-              onRaiseIssue={(id) => setExpandedScanId(id)}
-              onCollapse={() => setExpandedScanId(null)}
-              onQtyChange={(id, qty) => updateScan(id, { qty })}
-              onConditionChange={(id, condition) => updateScan(id, { condition })}
-              onSaveIssue={handleSaveIssue}
-              onUpdateEvidence={updateScanEvidence}
-              onRequestImage={setAttachmentTarget}
-              onSelectLocation={setSelectedLoc}
-              onStopCamera={handleStopCamera}
-              onResumeCamera={handleResumeCamera}
-              onSaveAudit={handleSaveAudit}
-            />
-          ) : null}
+            {expandedIdx !== null && scannedLine && skuMatched && expectedSku ? (
+              // The SKU form only appears once the identity check passes —
+              // a misplaced scan (wrong SKU for this pallet) has nothing to
+              // fill in, it's handled by the view below instead. Status here
+              // is only ever Quantity/Condition mismatch or a clean Matched,
+              // since "wrong SKU" can't happen in this branch.
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
+                {(() => {
+                  const line = scannedLine;
+                  const qtyMismatch = line.qty !== expectedSku.qty;
+                  const conditionFlagged = line.condition !== 'Good';
+                  const editStatus = qtyMismatch
+                    ? { label: 'Quantity Mismatch', rag: tokens.rag.amber }
+                    : conditionFlagged
+                      ? { label: 'Condition Mismatch', rag: tokens.rag.amber }
+                      : { label: 'Matched', rag: tokens.rag.green };
+                  const raised = issuesRaised.has(line.sku);
+                  return (
+                    <>
+                      <View style={[styles.editStatusPill, { backgroundColor: editStatus.rag.soft, borderColor: editStatus.rag.border, borderRadius: tokens.radius.lg }]}>
+                        <Text style={{ color: editStatus.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{editStatus.label}</Text>
+                      </View>
+                      {qtyMismatch || conditionFlagged ? (
+                        <Pressable
+                          disabled={raised}
+                          onPress={() => setIssuesRaised((prev) => new Set(prev).add(line.sku))}
+                          style={[
+                            styles.raiseIssueBox,
+                            {
+                              backgroundColor: raised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                              borderColor: raised ? tokens.rag.green.border : tokens.rag.red.border,
+                              borderRadius: tokens.radius.lg,
+                            },
+                          ]}
+                        >
+                          <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                          <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
+                            {raised
+                              ? 'Issue raised for this SKU'
+                              : qtyMismatch
+                                ? `Raise Issue — expected ${expectedSku.qty}, found ${line.qty}`
+                                : `Raise Issue — condition: ${line.condition}`}
+                          </Text>
+                          {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
+                        </Pressable>
+                      ) : null}
+                    </>
+                  );
+                })()}
+                <SkuLineCard
+                  line={scanLines[expandedIdx]}
+                  active
+                  onQtyChange={(qty) => {
+                    const next = scanLines.slice();
+                    next[expandedIdx] = { ...next[expandedIdx], qty };
+                    setScanLines(next);
+                    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next[expandedIdx], expectedSku);
+                  }}
+                  onConditionChange={(condition) => {
+                    const next = scanLines.slice();
+                    next[expandedIdx] = { ...next[expandedIdx], condition };
+                    setScanLines(next);
+                    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next[expandedIdx], expectedSku);
+                  }}
+                  onSave={() => setExpandedIdx(null)}
+                  onDelete={() =>
+                    confirm.ask(`Remove ${scanLines[expandedIdx].sku} from this record?`, () => {
+                      setScanLines(scanLines.filter((_, i) => i !== expandedIdx));
+                      setExpandedIdx(null);
+                      if (selectedLocObj) applyLocationStatus(selectedLocObj.code, null, expectedSku);
+                    })
+                  }
+                  onEdit={() => {}}
+                  evidenceSlot={
+                    <EvidenceBlock
+                      evidence={ensureLineEvidence(scanLines[expandedIdx])}
+                      onOpenNote={() => updateLineEvidence(expandedIdx, { noteOpen: true })}
+                      onChangeNote={(note) => updateLineEvidence(expandedIdx, { note })}
+                      onRecordAudio={() => updateLineEvidence(expandedIdx, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                      onToggleAudioPlay={() => {
+                        const ev = ensureLineEvidence(scanLines[expandedIdx]);
+                        if (!ev.audio) return;
+                        updateLineEvidence(expandedIdx, { audio: { ...ev.audio, playing: !ev.audio.playing } });
+                      }}
+                      onRemoveAudio={() => updateLineEvidence(expandedIdx, { audio: null })}
+                      onAddImage={() => setAttachmentTarget(expandedIdx)}
+                      onRemoveImage={(i) =>
+                        updateLineEvidence(expandedIdx, { images: ensureLineEvidence(scanLines[expandedIdx]).images.filter((_, ii) => ii !== i) })
+                      }
+                      onAddVideo={() =>
+                        updateLineEvidence(expandedIdx, { videos: [...ensureLineEvidence(scanLines[expandedIdx]).videos, { durationSec: 20 }] })
+                      }
+                      onRemoveVideo={(i) =>
+                        updateLineEvidence(expandedIdx, { videos: ensureLineEvidence(scanLines[expandedIdx]).videos.filter((_, ii) => ii !== i) })
+                      }
+                    />
+                  }
+                />
+              </ScrollView>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
+                {!scannedLine ? (
+                  <Pressable
+                    onPress={() => handleToggleNoScannerFound(!noScannerFound)}
+                    style={[
+                      styles.noScannerRow,
+                      {
+                        backgroundColor: noScannerFound ? tokens.slate300 : tokens.card,
+                        borderColor: noScannerFound ? tokens.mutedForeground : tokens.border,
+                        borderRadius: tokens.radius.lg,
+                      },
+                    ]}
+                  >
+                    <Ionicons name={noScannerFound ? 'checkbox' : 'square-outline'} size={20} color={noScannerFound ? tokens.mutedForeground : tokens.foreground} />
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, flex: 1 }}>
+                      No scanner code found at this location
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                {expectedSku ? (
+                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                    <View style={styles.expectedHeadRow}>
+                      <Ionicons name="clipboard-outline" size={16} color={tokens.mutedForeground} />
+                      <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+                        Expected on this Pallet
+                      </Text>
+                    </View>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{expectedSku.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Expected qty {expectedSku.qty}</Text>
+                  </View>
+                ) : (
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 12 }}>
+                    No SKU is expected at this location.
+                  </Text>
+                )}
+
+                {misplaced && scannedLine ? (
+                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                    <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
+                      <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Misplaced</Text>
+                    </View>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scannedLine.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
+                      {expectedSku ? `This isn't ${expectedSku.sku}, which is what's expected here.` : "This SKU isn't expected at this location at all."}
+                    </Text>
+                    {(() => {
+                      const raised = issuesRaised.has(scannedLine.sku);
+                      return (
+                        <Pressable
+                          disabled={raised}
+                          onPress={() => setIssuesRaised((prev) => new Set(prev).add(scannedLine.sku))}
+                          style={[
+                            styles.raiseIssueBox,
+                            {
+                              marginTop: 12,
+                              marginBottom: 0,
+                              backgroundColor: raised ? tokens.rag.green.soft : tokens.card,
+                              borderColor: raised ? tokens.rag.green.border : tokens.border,
+                              borderRadius: tokens.radius.lg,
+                            },
+                          ]}
+                        >
+                          <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.mutedForeground} />
+                          <Text style={{ color: raised ? tokens.rag.green.strong : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
+                            {raised ? 'Issue raised for this SKU' : 'Raise Issue — wrong item scanned'}
+                          </Text>
+                          {!raised ? <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
+                        </Pressable>
+                      );
+                    })()}
+                  </View>
+                ) : null}
+
+                {skuMatched && !misplaced && scannedLine && expectedSku ? (
+                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                    {(() => {
+                      const reviewed =
+                        scannedLine.qty === expectedSku.qty && scannedLine.condition === 'Good'
+                          ? { label: 'Matched', rag: tokens.rag.green }
+                          : scannedLine.qty !== expectedSku.qty
+                            ? { label: 'Quantity Mismatch', rag: tokens.rag.amber }
+                            : { label: 'Condition Mismatch', rag: tokens.rag.amber };
+                      return (
+                        <View style={[styles.editStatusPill, { backgroundColor: reviewed.rag.soft, borderColor: reviewed.rag.border, borderRadius: tokens.radius.lg }]}>
+                          <Text style={{ color: reviewed.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{reviewed.label}</Text>
+                        </View>
+                      );
+                    })()}
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scannedLine.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>
+                      Qty {scannedLine.qty} · {scannedLine.condition}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {!expectedSku && !scannedLine ? (
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
+                    No SKU scanned yet — use the scanner above.
+                  </Text>
+                ) : null}
+              </ScrollView>
+            )}
+            <View style={styles.skuPanelFooter}>
+              <Pressable
+                onPress={() => (expandedIdx !== null ? setExpandedIdx(null) : setSkuPanelOpen(false))}
+                style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+              >
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
+                  {expandedIdx !== null ? 'Back' : 'Cancel'}
+                </Text>
+              </Pressable>
+              <Pressable onPress={handleSaveSkuPanel} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
+              </Pressable>
+            </View>
+          </Card>
+        ) : null}
         </View>
       </View>
 
@@ -671,366 +774,31 @@ export function RackViewScreen() {
         }}
         onClose={() => setScannerOpen(null)}
       />
-
-      <NewAttachmentModal visible={attachmentTarget !== null} onClose={() => setAttachmentTarget(null)} onSave={handleAddEvidenceImage} />
-
-      <Modal visible={testSheetOpen} animationType="fade" onRequestClose={() => setTestSheetOpen(false)}>
-        <View style={styles.testSheetContainer}>
-          <View style={styles.testSheetHead}>
-            <Text style={styles.testSheetTitle}>Rack A-21 — Test Scan Sheet</Text>
-            <Pressable onPress={() => setTestSheetOpen(false)} hitSlop={10}>
-              <Ionicons name="close" size={26} color="#fff" />
-            </Pressable>
-          </View>
-          <Text style={styles.testSheetHint}>Hold this up to a second device's camera during a Live Scan session — pinch to zoom.</Text>
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.testSheetScrollContent}
-            minimumZoomScale={1}
-            maximumZoomScale={4}
-          >
-            {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
-            <Image source={require('../../../assets/images/test-sheets/rack-a21-scan-sheet.png')} style={styles.testSheetImage} resizeMode="contain" />
-          </ScrollView>
-        </View>
-      </Modal>
+      <BarcodeScannerModal
+        visible={scannerOpen === 'sku'}
+        title="Scan SKU"
+        hint="Point at the SKU QR code on the pallet"
+        onScanned={(data) => {
+          setScannerOpen(null);
+          handleSkuScanned(data);
+        }}
+        onUseSimulated={() => {
+          setScannerOpen(null);
+          handleSkuSimulated();
+        }}
+        onClose={() => setScannerOpen(null)}
+      />
+      <NewAttachmentModal
+        visible={attachmentTarget !== null}
+        onClose={() => setAttachmentTarget(null)}
+        onSave={(image) => {
+          if (attachmentTarget === null) return;
+          const idx = attachmentTarget;
+          updateLineEvidence(idx, { images: [...ensureLineEvidence(scanLines[idx]).images, image] });
+        }}
+      />
+      {confirm.element}
     </View>
-  );
-}
-
-// Split half-and-half with the canvas once Start Audit is tapped: camera on
-// top, running list of what's been scanned this session below it. Matched
-// entries can have "Raise Issue" tapped to expand an inline accordion (the
-// same SkuLineCard Count Sheet uses) for correcting qty/condition.
-function ScanSessionPanel({
-  scans,
-  expandedId,
-  matchedCount,
-  totalCount,
-  cameraActive,
-  selectedLocCode,
-  onScanCode,
-  onSimulate,
-  onRaiseIssue,
-  onCollapse,
-  onQtyChange,
-  onConditionChange,
-  onSaveIssue,
-  onUpdateEvidence,
-  onRequestImage,
-  onSelectLocation,
-  onStopCamera,
-  onResumeCamera,
-  onSaveAudit,
-}: {
-  scans: SessionScan[];
-  expandedId: string | null;
-  matchedCount: number;
-  totalCount: number;
-  cameraActive: boolean;
-  selectedLocCode: string | null;
-  onScanCode: (code: string) => void;
-  onSimulate: () => void;
-  onRaiseIssue: (id: string) => void;
-  onCollapse: () => void;
-  onQtyChange: (id: string, qty: number) => void;
-  onConditionChange: (id: string, condition: Condition) => void;
-  onSaveIssue: (id: string) => void;
-  onUpdateEvidence: (id: string, patch: Partial<Evidence>) => void;
-  onRequestImage: (id: string) => void;
-  onSelectLocation: (locCode: string) => void;
-  onStopCamera: () => void;
-  onResumeCamera: () => void;
-  onSaveAudit: () => void;
-}) {
-  const { tokens } = useTheme();
-  const [permission, requestPermission] = useCameraPermissions();
-  const handledRef = useRef(false);
-  // expo-camera calls onBarcodeScanned on every frame a code is decoded in
-  // view. Two things need to both be true at once: (1) holding on the SAME
-  // physical label too long must not double-count it (was: 38 codes
-  // registering as 39), and (2) panning across a dense sheet of codes must
-  // NOT get stuck after the first one — a naive "reset once nothing's been
-  // seen for 700ms" fails (2) whenever another code is continuously in
-  // view, since the idle window never actually opens. So: track which
-  // code's currently "claimed" — a different code arriving is processed
-  // immediately regardless of timing (the camera plainly moved to a new
-  // label), while the SAME code repeating only re-arms after it's been
-  // genuinely out of view for a bit.
-  const lastDataRef = useRef<string | null>(null);
-  const lastSeenRef = useRef(0);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (handledRef.current && Date.now() - lastSeenRef.current > 700) {
-        handledRef.current = false;
-        lastDataRef.current = null;
-      }
-    }, 150);
-    return () => clearInterval(id);
-  }, []);
-
-  // Immediate visual confirmation on every scan — matched or mismatch —
-  // since a mismatch never resolves to a canvas cell (there's no location
-  // to attribute it to), so without this the only feedback for that path
-  // was the list scrolling, easy to miss while looking at the camera.
-  const [flash, setFlash] = useState<{ tone: 'matched' | 'mismatch' } | null>(null);
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastFlashedIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    const latest = scans[0];
-    if (!latest || latest.id === lastFlashedIdRef.current) return;
-    lastFlashedIdRef.current = latest.id;
-    // Only real-time camera scans flash — "missing" entries are added in
-    // bulk once the camera's already stopped, so there's no live moment to
-    // flash for.
-    if (latest.status === 'missing') return;
-    setFlash({ tone: latest.status });
-    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
-    flashTimeoutRef.current = setTimeout(() => setFlash(null), 650);
-  }, [scans]);
-  useEffect(
-    () => () => {
-      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
-    },
-    [],
-  );
-
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
-    const now = Date.now();
-    if (handledRef.current && data === lastDataRef.current) {
-      // Same code still sitting in frame — note it's still visible, but
-      // don't reprocess it.
-      lastSeenRef.current = now;
-      return;
-    }
-    handledRef.current = true;
-    lastDataRef.current = data;
-    lastSeenRef.current = now;
-    onScanCode(data);
-  };
-
-  return (
-    <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
-      <View style={[styles.diagramHeadRow, styles.sessionHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-          Live Scan — {matchedCount}/{totalCount} matched
-        </Text>
-        {cameraActive ? (
-          <Pressable onPress={onStopCamera} style={[styles.sessionDoneBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Done</Text>
-          </Pressable>
-        ) : (
-          <Pressable onPress={onResumeCamera} style={[styles.sessionDoneBtn, { borderWidth: 1, borderColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Scan</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Done just closes this camera box — nothing else changes. The list
-          below is always there; with the camera closed it simply gets the
-          full remaining height instead of sharing it. */}
-      {cameraActive ? (
-        <View style={styles.sessionCameraBox}>
-          {permission?.granted ? (
-            <CameraView style={StyleSheet.absoluteFill} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={handleBarcodeScanned} />
-          ) : (
-            <View style={styles.sessionPermissionWrap}>
-              <Ionicons name="camera-outline" size={26} color="#fff" />
-              <Text style={styles.sessionPermissionText}>Camera access is needed to scan SKU codes.</Text>
-              <Pressable onPress={requestPermission} style={styles.sessionGrantBtn}>
-                <Text style={styles.sessionGrantBtnText}>Grant Camera Access</Text>
-              </Pressable>
-            </View>
-          )}
-          <View style={styles.sessionCountBadge}>
-            <Text style={styles.sessionCountText}>{scans.length} scanned</Text>
-          </View>
-          {flash ? (
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <View
-                style={[
-                  StyleSheet.absoluteFillObject,
-                  { borderWidth: 6, borderColor: flash.tone === 'matched' ? tokens.rag.green.strong : tokens.rag.amber.strong },
-                ]}
-              />
-              <View
-                style={[
-                  styles.sessionFlashBanner,
-                  { backgroundColor: flash.tone === 'matched' ? tokens.rag.green.strong : tokens.rag.amber.strong },
-                ]}
-              >
-                <Text style={styles.sessionFlashText}>{flash.tone === 'matched' ? 'Matched' : 'Mismatch'}</Text>
-              </View>
-            </View>
-          ) : null}
-          <Pressable onPress={onSimulate} style={styles.sessionSimBtn}>
-            <Text style={styles.sessionSimBtnText}>Use test scan</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10 }}>
-        {scans.length === 0 ? (
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
-            No SKUs scanned yet — point the camera at a pallet's SKU code.
-          </Text>
-        ) : null}
-        {scans.map((scan) =>
-          expandedId === scan.id ? (
-            <View key={scan.id} style={{ gap: 6 }}>
-              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>
-                {scan.locLabel ?? 'No pallet left to attribute this to'}
-              </Text>
-              <SkuLineCard
-                line={scan}
-                active
-                onQtyChange={(qty) => onQtyChange(scan.id, qty)}
-                onConditionChange={(condition) => onConditionChange(scan.id, condition)}
-                onSave={() => onSaveIssue(scan.id)}
-                onDelete={onCollapse}
-                onEdit={() => {}}
-                evidenceSlot={
-                  <EvidenceBlock
-                    evidence={scan.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] }}
-                    onOpenNote={() => onUpdateEvidence(scan.id, { noteOpen: true })}
-                    onChangeNote={(note) => onUpdateEvidence(scan.id, { note })}
-                    onRecordAudio={() => onUpdateEvidence(scan.id, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                    onToggleAudioPlay={() => {
-                      const audio = scan.evidence?.audio;
-                      if (!audio) return;
-                      onUpdateEvidence(scan.id, { audio: { ...audio, playing: !audio.playing } });
-                    }}
-                    onRemoveAudio={() => onUpdateEvidence(scan.id, { audio: null })}
-                    onAddImage={() => onRequestImage(scan.id)}
-                    onRemoveImage={(i) => onUpdateEvidence(scan.id, { images: (scan.evidence?.images ?? []).filter((_, ii) => ii !== i) })}
-                    onAddVideo={() => onUpdateEvidence(scan.id, { videos: [...(scan.evidence?.videos ?? []), { durationSec: 20 }] })}
-                    onRemoveVideo={(i) => onUpdateEvidence(scan.id, { videos: (scan.evidence?.videos ?? []).filter((_, ii) => ii !== i) })}
-                  />
-                }
-              />
-            </View>
-          ) : (
-            <ScanRow
-              key={scan.id}
-              scan={scan}
-              selected={!!scan.locCode && scan.locCode === selectedLocCode}
-              onRaiseIssue={() => onRaiseIssue(scan.id)}
-              onSelect={() => scan.locCode && onSelectLocation(scan.locCode)}
-            />
-          ),
-        )}
-      </ScrollView>
-
-      <View style={[styles.sessionSaveRow, { borderTopColor: tokens.border }]}>
-        <Pressable onPress={onSaveAudit} style={[styles.sessionSaveBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="checkmark-circle-outline" size={18} color={tokens.primaryForeground} />
-          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save Audit</Text>
-        </Pressable>
-      </View>
-    </Card>
-  );
-}
-
-function ScanRow({ scan, selected, onRaiseIssue, onSelect }: { scan: SessionScan; selected: boolean; onRaiseIssue: () => void; onSelect: () => void }) {
-  const { tokens } = useTheme();
-  const missingTone = { strong: tokens.mutedForeground, soft: tokens.muted, border: tokens.border };
-  const tone = scan.status === 'matched' ? tokens.rag.green : scan.status === 'mismatch' ? tokens.rag.amber : missingTone;
-  const badgeLabel = scan.status === 'matched' ? 'Matched' : scan.status === 'mismatch' ? 'Mismatch' : 'Missing';
-  return (
-    <Pressable
-      disabled={!scan.locCode}
-      onPress={onSelect}
-      style={[styles.scanRow, { borderColor: selected ? tokens.primary : tokens.border, borderWidth: selected ? 2 : 1, borderRadius: tokens.radius.lg, backgroundColor: tokens.card }]}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
-          {scan.locLabel ?? 'No pallet left to attribute this to'}
-        </Text>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }} numberOfLines={1}>
-          {scan.sku ? `${scan.sku} · ${scan.name}` : scan.name}
-        </Text>
-      </View>
-      <View style={[styles.scanBadge, { backgroundColor: tone.soft, borderColor: tone.border, borderRadius: tokens.radius.sm }]}>
-        <Text style={{ color: tone.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{badgeLabel}</Text>
-      </View>
-      {scan.status === 'matched' || scan.status === 'missing' ? (
-        scan.issueRaised ? (
-          <View style={[styles.issuePill, { backgroundColor: tokens.rag.red.soft, borderRadius: tokens.radius.sm }]}>
-            <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
-              {scan.status === 'missing' ? 'Evidence Added' : 'Issue Raised'}
-            </Text>
-          </View>
-        ) : (
-          <Pressable onPress={onRaiseIssue} style={[styles.raiseBtn, { borderColor: tokens.rag.red.border, borderRadius: tokens.radius.sm }]}>
-            {scan.status === 'missing' ? (
-              <Ionicons name="camera-outline" size={14} color={tokens.rag.red.strong} />
-            ) : (
-              <Ionicons name="flag-outline" size={14} color={tokens.rag.red.strong} />
-            )}
-          </Pressable>
-        )
-      ) : null}
-    </Pressable>
-  );
-}
-
-// A canvas cell owns its own blink animation (a repeating opacity pulse)
-// rather than the parent, since starting/stopping a reanimated loop needs a
-// hook tied to this specific cell's `blinking` prop.
-function RackCell({
-  bg,
-  border,
-  selected,
-  selectable,
-  dashed,
-  blinking,
-  flagged,
-  onPress,
-}: {
-  bg: string;
-  border: string;
-  selected: boolean;
-  selectable: boolean;
-  dashed: boolean;
-  blinking: boolean;
-  flagged: boolean;
-  onPress: () => void;
-}) {
-  const { tokens } = useTheme();
-  const opacity = useSharedValue(selectable ? 1 : 0.45);
-
-  useEffect(() => {
-    if (blinking) {
-      opacity.value = withRepeat(withSequence(withTiming(0.25, { duration: 350 }), withTiming(1, { duration: 350 })), -1, true);
-    } else {
-      cancelAnimation(opacity);
-      opacity.value = withTiming(selectable ? 1 : 0.45, { duration: 150 });
-    }
-  }, [blinking, selectable]);
-
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.cell,
-        {
-          backgroundColor: bg,
-          borderColor: border,
-          borderWidth: selected ? 2 : 1,
-          // RN on Android drops dashes unevenly (especially at corners) when
-          // borderStyle:'dashed' is combined with borderRadius — square the
-          // corners for a dashed cell so the full dashed outline actually
-          // renders, instead of a partial/broken-looking border.
-          ...(dashed ? { borderStyle: 'dashed' as const, borderRadius: 0 } : { borderStyle: 'solid' as const }),
-        },
-        animatedStyle,
-      ]}
-    >
-      <Pressable disabled={!selectable} onPress={onPress} style={StyleSheet.absoluteFill} />
-      {flagged ? <View style={[styles.flagDot, { backgroundColor: tokens.rag.red.strong }]} /> : null}
-    </Animated.View>
   );
 }
 
@@ -1110,30 +878,15 @@ const styles = StyleSheet.create({
   primaryBtn: { flex: 1, flexDirection: 'row', height: 44, alignItems: 'center', justifyContent: 'center', gap: 6 },
   footerRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
   footerBtn: { flex: 0, paddingHorizontal: 18 },
-  sessionHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sessionDoneBtn: { height: 30, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
-  sessionCameraBox: { height: 190, backgroundColor: '#000' },
-  sessionPermissionWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
-  sessionPermissionText: { color: '#fff', fontSize: 12, textAlign: 'center' },
-  sessionGrantBtn: { backgroundColor: '#1b59f8', paddingHorizontal: 16, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  sessionGrantBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  sessionCountBadge: { position: 'absolute', top: 10, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 },
-  sessionCountText: { color: '#fff', fontWeight: '700', fontSize: 11 },
-  sessionFlashBanner: { position: 'absolute', bottom: 50, alignSelf: 'center', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 6 },
-  sessionFlashText: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  sessionSimBtn: { position: 'absolute', bottom: 10, alignSelf: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)', borderRadius: 8, paddingHorizontal: 14, height: 32, alignItems: 'center', justifyContent: 'center' },
-  sessionSimBtnText: { color: '#fff', fontWeight: '600', fontSize: 12 },
-  sessionSaveRow: { padding: 12, borderTopWidth: 1 },
-  sessionSaveBtn: { flexDirection: 'row', height: 44, alignItems: 'center', justifyContent: 'center', gap: 6 },
-  scanRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 10 },
-  scanBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
-  raiseBtn: { width: 30, height: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  issuePill: { paddingHorizontal: 8, paddingVertical: 4 },
-  flagDot: { position: 'absolute', top: -3, right: -3, width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: '#fff' },
-  testSheetContainer: { flex: 1, backgroundColor: '#111' },
-  testSheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingHorizontal: 20, paddingBottom: 8 },
-  testSheetTitle: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  testSheetHint: { color: 'rgba(255,255,255,0.7)', fontSize: 12, paddingHorizontal: 20, paddingBottom: 12 },
-  testSheetScrollContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  testSheetImage: { width: '100%', height: 900 },
+  skuPanel: { flex: 1 },
+  skuPanelHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 },
+  headBtnRow: { flexDirection: 'row', gap: 8 },
+  topScanBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  nextScanBtn: { flexDirection: 'row', height: 40, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, borderWidth: 1 },
+  noScannerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12 },
+  expectedBox: { borderWidth: 1, padding: 14, marginBottom: 12 },
+  expectedHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginBottom: 12 },
+  editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 10 },
+  skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
 });
