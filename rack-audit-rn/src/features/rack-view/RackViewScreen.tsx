@@ -319,6 +319,7 @@ export function RackViewScreen() {
   const applySkuScan = (pick: { sku: string; name: string; lot: string }) => {
     const line: CountLine = { sku: pick.sku, name: pick.name, lot: pick.lot, qty: 1, condition: 'Good' };
     setScanLines([line]);
+    setNoScannerFound(false);
     const matchesExpected = !!expectedSkus[0] && expectedSkus[0].sku === pick.sku;
     setExpandedIdx(matchesExpected ? 0 : null);
     if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null);
@@ -504,12 +505,11 @@ export function RackViewScreen() {
 
         {skuPanelOpen ? (
           <Card style={styles.skuPanel}>
-            {/* Location/pallet info AND the scan actions live in the same
-                header row at the top of the form: a Scan icon (always
-                re-scans this pallet) sitting right next to a Next Scan
-                button (saves and advances to the next pallet — enabled once
-                something's scanned, or the pallet's flagged as having no
-                scanner code found at all). */}
+            {/* Location/pallet info AND the scan icon live in the same
+                header row at the top of the form — the icon just (re-)scans
+                this pallet's SKU. Advancing to the next pallet ("Scan Next")
+                and flagging a missing scanner ("Empty") are down in the
+                footer, alongside Cancel. */}
             <View style={styles.skuPanelHead}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Reconciliation Form</Text>
@@ -518,25 +518,12 @@ export function RackViewScreen() {
                 </Text>
               </View>
               {expandedIdx === null ? (
-                <View style={styles.headBtnRow}>
-                  <Pressable
-                    onPress={() => setScannerOpen('sku')}
-                    style={[styles.topScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
-                  >
-                    <Ionicons name="qr-code-outline" size={18} color={tokens.primaryForeground} />
-                  </Pressable>
-                  <Pressable
-                    disabled={!scannedLine && !noScannerFound}
-                    onPress={handleScanNext}
-                    style={[
-                      styles.nextScanBtn,
-                      { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg, opacity: scannedLine || noScannerFound ? 1 : 0.5 },
-                    ]}
-                  >
-                    <Ionicons name="arrow-forward-circle-outline" size={18} color={tokens.foreground} />
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Next Scan</Text>
-                  </Pressable>
-                </View>
+                <Pressable
+                  onPress={() => setScannerOpen('sku')}
+                  style={[styles.topScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+                >
+                  <Ionicons name="qr-code-outline" size={18} color={tokens.primaryForeground} />
+                </Pressable>
               ) : null}
             </View>
 
@@ -641,23 +628,13 @@ export function RackViewScreen() {
               </ScrollView>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 10 }}>
-                {!scannedLine ? (
-                  <Pressable
-                    onPress={() => handleToggleNoScannerFound(!noScannerFound)}
-                    style={[
-                      styles.noScannerRow,
-                      {
-                        backgroundColor: noScannerFound ? tokens.slate300 : tokens.card,
-                        borderColor: noScannerFound ? tokens.mutedForeground : tokens.border,
-                        borderRadius: tokens.radius.lg,
-                      },
-                    ]}
-                  >
-                    <Ionicons name={noScannerFound ? 'checkbox' : 'square-outline'} size={20} color={noScannerFound ? tokens.mutedForeground : tokens.foreground} />
+                {noScannerFound ? (
+                  <View style={[styles.noScannerRow, { backgroundColor: tokens.slate300, borderColor: tokens.mutedForeground, borderRadius: tokens.radius.lg }]}>
+                    <Ionicons name="alert-circle" size={20} color={tokens.mutedForeground} />
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, flex: 1 }}>
-                      No scanner code found at this location
+                      Marked Empty — no scanner code found at this location
                     </Text>
-                  </Pressable>
+                  </View>
                 ) : null}
 
                 {expectedSku ? (
@@ -745,19 +722,37 @@ export function RackViewScreen() {
                 ) : null}
               </ScrollView>
             )}
-            <View style={styles.skuPanelFooter}>
-              <Pressable
-                onPress={() => (expandedIdx !== null ? setExpandedIdx(null) : setSkuPanelOpen(false))}
-                style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
-              >
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-                  {expandedIdx !== null ? 'Back' : 'Cancel'}
-                </Text>
-              </Pressable>
-              <Pressable onPress={handleSaveSkuPanel} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
-              </Pressable>
-            </View>
+            {expandedIdx !== null ? (
+              // Editing a matched line's qty/condition — Back returns to the
+              // main view without advancing, Save commits just that edit.
+              <View style={styles.skuPanelFooter}>
+                <Pressable onPress={() => setExpandedIdx(null)} style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Back</Text>
+                </Pressable>
+                <Pressable onPress={handleSaveSkuPanel} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.skuPanelFooter}>
+                <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleToggleNoScannerFound(true)}
+                  style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                >
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Empty</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!scannedLine && !noScannerFound}
+                  onPress={handleScanNext}
+                  style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: scannedLine || noScannerFound ? 1 : 0.5 }]}
+                >
+                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Next</Text>
+                </Pressable>
+              </View>
+            )}
           </Card>
         ) : null}
         </View>
@@ -880,9 +875,7 @@ const styles = StyleSheet.create({
   footerBtn: { flex: 0, paddingHorizontal: 18 },
   skuPanel: { flex: 1 },
   skuPanelHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 },
-  headBtnRow: { flexDirection: 'row', gap: 8 },
   topScanBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  nextScanBtn: { flexDirection: 'row', height: 40, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, borderWidth: 1 },
   noScannerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12 },
   expectedBox: { borderWidth: 1, padding: 14, marginBottom: 12 },
   expectedHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
