@@ -129,9 +129,9 @@ export function DashboardTablet() {
                 {ongoing.audit_name}
               </Text>
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{ongoing.audit_id}</Text>
-              <Text style={[styles.sectionLabel, { color: tokens.mutedForeground }]}>Inspection Details</Text>
+              <Text style={[styles.sectionLabel, { color: tokens.mutedForeground }]}>Audit Details</Text>
               <View style={styles.detailGrid}>
-                <DetailField label="Warehouse" value={inspector?.warehouse ?? '—'} />
+                <DetailField label="Layout" value={ongoing.scope_type === 'Layout' && ongoing.scope_values.length ? ongoing.scope_values.join(', ') : '—'} />
                 <DetailField label="Rack" value={String(bannerProgress.rollup.rackTotal)} />
                 <DetailField label="Total Bays" value={String(bannerProgress.rollup.bayTotal)} />
                 <DetailField label="Pending Bays" value={String(bannerProgress.rollup.bayTotal - bannerProgress.rollup.bayDone)} />

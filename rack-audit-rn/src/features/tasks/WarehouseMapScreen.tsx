@@ -9,6 +9,7 @@ import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, isOverdue, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
+import { EXPECTED_SKUS } from '@/lib/mockData';
 import type { Audit, AuditType } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits, useMyAudits } from '../dashboard/hooks';
@@ -147,17 +148,26 @@ export function WarehouseMapScreen() {
       .sort((a, b) => a.layout.localeCompare(b.layout));
   }, [allAudits, map]);
 
+  // A location only actually counts toward an audit's footprint on the map
+  // if it's genuinely in that audit's scope — for a spot-check audit with a
+  // target_sku, that means the location's expected SKU has to match it.
+  // Without this, a bay that's physically part of the same rack but never
+  // in scope (e.g. Rack A-21's 4th bay, added purely so Rack View can show
+  // the whole physical rack) would still read as "assigned" here just for
+  // sharing the same audit's location tree.
+  const inAuditScope = (a: Audit, l: { loc: { code: string } }) => !a.target_sku || (EXPECTED_SKUS[l.loc.code] ?? []).some((line) => line.sku === a.target_sku);
+
   const tasksTouching = (cell: RackCell, pool: Audit[]) =>
-    pool.filter((a) => (map[a.audit_id]?.allLocations ?? []).some((l) => l.layout === cell.layout && l.rack === cell.rack));
+    pool.filter((a) => (map[a.audit_id]?.allLocations ?? []).some((l) => l.layout === cell.layout && l.rack === cell.rack && inAuditScope(a, l)));
 
   const bayTasksTouching = (cell: BayCell, pool: Audit[]) =>
-    pool.filter((a) => (map[a.audit_id]?.allLocations ?? []).some((l) => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay));
+    pool.filter((a) => (map[a.audit_id]?.allLocations ?? []).some((l) => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay && inAuditScope(a, l)));
 
   const bayLocs = (cell: BayCell, pool: Audit[]) =>
-    pool.flatMap((a) => (map[a.audit_id]?.allLocations ?? []).filter((l) => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay).map((l) => l.loc));
+    pool.flatMap((a) => (map[a.audit_id]?.allLocations ?? []).filter((l) => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay && inAuditScope(a, l)).map((l) => l.loc));
 
   const rackLocs = (cell: RackCell, pool: Audit[]) =>
-    pool.flatMap((a) => (map[a.audit_id]?.allLocations ?? []).filter((l) => l.layout === cell.layout && l.rack === cell.rack).map((l) => l.loc));
+    pool.flatMap((a) => (map[a.audit_id]?.allLocations ?? []).filter((l) => l.layout === cell.layout && l.rack === cell.rack && inAuditScope(a, l)).map((l) => l.loc));
 
   // Assigned = touched by one of my active tasks, regardless of the current
   // due-bucket filter — this is what tells a rack apart from the rest of
@@ -266,40 +276,16 @@ export function WarehouseMapScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Warehouse Map" sub={`${assignedRackCount} of ${totalRackCount} racks assigned to you`} showBack />
-
-      <View style={styles.filterBarRow}>
-        {filter !== 'All' ? (
-          <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
-            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{filter}</Text>
-            <Pressable onPress={() => setFilter('All')} hitSlop={6}>
-              <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
-            </Pressable>
-          </View>
-        ) : null}
-        {typeFilter !== 'All' ? (
-          <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
-            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{typeFilter}</Text>
-            <Pressable onPress={() => setTypeFilter('All')} hitSlop={6}>
-              <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
-            </Pressable>
-          </View>
-        ) : null}
-        <Pressable
-          onPress={() => setFilterOpen((o) => !o)}
-          style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
-        >
-          <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
-        </Pressable>
-      </View>
+      <AppHeader title="Tasks on Map" sub={`${assignedRackCount} of ${totalRackCount} racks assigned to you`} showBack />
 
       {zones.length ? (
         <View style={styles.body}>
-          <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
-            <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Warehouse Floor — Top View</Text>
-            </View>
-            <View style={styles.legendRow}>
+          <Card style={{ padding: 0, overflow: 'hidden', flex: 1, borderColor: tokens.border }}>
+            {/* Sticky toolbar, Figma-style — the filter lives here, fixed at
+                the top of the canvas card. Everything below (GestureDetector
+                + Animated.View) is the actual movable/zoomable layer; this
+                row never pans or zooms with it. */}
+            <View style={[styles.canvasToolbarRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
               {(
                 [
                   { label: 'Completed', color: tokens.rag.green.base },
@@ -311,6 +297,29 @@ export function WarehouseMapScreen() {
                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{item.label}</Text>
                 </View>
               ))}
+              <View style={{ flex: 1 }} />
+              {filter !== 'All' ? (
+                <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+                  <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{filter}</Text>
+                  <Pressable onPress={() => setFilter('All')} hitSlop={6}>
+                    <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+                  </Pressable>
+                </View>
+              ) : null}
+              {typeFilter !== 'All' ? (
+                <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+                  <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{typeFilter}</Text>
+                  <Pressable onPress={() => setTypeFilter('All')} hitSlop={6}>
+                    <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+                  </Pressable>
+                </View>
+              ) : null}
+              <Pressable
+                onPress={() => setFilterOpen((o) => !o)}
+                style={[styles.filterIconBtn, { backgroundColor: tokens.card, borderColor: filterOpen ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg }]}
+              >
+                <Ionicons name="filter-outline" size={16} color={tokens.foreground} />
+              </Pressable>
             </View>
             <View style={styles.stage}>
               <GestureDetector gesture={floorGesture}>
@@ -323,10 +332,6 @@ export function WarehouseMapScreen() {
                   </Animated.View>
                 </View>
               </GestureDetector>
-              <View style={[styles.zoomHint, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                <Ionicons name="resize-outline" size={13} color={tokens.mutedForeground} />
-                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Pinch to zoom · drag to pan</Text>
-              </View>
             </View>
           </Card>
         </View>
@@ -522,9 +527,7 @@ export function WarehouseMapScreen() {
 
 const styles = StyleSheet.create({
   filterIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  filterBarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, paddingHorizontal: 16, paddingTop: 12 },
   activeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
-  legendRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 14, paddingHorizontal: 14, paddingVertical: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   filterBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'flex-end', paddingTop: 90, paddingRight: 24 },
@@ -533,7 +536,7 @@ const styles = StyleSheet.create({
   filterOption: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   filterDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'transparent' },
   body: { flex: 1, padding: 12 },
-  diagramHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
+  canvasToolbarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   planCanvas: { flexDirection: 'row', alignItems: 'flex-start', gap: 40, padding: 10 },
@@ -546,7 +549,6 @@ const styles = StyleSheet.create({
   rackCard: { alignItems: 'center', width: 66, borderWidth: 1.5, borderRadius: 5, paddingVertical: 5, paddingHorizontal: 4, gap: 3 },
   bayRow: { flexDirection: 'row', gap: BAY_GAP },
   baySeg: { width: BAY_SEG_W, height: BAY_SEG_H, borderWidth: 1, borderRadius: 1.5 },
-  zoomHint: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheet: { width: '100%', maxWidth: 520, maxHeight: '88%', padding: 20 },
   sheetHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },

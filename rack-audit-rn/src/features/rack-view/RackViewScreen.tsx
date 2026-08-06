@@ -152,6 +152,7 @@ export function RackViewScreen() {
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
+
   // Bay is no longer a pickable dimension — the whole rack's bays render
   // together, so only the rack (and layout) identify what's on screen.
   const seedKey = `${auditId}|${layout}|${rackCode}`;
@@ -483,17 +484,18 @@ export function RackViewScreen() {
             </>
           ) : null}
         </View>
+        {/* Live-scan status is a badge, not a colored icon — the camera
+            button below is purely the "open/resume scanning" action, always
+            the same neutral look regardless of session state. */}
+        {sessionOpen ? <Pill label="Scanning" tone="In Progress" /> : null}
         <Pressable onPress={() => setScannerOpen('pallet')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
         </Pressable>
         {/* Always available while Rack View is open, not just before the
             first Start Audit tap, so the Live Scan overlay can be reopened
             any time without going back through the footer button. */}
-        <Pressable
-          onPress={handleStartAudit}
-          style={[styles.scanIconBtn, { backgroundColor: sessionOpen ? tokens.primary : tokens.muted, borderRadius: tokens.radius.lg }]}
-        >
-          <Ionicons name="camera-outline" size={18} color={sessionOpen ? tokens.primaryForeground : tokens.foreground} />
+        <Pressable onPress={handleStartAudit} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
+          <Ionicons name="camera-outline" size={18} color={tokens.foreground} />
         </Pressable>
       </View>
 

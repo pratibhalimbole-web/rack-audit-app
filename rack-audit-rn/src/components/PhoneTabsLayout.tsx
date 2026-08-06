@@ -6,14 +6,15 @@ import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useTheme } from '@/theme/ThemeProvider';
 
 // Ports renderTabBar (rack-audit-app.html ~1693-1710): Home / Audit Schedule
-// / Tasks / Scan / Progress, with Progress only shown while an audit is
-// ongoing (source: `if (ongoing) items.push(...)`). Both "Scan" and
-// "Progress" open as a screen over the current one rather than a persistent
-// tab destination — Progress specifically always carries the ongoing
+// / Tasks / Progress — "Scan" has been dropped from the bottom bar entirely
+// (Live Scan is reached from within Rack View itself now, not a standalone
+// tab). Progress only shows while an audit is ongoing (source: `if
+// (ongoing) items.push(...)`), and opens as a screen over the current one
+// rather than a persistent tab destination — it always carries the ongoing
 // audit's id (source: `railTo('progress', {auditId: ongoing.audit_id})`),
-// so both are intercepted via `listeners.tabPress` rather than getting real
-// tab screen content. Same bottom bar on tablet as phone — Progress just
-// reads "Reported Audits" there (source line ~1704).
+// intercepted via `listeners.tabPress` rather than getting real tab screen
+// content. Same bottom bar on tablet as phone — Progress just reads
+// "Reported Audits" there (source line ~1704).
 export default function PhoneTabsLayout() {
   const { tokens } = useTheme();
   const device = useDeviceClass();
@@ -23,6 +24,14 @@ export default function PhoneTabsLayout() {
 
   return (
     <Tabs
+      // Every pushed screen (Audit Details, Rack View, Count Sheet, Warehouse
+      // Map, ...) is registered here as a hidden Tabs.Screen (href: null),
+      // not a real Stack push — see the comment further down. The default
+      // backBehavior ('firstRoute') makes the hardware/header back button
+      // always collapse to the first tab (Dashboard) no matter how many
+      // screens deep the user actually navigated. 'history' makes back()
+      // follow the real order screens were focused in instead.
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: tokens.primary,
@@ -31,7 +40,7 @@ export default function PhoneTabsLayout() {
         tabBarLabelStyle: { fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold },
       }}
     >
-      {NAV_ITEMS.filter((item) => item.key !== 'scan' && item.key !== 'progress').map((item) => (
+      {NAV_ITEMS.filter((item) => item.key !== 'progress').map((item) => (
         <Tabs.Screen
           key={item.key}
           name={item.key}
@@ -50,19 +59,6 @@ export default function PhoneTabsLayout() {
             if (!ongoing) return;
             e.preventDefault();
             router.push({ pathname: '/audit/[auditId]/progress', params: { auditId: ongoing.audit_id } } as never);
-          },
-        }}
-      />
-      <Tabs.Screen
-        name="scan-tab"
-        options={{
-          title: 'Scan',
-          tabBarIcon: ({ color }) => <NavIcon icon="scan" color={color} />,
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.push('/scan');
           },
         }}
       />

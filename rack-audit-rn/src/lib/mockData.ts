@@ -413,6 +413,25 @@ LOCATIONS['AUD-0234'].layouts[0].racks[0].bays.forEach((bay) => {
       }
     });
   });
+  // Rack A-21 physically has a 4th bay that isn't part of AUD-0240's scope
+  // at all — added after the SKU-1001 scatter above so none of it ever gets
+  // the target SKU, letting Rack View show the whole physical rack (all 4
+  // bays) while this one reads as entirely out of scope, faded out the same
+  // way any other non-target pallet already does.
+  const bay4 = makeBay('B-04', fillBayLevels('A-21-B04', []));
+  // INVENTORY_POOL itself includes SKU-1001 (used elsewhere for the target-
+  // SKU demo), so the generic pallet-seeding cycle above can land on it by
+  // coincidence — swap any such pallet for a genuinely non-target item so
+  // this bay never accidentally lights up as in-scope.
+  const nonTargetPool = INVENTORY_POOL.filter((p) => p.sku !== iphoneBox.sku);
+  bay4.locations.forEach((loc, i) => {
+    const pallet = loc.pallets[0];
+    if (pallet?.lines[0]?.sku === iphoneBox.sku) {
+      const swap = nonTargetPool[i % nonTargetPool.length];
+      pallet.lines[0] = { ...pallet.lines[0], sku: swap.sku, name: swap.name, lot: swap.lot };
+    }
+  });
+  rackA21?.bays.push(bay4);
 }
 
 // Of Rack A-21's 38 target-SKU locations, these 4 are known up front to
@@ -491,3 +510,22 @@ function buildExpectedSkus(locationsMap: Record<string, AuditLocationsTree>): vo
   });
 }
 buildExpectedSkus(LOCATIONS);
+
+// buildExpectedSkus can independently pick SKU-1001 as one of a location's
+// *secondary* expected lines (it cycles through the same INVENTORY_POOL,
+// which includes SKU-1001) even after the primary-pallet scrub above — so
+// re-check Rack A-21's Bay B-04 here, once EXPECTED_SKUS actually exists,
+// and swap out any lingering SKU-1001 line so this bay is guaranteed to
+// never match AUD-0240's target_sku.
+{
+  const rackA21ForBay4 = LOCATIONS['AUD-0240'].layouts[0].racks.find((r) => r.code === 'A-21');
+  const bay4Locs = rackA21ForBay4?.bays.find((b) => b.code === 'B-04')?.locations ?? [];
+  const nonTargetPool = INVENTORY_POOL.filter((p) => p.sku !== 'SKU-1001');
+  bay4Locs.forEach((loc, i) => {
+    const lines = EXPECTED_SKUS[loc.code];
+    if (!lines) return;
+    EXPECTED_SKUS[loc.code] = lines.map((line, j) =>
+      line.sku === 'SKU-1001' ? { ...line, ...nonTargetPool[(i + j) % nonTargetPool.length] } : line,
+    );
+  });
+}
