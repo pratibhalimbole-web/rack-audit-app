@@ -17,6 +17,8 @@ export function SkuLineCard({
   onDelete,
   onEdit,
   evidenceSlot,
+  conditionLabel = 'Condition',
+  conditionOptions = CONDITIONS,
 }: {
   line: CountLine;
   active: boolean;
@@ -29,6 +31,11 @@ export function SkuLineCard({
   // Rack View's SKU panel passes an EvidenceBlock here (source: withEvidence
   // on renderScanLinesAccordion); Count Sheet's own accordion never does.
   evidenceSlot?: React.ReactNode;
+  // Rack View's Reconciliation Form calls this field "Damage" and drops the
+  // redundant "Damaged" choice from the picklist; Count Sheet leaves both
+  // defaults (label "Condition", full CONDITIONS list) untouched.
+  conditionLabel?: string;
+  conditionOptions?: Condition[];
 }) {
   const { tokens } = useTheme();
 
@@ -86,10 +93,10 @@ export function SkuLineCard({
       />
 
       <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
-        Condition <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+        {conditionLabel} <Text style={{ color: tokens.rag.red.strong }}>*</Text>
       </Text>
       <View style={styles.condGrid}>
-        {CONDITIONS.map((c) => {
+        {conditionOptions.map((c) => {
           const selected = line.condition === c;
           return (
             <Pressable
