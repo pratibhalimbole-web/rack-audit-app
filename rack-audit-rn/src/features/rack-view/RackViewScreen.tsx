@@ -415,14 +415,17 @@ export function RackViewScreen() {
   };
 
   // Manual Mode's whole point is reporting a problem, so saving it always
-  // raises the issue (red dot) too — there's no separate "looks fine, no
-  // issue" outcome here the way a normal scan has. Advances to the next
-  // pallet in the rack afterward, same progression as Scan Next.
+  // raises the issue (red dot) too. Stays on this pallet afterward — the
+  // button itself flips to a confirmed "Issue Raised" state (below) so the
+  // tap has visible proof it worked; moving on is a deliberate separate
+  // "Next Pallet" action instead of an implicit side effect of saving.
   const handleSaveManualIssue = async () => {
-    if (selectedLocObj) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, [manualLine]);
-      handleRaiseIssue(manualLine.sku);
-    }
+    if (!selectedLocObj) return;
+    await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, [manualLine]);
+    handleRaiseIssue(manualLine.sku);
+  };
+
+  const handleManualNext = () => {
     const locs = scannableLocations;
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
     const next = idx !== -1 ? locs[idx + 1] : undefined;
@@ -651,37 +654,49 @@ export function RackViewScreen() {
               // inspector already knows what they found and where, so this
               // goes straight to reporting it: qty, damage, and evidence.
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
-                <SkuLineCard
-                  line={manualLine}
-                  active
-                  conditionLabel="Damage"
-                  conditionOptions={CONDITIONS.filter((c) => c !== 'Damaged')}
-                  saveLabel="Raise Issue"
-                  hideDelete
-                  onQtyChange={(qty) => setManualLine((prev) => ({ ...prev, qty }))}
-                  onConditionChange={(condition) => setManualLine((prev) => ({ ...prev, condition }))}
-                  onSave={handleSaveManualIssue}
-                  onDelete={() => {}}
-                  onEdit={() => {}}
-                  evidenceSlot={
-                    <EvidenceBlock
-                      evidence={ensureLineEvidence(manualLine)}
-                      onOpenNote={() => updateManualEvidence({ noteOpen: true })}
-                      onChangeNote={(note) => updateManualEvidence({ note })}
-                      onRecordAudio={() => updateManualEvidence({ audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                      onToggleAudioPlay={() => {
-                        const ev = ensureLineEvidence(manualLine);
-                        if (!ev.audio) return;
-                        updateManualEvidence({ audio: { ...ev.audio, playing: !ev.audio.playing } });
-                      }}
-                      onRemoveAudio={() => updateManualEvidence({ audio: null })}
-                      onAddImage={() => setAttachmentTarget(-1)}
-                      onRemoveImage={(i) => updateManualEvidence({ images: ensureLineEvidence(manualLine).images.filter((_, ii) => ii !== i) })}
-                      onAddVideo={() => updateManualEvidence({ videos: [...ensureLineEvidence(manualLine).videos, { durationSec: 20 }] })}
-                      onRemoveVideo={(i) => updateManualEvidence({ videos: ensureLineEvidence(manualLine).videos.filter((_, ii) => ii !== i) })}
-                    />
-                  }
-                />
+                {(() => {
+                  const manualRaised = !!selectedLocObj && flaggedLocs.has(selectedLocObj.code);
+                  return (
+                    <>
+                      {manualRaised ? (
+                        <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.green.soft, borderColor: tokens.rag.green.border, borderRadius: tokens.radius.lg }]}>
+                          <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Issue Raised — saved</Text>
+                        </View>
+                      ) : null}
+                      <SkuLineCard
+                        line={manualLine}
+                        active
+                        conditionLabel="Damage"
+                        conditionOptions={CONDITIONS.filter((c) => c !== 'Damaged')}
+                        saveLabel={manualRaised ? 'Issue Raised ✓' : 'Raise Issue'}
+                        hideDelete
+                        onQtyChange={(qty) => setManualLine((prev) => ({ ...prev, qty }))}
+                        onConditionChange={(condition) => setManualLine((prev) => ({ ...prev, condition }))}
+                        onSave={manualRaised ? () => {} : handleSaveManualIssue}
+                        onDelete={() => {}}
+                        onEdit={() => {}}
+                        evidenceSlot={
+                          <EvidenceBlock
+                            evidence={ensureLineEvidence(manualLine)}
+                            onOpenNote={() => updateManualEvidence({ noteOpen: true })}
+                            onChangeNote={(note) => updateManualEvidence({ note })}
+                            onRecordAudio={() => updateManualEvidence({ audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                            onToggleAudioPlay={() => {
+                              const ev = ensureLineEvidence(manualLine);
+                              if (!ev.audio) return;
+                              updateManualEvidence({ audio: { ...ev.audio, playing: !ev.audio.playing } });
+                            }}
+                            onRemoveAudio={() => updateManualEvidence({ audio: null })}
+                            onAddImage={() => setAttachmentTarget(-1)}
+                            onRemoveImage={(i) => updateManualEvidence({ images: ensureLineEvidence(manualLine).images.filter((_, ii) => ii !== i) })}
+                            onAddVideo={() => updateManualEvidence({ videos: [...ensureLineEvidence(manualLine).videos, { durationSec: 20 }] })}
+                            onRemoveVideo={(i) => updateManualEvidence({ videos: ensureLineEvidence(manualLine).videos.filter((_, ii) => ii !== i) })}
+                          />
+                        }
+                      />
+                    </>
+                  );
+                })()}
               </ScrollView>
             ) : expandedIdx !== null && scannedLine && skuMatched && expectedSku ? (
               // The SKU form only appears once the identity check passes —
@@ -946,11 +961,16 @@ export function RackViewScreen() {
               </ScrollView>
             )}
             {manualMode ? (
-              // Raise Issue (inside SkuLineCard above) already saves and
-              // advances — the outer footer only needs a plain way out.
+              // Raise Issue (inside SkuLineCard above) saves and flags this
+              // pallet but deliberately stays put — moving to the next one
+              // is this separate, explicit action.
               <View style={[styles.skuPanelFooter, { borderTopColor: tokens.border }]}>
                 <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={handleManualNext} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Next Pallet</Text>
+                  <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
                 </Pressable>
               </View>
             ) : expandedIdx !== null ? (
