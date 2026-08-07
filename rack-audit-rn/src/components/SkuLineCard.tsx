@@ -21,6 +21,7 @@ export function SkuLineCard({
   conditionOptions = CONDITIONS,
   saveLabel = 'Save',
   hideDelete,
+  hideFooter,
 }: {
   line: CountLine;
   active: boolean;
@@ -43,6 +44,10 @@ export function SkuLineCard({
   // Count Sheet/Rack View's existing look.
   saveLabel?: string;
   hideDelete?: boolean;
+  // Manual Mode moves the primary action down into Rack View's own footer
+  // (replacing "Next Pallet" there), so this card's own Save/Delete row
+  // would just be a redundant second button — hidden entirely in that case.
+  hideFooter?: boolean;
 }) {
   const { tokens } = useTheme();
 
@@ -126,7 +131,7 @@ export function SkuLineCard({
 
       {evidenceSlot}
 
-      {!disabled ? (
+      {!disabled && !hideFooter ? (
         <View style={styles.footerRow}>
           <Pressable onPress={onSave} style={[styles.saveBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
             <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{saveLabel}</Text>
