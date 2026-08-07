@@ -283,21 +283,35 @@ export function RackViewScreen() {
     const expected = (EXPECTED_SKUS[loc.code] ?? []).slice(0, 1);
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
-    setExpandedIdx(base.length ? 0 : null);
+    // Always land on the compare view (Expected vs Scanned), never straight
+    // into the edit subform — true for a fresh pallet and equally true when
+    // re-selecting one already resolved this session, so re-tapping a saved
+    // pallet always shows its saved details again instead of nothing.
+    setExpandedIdx(null);
     setExpectedSkus(expected);
     setNoScannerFound(false);
     applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null);
   };
 
+  // Loads whichever pallet is currently selected into the panel — covers
+  // opening the panel fresh (Start Audit), advancing (Scan Next), AND
+  // simply re-tapping a different — including already-resolved — pallet on
+  // the canvas while the panel is already open, so its saved details always
+  // reload instead of the panel staying stuck showing the previous pallet.
+  useEffect(() => {
+    if (skuPanelOpen && selectedLocObj) {
+      startAuditFor(selectedLocObj);
+    }
+  }, [selectedLoc, skuPanelOpen]);
+
   const handleStartAudit = () => {
     if (!selectedLocObj) return;
-    startAuditFor(selectedLocObj);
     setSkuPanelOpen(true);
   };
 
   // Persists the pallet just finished, then jumps straight to the next
   // location on this rack — selecting it (which highlights it on the
-  // canvas behind the panel) and loading it up ready to scan, so the
+  // canvas behind the panel) reloads it via the effect above, so the
   // inspector never has to close the panel and tap the canvas by hand.
   // Progresses across all of the rack's bays in sequence, not just the one
   // the current location happens to be in.
@@ -313,7 +327,6 @@ export function RackViewScreen() {
       return;
     }
     setSelectedLoc(next.code);
-    startAuditFor(next);
   };
 
   // One scan per pallet — a new scan replaces whatever was scanned before,
@@ -458,9 +471,16 @@ export function RackViewScreen() {
                                     // with a dark blue border, blinking,
                                     // so the currently-selected pallet is
                                     // unmistakable on a busy canvas.
-                                    const bg = selected
-                                      ? '#BFDBFE'
-                                      : status === 'matched'
+                                    // Selection only overrides the fill for
+                                    // a not-yet-resolved pallet (plain
+                                    // blue = "this is what's selected right
+                                    // now, nothing decided yet"). Once a
+                                    // pallet has a real status, re-selecting
+                                    // it keeps that true color — only the
+                                    // border turns dark blue and blinks —
+                                    // so its resolved state stays visible.
+                                    const bg =
+                                      status === 'matched'
                                         ? tokens.rag.green.soft
                                         : status === 'issue'
                                           ? tokens.rag.amber.soft
@@ -468,9 +488,11 @@ export function RackViewScreen() {
                                             ? tokens.rag.red.soft
                                             : status === 'missing'
                                               ? tokens.slate400
-                                              : highlighted
-                                                ? tokens.slate300
-                                                : tokens.muted;
+                                              : selected
+                                                ? '#BFDBFE'
+                                                : highlighted
+                                                  ? tokens.slate300
+                                                  : tokens.muted;
                                     const border = selected
                                       ? '#1D4ED8'
                                       : status === 'matched'
