@@ -138,17 +138,19 @@ export function ScheduleTablet() {
               ))}
             </View>
 
-            {(view === 'week' ? weekOnly(cal) : monthWeeks(cal)).map((weekDates, i) => (
-              <TabletWeekRow
-                key={i}
-                weekDates={weekDates}
-                refMonth={view === 'week' ? null : cal.month}
-                todayISO={todayISO}
-                selectedDateISO={selectedDateISO}
-                auditPool={auditPool}
-                onDayPress={openDay}
-              />
-            ))}
+            <View style={styles.gridRows}>
+              {(view === 'week' ? weekOnly(cal) : monthWeeks(cal)).map((weekDates, i) => (
+                <TabletWeekRow
+                  key={i}
+                  weekDates={weekDates}
+                  refMonth={view === 'week' ? null : cal.month}
+                  todayISO={todayISO}
+                  selectedDateISO={selectedDateISO}
+                  auditPool={auditPool}
+                  onDayPress={openDay}
+                />
+              ))}
+            </View>
           </>
         )}
       </ScrollView>
@@ -325,12 +327,13 @@ const styles = StyleSheet.create({
   viewMenu: { position: 'absolute', top: 48, right: 0, width: 150, borderWidth: 1, overflow: 'hidden', zIndex: 10 },
   viewMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   weekdayRow: { flexDirection: 'row', gap: 8 },
+  gridRows: { gap: 8 },
   weekdayBox: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 40, borderWidth: 1 },
   // Seamless table grid — cells share borders edge-to-edge (no gap, no
   // per-cell rounding), matching the reference's continuous grid look
   // rather than separated rounded cards. Rows also butt directly against
   // each other (marginTop: -1 collapses the shared border to one line).
-  weekWrap: { position: 'relative', marginBottom: 8 },
+  weekWrap: { position: 'relative' },
   dayRow: { flexDirection: 'row', gap: 8 },
   dayCell: { flex: 1, minHeight: CELL_MIN_HEIGHT, borderWidth: 1, padding: 8, alignItems: 'flex-end' },
   dayNumWrap: { paddingHorizontal: 6, paddingVertical: 2, minWidth: 24, alignItems: 'center' },
