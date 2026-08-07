@@ -81,6 +81,10 @@ export function RackViewScreen() {
   // Once a pallet's already been reported, its form starts collapsed
   // (a "tap to see details" summary) — this flips it back open for review.
   const [manualReviewExpanded, setManualReviewExpanded] = useState(false);
+  // Manual Mode still requires an actual scan before showing the report
+  // form — the inspector picks the location, but what SKU is physically
+  // on that pallet is only known once they scan it, same as normal mode.
+  const [manualScanned, setManualScanned] = useState(false);
   const confirm = useConfirmDialog();
 
   // Exactly one SKU is expected per pallet, and exactly one scan is on
@@ -302,17 +306,13 @@ export function RackViewScreen() {
   // the inspector is meant to see first.
   const startAuditFor = (loc: LocationNode) => {
     if (manualMode) {
-      // No scanning, no expected-vs-scanned check — just load whatever's
-      // already on record for this pallet (if the inspector already
-      // reported it) or the rack's real item here (for context) so the
-      // form isn't blank, then let them go straight to qty/damage/evidence.
+      // No expected-vs-scanned check, but a real scan is still required —
+      // this pallet's SKU isn't known ahead of time the way an in-scope
+      // one is. Only a pallet already reported this audit (saved: true)
+      // counts as "already scanned"; otherwise the scan target shows first.
       const existing = loc.pallets.find((p) => p.saved) ?? null;
-      const item = existing?.lines[0] ?? (EXPECTED_SKUS[loc.code] ?? [])[0];
-      setManualLine(
-        existing?.lines[0]
-          ? { ...existing.lines[0] }
-          : { sku: item?.sku ?? 'MANUAL-ISSUE', name: item?.name ?? 'Manual Issue Report', lot: item?.lot ?? '—', qty: item?.qty ?? 1, condition: 'Good' },
-      );
+      setManualLine(existing?.lines[0] ? { ...existing.lines[0] } : { sku: '', name: '', lot: '—', qty: 1, condition: 'Good' });
+      setManualScanned(!!existing?.lines[0]);
       setManualReviewExpanded(false);
       return;
     }
@@ -421,13 +421,31 @@ export function RackViewScreen() {
     if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null);
   };
 
+  // Manual Mode's scan just identifies what's on the pallet — there's no
+  // expected SKU to compare against, so it only fills in the report form's
+  // SKU/name/lot and reveals it (qty/damage/evidence are still up to the
+  // inspector to fill in afterward).
+  const applyManualSkuScan = (pick: { sku: string; name: string; lot: string }) => {
+    setManualLine((prev) => ({ ...prev, sku: pick.sku, name: pick.name, lot: pick.lot }));
+    setManualScanned(true);
+  };
+
   const handleSkuScanned = (data: string) => {
     const code = data.trim();
     const pick = INVENTORY_POOL.find((p) => p.sku === code) ?? { sku: code, name: 'Unlisted SKU', lot: '—' };
+    if (manualMode) {
+      applyManualSkuScan(pick);
+      return;
+    }
     applySkuScan(pick);
   };
 
   const handleSkuSimulated = () => {
+    if (manualMode) {
+      applyManualSkuScan(INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length]);
+      setSkuScanCount((c) => c + 1);
+      return;
+    }
     // Mostly scan the expected SKU (the common case), occasionally
     // simulate a misplaced item to demo that path too.
     const expected = expectedSkus[0];
@@ -670,7 +688,7 @@ export function RackViewScreen() {
             </View>
 
             {manualMode ? (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 10 }}>
                 {manualRaised && !manualReviewExpanded ? (
                   // Already reported — collapsed by default instead of
                   // reopening the full form every time this pallet is
@@ -689,12 +707,30 @@ export function RackViewScreen() {
                     </Text>
                     <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 10 }}>Tap to see details</Text>
                   </Pressable>
+                ) : !manualScanned ? (
+                  // Selecting the location isn't the same as knowing what's
+                  // on it — Manual Mode still needs an actual scan first,
+                  // same as normal mode's target. There's no expected SKU
+                  // to check it against here; the scan just identifies it.
+                  <>
+                    <Pressable
+                      onPress={() => setScannerOpen('sku')}
+                      style={[styles.scanDottedBox, { borderColor: tokens.mutedForeground, borderRadius: tokens.radius.xl }]}
+                    >
+                      <View style={[styles.scanDottedIconWrap, { backgroundColor: tokens.primary }]}>
+                        <Ionicons name="qr-code-outline" size={26} color={tokens.primaryForeground} />
+                      </View>
+                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
+                    </Pressable>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center' }}>
+                      Scans the SKU code on this pallet so you can report what you actually found here.
+                    </Text>
+                  </>
                 ) : (
-                  // No scanning, no expected-vs-scanned comparison — the
-                  // inspector already knows what they found and where, so
-                  // this goes straight to qty/damage/evidence. Save/Delete
-                  // live in the outer footer instead (Raise Issue there),
-                  // not duplicated inside the card.
+                  // Scanned — shows exactly what was scanned as the report's
+                  // SKU, then qty/damage/evidence are up to the inspector.
+                  // Save/Delete live in the outer footer instead (Raise
+                  // Issue there), not duplicated inside the card.
                   <SkuLineCard
                     line={manualLine}
                     active
@@ -1000,11 +1036,16 @@ export function RackViewScreen() {
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  disabled={manualRaised && !manualReviewExpanded}
+                  disabled={!manualScanned || (manualRaised && !manualReviewExpanded)}
                   onPress={handleSaveManualIssue}
                   style={[
                     styles.primaryBtn,
-                    { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: manualRaised && !manualReviewExpanded ? 0.5 : 1 },
+                    {
+                      flex: 1,
+                      backgroundColor: tokens.primary,
+                      borderRadius: tokens.radius.lg,
+                      opacity: !manualScanned || (manualRaised && !manualReviewExpanded) ? 0.5 : 1,
+                    },
                   ]}
                 >
                   <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
