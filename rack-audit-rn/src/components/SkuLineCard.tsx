@@ -19,6 +19,8 @@ export function SkuLineCard({
   evidenceSlot,
   conditionLabel = 'Condition',
   conditionOptions = CONDITIONS,
+  saveLabel = 'Save',
+  hideDelete,
 }: {
   line: CountLine;
   active: boolean;
@@ -36,6 +38,11 @@ export function SkuLineCard({
   // defaults (label "Condition", full CONDITIONS list) untouched.
   conditionLabel?: string;
   conditionOptions?: Condition[];
+  // Manual Mode's report form has nothing pre-existing to delete and calls
+  // its primary action "Raise Issue" rather than "Save" — both default to
+  // Count Sheet/Rack View's existing look.
+  saveLabel?: string;
+  hideDelete?: boolean;
 }) {
   const { tokens } = useTheme();
 
@@ -122,11 +129,13 @@ export function SkuLineCard({
       {!disabled ? (
         <View style={styles.footerRow}>
           <Pressable onPress={onSave} style={[styles.saveBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
+            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{saveLabel}</Text>
           </Pressable>
-          <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: tokens.rag.red.border, borderRadius: tokens.radius.lg }]}>
-            <Ionicons name="trash-outline" size={18} color={tokens.rag.red.strong} />
-          </Pressable>
+          {!hideDelete ? (
+            <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: tokens.rag.red.border, borderRadius: tokens.radius.lg }]}>
+              <Ionicons name="trash-outline" size={18} color={tokens.rag.red.strong} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>

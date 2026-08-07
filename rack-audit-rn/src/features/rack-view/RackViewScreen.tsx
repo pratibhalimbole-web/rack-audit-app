@@ -72,6 +72,12 @@ export function RackViewScreen() {
   // the panel closes or a different pallet gets selected.
   const [flaggedLocs, setFlaggedLocs] = useState<Set<string>>(new Set());
   const [attachmentTarget, setAttachmentTarget] = useState<number | null>(null);
+  // Manual Mode: for reporting a real-world issue (e.g. a damaged pallet)
+  // found anywhere in the physical rack, not just the audit's assigned
+  // scope — every pallet becomes selectable and the panel skips scanning
+  // entirely, going straight to a location + qty/damage + evidence report.
+  const [manualMode, setManualMode] = useState(false);
+  const [manualLine, setManualLine] = useState<CountLine>({ sku: '', name: '', lot: '—', qty: 1, condition: 'Good' });
   const confirm = useConfirmDialog();
 
   // Exactly one SKU is expected per pallet, and exactly one scan is on
@@ -190,12 +196,17 @@ export function RackViewScreen() {
   // every other pallet is disabled on the canvas, absent from the Pallet
   // picker, and ignored by both real and simulated pallet scans. Without a
   // target_sku every pallet in the rack stays selectable, same as before.
+  // Manual Mode overrides all of this: the inspector found a real-world
+  // problem (e.g. a damaged pallet) outside the audit's assigned scope, so
+  // every pallet in the physical rack becomes selectable/reportable, not
+  // just the ones this audit was scoped to.
   const matchesTargetSku = (locCode: string) => !!audit.target_sku && (EXPECTED_SKUS[locCode] ?? []).some((l) => l.sku === audit.target_sku);
-  const isLocSelectable = (locCode: string) => !audit.target_sku || matchesTargetSku(locCode);
+  const isLocSelectable = (locCode: string) => manualMode || !audit.target_sku || matchesTargetSku(locCode);
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before) — this is purely cosmetic and separate from selectability.
-  const isLocHighlighted = (locCode: string) => (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
+  const isLocHighlighted = (locCode: string) =>
+    manualMode || (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
   const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
 
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
@@ -277,6 +288,20 @@ export function RackViewScreen() {
   // a resolved Matched/Mismatch state instead of the empty "Scan SKU" UI
   // the inspector is meant to see first.
   const startAuditFor = (loc: LocationNode) => {
+    if (manualMode) {
+      // No scanning, no expected-vs-scanned check — just load whatever's
+      // already on record for this pallet (if the inspector already
+      // reported it) or the rack's real item here (for context) so the
+      // form isn't blank, then let them go straight to qty/damage/evidence.
+      const existing = loc.pallets.find((p) => p.saved) ?? null;
+      const item = existing?.lines[0] ?? (EXPECTED_SKUS[loc.code] ?? [])[0];
+      setManualLine(
+        existing?.lines[0]
+          ? { ...existing.lines[0] }
+          : { sku: item?.sku ?? 'MANUAL-ISSUE', name: item?.name ?? 'Manual Issue Report', lot: item?.lot ?? '—', qty: item?.qty ?? 1, condition: 'Good' },
+      );
+      return;
+    }
     const existing = loc.pallets.find((p) => p.saved) ?? null;
     // Single-SKU pallet: only the first line of any prior saved scan applies.
     const base = existing ? existing.lines.slice(0, 1).map((l) => ({ ...l })) : [];
@@ -385,6 +410,29 @@ export function RackViewScreen() {
     setScanLines(next);
   };
 
+  const updateManualEvidence = (patch: Partial<Evidence>) => {
+    setManualLine((prev) => ({ ...prev, evidence: { ...ensureLineEvidence(prev), ...patch } }));
+  };
+
+  // Manual Mode's whole point is reporting a problem, so saving it always
+  // raises the issue (red dot) too — there's no separate "looks fine, no
+  // issue" outcome here the way a normal scan has. Advances to the next
+  // pallet in the rack afterward, same progression as Scan Next.
+  const handleSaveManualIssue = async () => {
+    if (selectedLocObj) {
+      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, [manualLine]);
+      handleRaiseIssue(manualLine.sku);
+    }
+    const locs = scannableLocations;
+    const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
+    const next = idx !== -1 ? locs[idx + 1] : undefined;
+    if (!next) {
+      setSkuPanelOpen(false);
+      return;
+    }
+    setSelectedLoc(next.code);
+  };
+
   const handleSaveSkuPanel = async () => {
     if (selectedLocObj && scanLines.length) {
       await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
@@ -420,10 +468,34 @@ export function RackViewScreen() {
             </>
           ) : null}
         </View>
+        <Pressable
+          onPress={() => {
+            const next = !manualMode;
+            setManualMode(next);
+            setSelectedLoc(null);
+            setSkuPanelOpen(false);
+          }}
+          style={[
+            styles.manualModeToggle,
+            { backgroundColor: manualMode ? tokens.rag.amber.strong : tokens.muted, borderColor: manualMode ? tokens.rag.amber.strong : tokens.border, borderRadius: tokens.radius.lg },
+          ]}
+        >
+          <Ionicons name={manualMode ? 'construct' : 'construct-outline'} size={14} color={manualMode ? '#fff' : tokens.foreground} />
+          <Text style={{ color: manualMode ? '#fff' : tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Manual Mode</Text>
+        </Pressable>
         <Pressable onPress={() => setScannerOpen('pallet')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
         </Pressable>
       </View>
+
+      {manualMode ? (
+        <View style={[styles.manualModeBanner, { backgroundColor: tokens.rag.amber.soft, borderBottomColor: tokens.rag.amber.border }]}>
+          <Ionicons name="warning-outline" size={14} color={tokens.rag.amber.strong} />
+          <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
+            Manual Mode — every pallet in this rack is selectable, outside this audit's assigned scope too. No scanning: pick a location and report what you found.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.body}>
         {/* Canvas and the Reconciliation Form sit side by side, both full
@@ -558,7 +630,9 @@ export function RackViewScreen() {
                 divider, and scanning happens from the dotted scan target
                 further down, not a header icon. */}
             <View style={styles.skuPanelHead}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Reconciliation Form</Text>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                {manualMode ? 'Manual Issue Report' : 'Reconciliation Form'}
+              </Text>
             </View>
             <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
@@ -572,7 +646,44 @@ export function RackViewScreen() {
               <DetailRow label="Pallet" value={selectedLocObj ? palletIdFor(selectedLocObj) : '—'} tokens={tokens} />
             </View>
 
-            {expandedIdx !== null && scannedLine && skuMatched && expectedSku ? (
+            {manualMode ? (
+              // No scanning, no expected-vs-scanned comparison — the
+              // inspector already knows what they found and where, so this
+              // goes straight to reporting it: qty, damage, and evidence.
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
+                <SkuLineCard
+                  line={manualLine}
+                  active
+                  conditionLabel="Damage"
+                  conditionOptions={CONDITIONS.filter((c) => c !== 'Damaged')}
+                  saveLabel="Raise Issue"
+                  hideDelete
+                  onQtyChange={(qty) => setManualLine((prev) => ({ ...prev, qty }))}
+                  onConditionChange={(condition) => setManualLine((prev) => ({ ...prev, condition }))}
+                  onSave={handleSaveManualIssue}
+                  onDelete={() => {}}
+                  onEdit={() => {}}
+                  evidenceSlot={
+                    <EvidenceBlock
+                      evidence={ensureLineEvidence(manualLine)}
+                      onOpenNote={() => updateManualEvidence({ noteOpen: true })}
+                      onChangeNote={(note) => updateManualEvidence({ note })}
+                      onRecordAudio={() => updateManualEvidence({ audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                      onToggleAudioPlay={() => {
+                        const ev = ensureLineEvidence(manualLine);
+                        if (!ev.audio) return;
+                        updateManualEvidence({ audio: { ...ev.audio, playing: !ev.audio.playing } });
+                      }}
+                      onRemoveAudio={() => updateManualEvidence({ audio: null })}
+                      onAddImage={() => setAttachmentTarget(-1)}
+                      onRemoveImage={(i) => updateManualEvidence({ images: ensureLineEvidence(manualLine).images.filter((_, ii) => ii !== i) })}
+                      onAddVideo={() => updateManualEvidence({ videos: [...ensureLineEvidence(manualLine).videos, { durationSec: 20 }] })}
+                      onRemoveVideo={(i) => updateManualEvidence({ videos: ensureLineEvidence(manualLine).videos.filter((_, ii) => ii !== i) })}
+                    />
+                  }
+                />
+              </ScrollView>
+            ) : expandedIdx !== null && scannedLine && skuMatched && expectedSku ? (
               // The SKU form only appears once the identity check passes —
               // a misplaced scan (wrong SKU for this pallet) has nothing to
               // fill in, it's handled by the view below instead. Status here
@@ -834,7 +945,15 @@ export function RackViewScreen() {
                 ) : null}
               </ScrollView>
             )}
-            {expandedIdx !== null ? (
+            {manualMode ? (
+              // Raise Issue (inside SkuLineCard above) already saves and
+              // advances — the outer footer only needs a plain way out.
+              <View style={[styles.skuPanelFooter, { borderTopColor: tokens.border }]}>
+                <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : expandedIdx !== null ? (
               // Editing a matched line's qty/condition — Back returns to the
               // main view without advancing, Save commits just that edit.
               <View style={[styles.skuPanelFooter, { borderTopColor: tokens.border }]}>
@@ -900,6 +1019,10 @@ export function RackViewScreen() {
         onClose={() => setAttachmentTarget(null)}
         onSave={(image) => {
           if (attachmentTarget === null) return;
+          if (attachmentTarget === -1) {
+            updateManualEvidence({ images: [...ensureLineEvidence(manualLine).images, image] });
+            return;
+          }
           const idx = attachmentTarget;
           updateLineEvidence(idx, { images: [...ensureLineEvidence(scanLines[idx]).images, image] });
         }}
@@ -1031,6 +1154,8 @@ const styles = StyleSheet.create({
   toolbarField: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, height: 36, minWidth: 70 },
   toolbarFieldDropdown: { width: 118, justifyContent: 'space-between' },
   scanIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  manualModeToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderWidth: 1 },
+  manualModeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
   inlineDropdown: { position: 'absolute', top: 40, left: 0, width: 160, borderWidth: 1, zIndex: 30, elevation: 30 },
   inlineDropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
   body: { flex: 1, padding: 16 },
