@@ -321,11 +321,26 @@ export function RackViewScreen() {
   // happens next: right SKU opens the qty/condition form, wrong SKU is
   // "Misplaced" with nothing further to fill in.
   const applySkuScan = (pick: { sku: string; name: string; lot: string }) => {
-    const line: CountLine = { sku: pick.sku, name: pick.name, lot: pick.lot, qty: 1, condition: 'Good' };
+    const matchesExpected = !!expectedSkus[0] && expectedSkus[0].sku === pick.sku;
+    // Scanning only ever confirms SKU identity — quantity and damage are
+    // NOT known from the scan itself, so default them to "assume it's fine"
+    // (expected qty, Good) rather than a fixed qty:1 that would read as a
+    // false Quantity Mismatch the instant the scan resolves. The inspector
+    // only sees a real qty/damage mismatch after they deliberately open
+    // "Raise Issue" and correct these values to what they actually found.
+    const line: CountLine = {
+      sku: pick.sku,
+      name: pick.name,
+      lot: pick.lot,
+      qty: matchesExpected ? expectedSkus[0].qty : 1,
+      condition: 'Good',
+    };
     setScanLines([line]);
     setNoScannerFound(false);
-    const matchesExpected = !!expectedSkus[0] && expectedSkus[0].sku === pick.sku;
-    setExpandedIdx(matchesExpected ? 0 : null);
+    // Land on the comparison view, not straight into the edit subform — the
+    // inspector reads Expected vs Scanned first and only opens the subform
+    // deliberately, via Raise Issue, if something actually looks off.
+    setExpandedIdx(null);
     if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null);
   };
 
@@ -737,7 +752,10 @@ export function RackViewScreen() {
                             )}
                           </View>
                         </View>
-                        {hasIssue ? (
+                        {misplaced ? (
+                          // Wrong SKU is known the instant the scan resolves
+                          // — nothing to enter, so this raises the issue
+                          // directly rather than opening the qty/damage form.
                           <Pressable
                             disabled={raised}
                             onPress={() => handleRaiseIssue(scannedLine.sku)}
@@ -752,11 +770,42 @@ export function RackViewScreen() {
                           >
                             <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
                             <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
-                              {raised ? 'Issue raised for this SKU' : `Raise Issue — ${primary.label === 'Mismatch' ? 'wrong item scanned' : 'quantity/damage'}`}
+                              {raised ? 'Issue raised for this SKU' : 'Raise Issue — wrong item scanned'}
                             </Text>
                             {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
                           </Pressable>
-                        ) : null}
+                        ) : (
+                          // SKU matched — quantity/damage are still unknown
+                          // right now (the scan didn't capture them), so
+                          // there's nothing to auto-flag. The inspector
+                          // decides for themselves after eyeballing Expected
+                          // vs Scanned, and only enters the real qty/damage
+                          // (and raises an issue if it's actually off) inside
+                          // this subform, opened deliberately.
+                          <Pressable
+                            onPress={() => setExpandedIdx(0)}
+                            style={[
+                              styles.raiseIssueBox,
+                              {
+                                backgroundColor: hasIssue ? tokens.rag.red.soft : tokens.card,
+                                borderColor: hasIssue ? tokens.rag.red.border : tokens.border,
+                                borderRadius: tokens.radius.lg,
+                              },
+                            ]}
+                          >
+                            <Ionicons name={hasIssue ? 'flag' : 'create-outline'} size={18} color={hasIssue ? tokens.rag.red.strong : tokens.mutedForeground} />
+                            <Text
+                              style={{
+                                color: hasIssue ? tokens.rag.red.strong : tokens.foreground,
+                                fontWeight: tokens.fontWeight.bold,
+                                fontSize: tokens.text.sm,
+                                flex: 1,
+                              }}
+                            >
+                              {hasIssue ? 'Quantity/Damage issue found — tap to review' : 'Enter actual quantity & damage found'}
+                            </Text>
+                          </Pressable>
+                        )}
                       </>
                     );
                   })()
