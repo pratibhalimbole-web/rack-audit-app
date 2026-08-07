@@ -505,26 +505,19 @@ export function RackViewScreen() {
 
         {skuPanelOpen ? (
           <Card style={styles.skuPanel}>
-            {/* Location/pallet info AND the scan icon live in the same
-                header row at the top of the form — the icon just (re-)scans
-                this pallet's SKU. Advancing to the next pallet ("Scan Next")
-                and flagging a missing scanner ("Empty") are down in the
-                footer, alongside Cancel. */}
+            {/* Header carries only the form name — the location/pallet
+                identity is its own precise detail block right below the
+                divider, and scanning happens from the dotted scan target
+                further down, not a header icon. */}
             <View style={styles.skuPanelHead}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Reconciliation Form</Text>
-                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
-                  {selectedLocObj?.code} · {scanPallet ?? 'New Pallet'}
-                </Text>
-              </View>
-              {expandedIdx === null ? (
-                <Pressable
-                  onPress={() => setScannerOpen('sku')}
-                  style={[styles.topScanBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
-                >
-                  <Ionicons name="qr-code-outline" size={18} color={tokens.primaryForeground} />
-                </Pressable>
-              ) : null}
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Reconciliation Form</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+
+            <View style={styles.locDetailsBox}>
+              <DetailRow label="Location Code" value={selectedLocObj?.code ?? '—'} tokens={tokens} />
+              <DetailRow label="Rack / Bay" value={selectedLocObj ? `${rackObj.code} / ${bayCodeForLoc(selectedLocObj.code)}` : '—'} tokens={tokens} />
+              <DetailRow label="Pallet" value={selectedLocObj ? palletIdFor(selectedLocObj) : '—'} tokens={tokens} />
             </View>
 
             {expandedIdx !== null && scannedLine && skuMatched && expectedSku ? (
@@ -637,88 +630,91 @@ export function RackViewScreen() {
                   </View>
                 ) : null}
 
-                {expectedSku ? (
-                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                    <View style={styles.expectedHeadRow}>
-                      <Ionicons name="clipboard-outline" size={16} color={tokens.mutedForeground} />
-                      <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-                        Expected on this Pallet
-                      </Text>
+                {!scannedLine && !noScannerFound ? (
+                  // The one way into a scan — a dotted target, not a corner
+                  // icon, so it reads as "this is the thing to do next"
+                  // rather than a secondary action.
+                  <Pressable
+                    onPress={() => setScannerOpen('sku')}
+                    style={[styles.scanDottedBox, { borderColor: tokens.mutedForeground, borderRadius: tokens.radius.xl }]}
+                  >
+                    <View style={[styles.scanDottedIconWrap, { backgroundColor: tokens.primary }]}>
+                      <Ionicons name="qr-code-outline" size={26} color={tokens.primaryForeground} />
                     </View>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{expectedSku.sku}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Expected qty {expectedSku.qty}</Text>
-                  </View>
-                ) : (
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 12 }}>
-                    No SKU is expected at this location.
-                  </Text>
-                )}
-
-                {misplaced && scannedLine ? (
-                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                    <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                      <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Misplaced</Text>
-                    </View>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scannedLine.sku}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
-                      {expectedSku ? `This isn't ${expectedSku.sku}, which is what's expected here.` : "This SKU isn't expected at this location at all."}
-                    </Text>
-                    {(() => {
-                      const raised = issuesRaised.has(scannedLine.sku);
-                      return (
-                        <Pressable
-                          disabled={raised}
-                          onPress={() => setIssuesRaised((prev) => new Set(prev).add(scannedLine.sku))}
-                          style={[
-                            styles.raiseIssueBox,
-                            {
-                              marginTop: 12,
-                              marginBottom: 0,
-                              backgroundColor: raised ? tokens.rag.green.soft : tokens.card,
-                              borderColor: raised ? tokens.rag.green.border : tokens.border,
-                              borderRadius: tokens.radius.lg,
-                            },
-                          ]}
-                        >
-                          <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.mutedForeground} />
-                          <Text style={{ color: raised ? tokens.rag.green.strong : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
-                            {raised ? 'Issue raised for this SKU' : 'Raise Issue — wrong item scanned'}
-                          </Text>
-                          {!raised ? <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
-                        </Pressable>
-                      );
-                    })()}
-                  </View>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
+                  </Pressable>
                 ) : null}
 
-                {skuMatched && !misplaced && scannedLine && expectedSku ? (
-                  <View style={[styles.expectedBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                    {(() => {
-                      const reviewed =
-                        scannedLine.qty === expectedSku.qty && scannedLine.condition === 'Good'
-                          ? { label: 'Matched', rag: tokens.rag.green }
-                          : scannedLine.qty !== expectedSku.qty
-                            ? { label: 'Quantity Mismatch', rag: tokens.rag.amber }
-                            : { label: 'Condition Mismatch', rag: tokens.rag.amber };
-                      return (
-                        <View style={[styles.editStatusPill, { backgroundColor: reviewed.rag.soft, borderColor: reviewed.rag.border, borderRadius: tokens.radius.lg }]}>
-                          <Text style={{ color: reviewed.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{reviewed.label}</Text>
+                {scannedLine ? (
+                  (() => {
+                    const status = !scannedLine
+                      ? null
+                      : misplaced
+                        ? { label: 'Misplaced', rag: tokens.rag.red }
+                        : scannedLine.qty !== expectedSku?.qty
+                          ? { label: 'Quantity Mismatch', rag: tokens.rag.amber }
+                          : scannedLine.condition !== 'Good'
+                            ? { label: 'Condition Mismatch', rag: tokens.rag.amber }
+                            : { label: 'Matched', rag: tokens.rag.green };
+                    const raised = scannedLine ? issuesRaised.has(scannedLine.sku) : false;
+                    return (
+                      <>
+                        {status ? (
+                          <View style={[styles.editStatusPill, { backgroundColor: status.rag.soft, borderColor: status.rag.border, borderRadius: tokens.radius.lg }]}>
+                            <Text style={{ color: status.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{status.label}</Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.compareRow}>
+                          <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
+                            {expectedSku ? (
+                              <>
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku.sku}</Text>
+                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
+                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Qty {expectedSku.qty}</Text>
+                              </>
+                            ) : (
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
+                            )}
+                          </View>
+                          <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
+                            {scannedLine ? (
+                              <>
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
+                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
+                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
+                                  Qty {scannedLine.qty} · {scannedLine.condition}
+                                </Text>
+                              </>
+                            ) : (
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
+                            )}
+                          </View>
                         </View>
-                      );
-                    })()}
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{scannedLine.sku}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>
-                      Qty {scannedLine.qty} · {scannedLine.condition}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {!expectedSku && !scannedLine ? (
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
-                    No SKU scanned yet — use the scanner above.
-                  </Text>
+                        {scannedLine && status && status.label !== 'Matched' ? (
+                          <Pressable
+                            disabled={raised}
+                            onPress={() => setIssuesRaised((prev) => new Set(prev).add(scannedLine.sku))}
+                            style={[
+                              styles.raiseIssueBox,
+                              {
+                                backgroundColor: raised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                                borderColor: raised ? tokens.rag.green.border : tokens.rag.red.border,
+                                borderRadius: tokens.radius.lg,
+                              },
+                            ]}
+                          >
+                            <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                            <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
+                              {raised ? 'Issue raised for this SKU' : `Raise Issue — ${status.label.toLowerCase()}`}
+                            </Text>
+                            {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
+                          </Pressable>
+                        ) : null}
+                      </>
+                    );
+                  })()
                 ) : null}
               </ScrollView>
             )}
@@ -749,7 +745,7 @@ export function RackViewScreen() {
                   onPress={handleScanNext}
                   style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: scannedLine || noScannerFound ? 1 : 0.5 }]}
                 >
-                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Next</Text>
+                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save & Scan Next</Text>
                 </Pressable>
               </View>
             )}
@@ -793,6 +789,15 @@ export function RackViewScreen() {
         }}
       />
       {confirm.element}
+    </View>
+  );
+}
+
+function DetailRow({ label, value, tokens }: { label: string; value: string; tokens: ReturnType<typeof useTheme>['tokens'] }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{label}</Text>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{value}</Text>
     </View>
   );
 }
@@ -874,12 +879,16 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
   footerBtn: { flex: 0, paddingHorizontal: 18 },
   skuPanel: { flex: 1 },
-  skuPanelHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 },
-  topScanBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  skuPanelHead: { marginBottom: 12 },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 14 },
+  locDetailsBox: { gap: 8, marginBottom: 16 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  scanDottedBox: { alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 14 },
+  scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  compareRow: { flexDirection: 'row', gap: 10 },
+  compareCol: { flex: 1, borderWidth: 1, padding: 12 },
   noScannerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12 },
-  expectedBox: { borderWidth: 1, padding: 14, marginBottom: 12 },
-  expectedHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginBottom: 12 },
-  editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 10 },
+  raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginTop: 4 },
+  editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 4 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
 });
