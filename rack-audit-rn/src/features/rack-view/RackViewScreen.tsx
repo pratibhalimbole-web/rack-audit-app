@@ -205,8 +205,14 @@ export function RackViewScreen() {
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before) — this is purely cosmetic and separate from selectability.
-  const isLocHighlighted = (locCode: string) =>
-    manualMode || (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
+  // Unaffected by Manual Mode — the expected-SKU pallets keep exactly the
+  // same plain gray look they always had, so Manual Mode reads as "extra
+  // pallets opened up", not "the whole canvas repainted".
+  const isLocHighlighted = (locCode: string) => (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
+  // Manual Mode-only pallets — outside the audit's assigned scope, only
+  // selectable/reportable because Manual Mode opened them up. Dashed border
+  // marks them as "not originally in scope" without needing a fill color.
+  const isManualOnly = (locCode: string) => manualMode && !!audit.target_sku && !matchesTargetSku(locCode);
   const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
 
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
@@ -541,6 +547,7 @@ export function RackViewScreen() {
                                     const status = locationStatus[cell.code];
                                     const highlighted = isLocHighlighted(cell.code);
                                     const selectable = isLocSelectable(cell.code);
+                                    const manualOnly = isManualOnly(cell.code);
                                     const dimmed = !selectable;
                                     // Selection wins over status/highlight
                                     // coloring entirely — a light blue fill
@@ -589,7 +596,7 @@ export function RackViewScreen() {
                                         border={border}
                                         selected={selected}
                                         selectable={selectable}
-                                        dashed={status === 'missing'}
+                                        dashed={status === 'missing' || manualOnly}
                                         blinking={selected}
                                         dimmed={dimmed}
                                         flagged={flaggedLocs.has(cell.code)}
