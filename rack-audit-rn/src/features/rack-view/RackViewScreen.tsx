@@ -327,11 +327,26 @@ export function RackViewScreen() {
     if (skuPanelOpen && selectedLocObj) {
       startAuditFor(selectedLocObj);
     }
-  }, [selectedLoc, skuPanelOpen]);
+  }, [selectedLoc, skuPanelOpen, manualMode]);
 
   const handleStartAudit = () => {
     if (!selectedLocObj) return;
     setSkuPanelOpen(true);
+  };
+
+  // Flipping the toggle switches what's showing in the already-open split
+  // view (scan/compare <-> manual report) for whatever's currently
+  // selected — it never collapses back to the full canvas by itself. The
+  // one exception: turning manual mode OFF while an out-of-scope pallet is
+  // selected, since that pallet isn't selectable under normal audit scope
+  // at all, so there's nothing valid left to keep showing.
+  const handleToggleManualMode = () => {
+    const turningOff = manualMode;
+    if (turningOff && selectedLoc && audit.target_sku && !matchesTargetSku(selectedLoc)) {
+      setSelectedLoc(null);
+      setSkuPanelOpen(false);
+    }
+    setManualMode(!manualMode);
   };
 
   // Persists the pallet just finished, then jumps straight to the next
@@ -472,12 +487,7 @@ export function RackViewScreen() {
           ) : null}
         </View>
         <Pressable
-          onPress={() => {
-            const next = !manualMode;
-            setManualMode(next);
-            setSelectedLoc(null);
-            setSkuPanelOpen(false);
-          }}
+          onPress={handleToggleManualMode}
           style={[
             styles.manualModeToggle,
             { backgroundColor: manualMode ? tokens.rag.amber.strong : tokens.muted, borderColor: manualMode ? tokens.rag.amber.strong : tokens.border, borderRadius: tokens.radius.lg },
