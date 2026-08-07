@@ -486,16 +486,7 @@ export function RackViewScreen() {
             </>
           ) : null}
         </View>
-        <Pressable
-          onPress={handleToggleManualMode}
-          style={[
-            styles.manualModeToggle,
-            { backgroundColor: manualMode ? tokens.rag.amber.strong : tokens.muted, borderColor: manualMode ? tokens.rag.amber.strong : tokens.border, borderRadius: tokens.radius.lg },
-          ]}
-        >
-          <Ionicons name={manualMode ? 'construct' : 'construct-outline'} size={14} color={manualMode ? '#fff' : tokens.foreground} />
-          <Text style={{ color: manualMode ? '#fff' : tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Manual Mode</Text>
-        </Pressable>
+        <ManualModeToggle value={manualMode} onToggle={handleToggleManualMode} />
         <Pressable onPress={() => setScannerOpen('pallet')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
         </Pressable>
@@ -1120,6 +1111,30 @@ function RackCell({
   );
 }
 
+// A real switch (track + sliding thumb), not just a color-swapped button —
+// reads unambiguously as an on/off toggle at a glance, with the amber
+// on-state matching the caution banner it reveals below the toolbar.
+function ManualModeToggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
+  const { tokens } = useTheme();
+  const thumbX = useSharedValue(value ? 16 : 2);
+
+  useEffect(() => {
+    thumbX.value = withTiming(value ? 16 : 2, { duration: 180 });
+  }, [value]);
+
+  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: thumbX.value }] }));
+
+  return (
+    <Pressable onPress={onToggle} style={[styles.manualModeWrap, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+      <Ionicons name={value ? 'construct' : 'construct-outline'} size={14} color={value ? tokens.rag.amber.strong : tokens.mutedForeground} />
+      <Text style={{ color: value ? tokens.rag.amber.strong : tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Manual Mode</Text>
+      <View style={[styles.switchTrack, { backgroundColor: value ? tokens.rag.amber.strong : tokens.slate300 }]}>
+        <Animated.View style={[styles.switchThumb, thumbStyle]} />
+      </View>
+    </Pressable>
+  );
+}
+
 function DetailRow({ label, value, tokens }: { label: string; value: string; tokens: ReturnType<typeof useTheme>['tokens'] }) {
   return (
     <View style={styles.detailRow}>
@@ -1184,7 +1199,9 @@ const styles = StyleSheet.create({
   toolbarField: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, height: 36, minWidth: 70 },
   toolbarFieldDropdown: { width: 118, justifyContent: 'space-between' },
   scanIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  manualModeToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderWidth: 1 },
+  manualModeWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 10, borderWidth: 1 },
+  switchTrack: { width: 34, height: 20, borderRadius: 10 },
+  switchThumb: { position: 'absolute', top: 2, left: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
   manualModeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
   inlineDropdown: { position: 'absolute', top: 40, left: 0, width: 160, borderWidth: 1, zIndex: 30, elevation: 30 },
   inlineDropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
