@@ -21,6 +21,7 @@ export function AppHeader({
   avatar,
   menuItems,
   backgroundColor,
+  onBack,
 }: {
   title: string;
   sub?: string;
@@ -28,6 +29,10 @@ export function AppHeader({
   avatar?: boolean;
   menuItems?: HeaderMenuItem[];
   backgroundColor?: string;
+  // Overrides the default router.back() — for a screen that needs to check
+  // for unsaved work first (e.g. Rack View) rather than navigating away
+  // immediately.
+  onBack?: () => void;
 }) {
   const { tokens } = useTheme();
   const inspector = useAuthStore((s) => s.inspector);
@@ -45,7 +50,7 @@ export function AppHeader({
     >
       <View style={styles.row}>
         {showBack ? (
-          <Pressable onPress={() => router.back()} hitSlop={8} style={styles.iconBtn}>
+          <Pressable onPress={onBack ?? (() => router.back())} hitSlop={8} style={styles.iconBtn}>
             <Ionicons name="chevron-back" size={22} color={tokens.foreground} />
           </Pressable>
         ) : null}

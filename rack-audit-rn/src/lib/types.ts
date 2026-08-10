@@ -52,6 +52,19 @@ export type CountLine = {
   qty: number;
   condition: Condition;
   evidence?: Evidence;
+  // Persisted "Raise Issue" flag — set the moment an inspector raises an
+  // issue in Rack View (Mismatch, quantity/damage discrepancy, or any
+  // Manual Mode report), so it survives navigation/reload instead of living
+  // only in that screen's session state. Reported Audits/Audit Summary can
+  // surface these directly instead of only re-deriving issues from
+  // condition/qty comparisons at read-time.
+  issueRaised?: boolean;
+  // How this line was captured — 'manual' for a Rack View Manual Mode
+  // report (selectable outside the audit's assigned target_sku scope),
+  // 'scan' (the default) for the normal scoped Reconciliation flow. Lets
+  // downstream views distinguish an out-of-scope report from a normal
+  // in-scope one, which is otherwise structurally identical.
+  source?: 'scan' | 'manual';
 };
 
 export type Pallet = {

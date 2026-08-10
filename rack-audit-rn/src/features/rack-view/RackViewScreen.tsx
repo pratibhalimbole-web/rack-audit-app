@@ -29,8 +29,13 @@ const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Comp
 // Pallet ID shown to the inspector — level + pallet number on that level,
 // e.g. level 5 / pallet 1 -> "P-0501" — distinct from the location's
 // internal `code` (rack/bay-scoped) used for lookups and saving records.
-function palletIdFor(loc: { level?: number; slot?: number; code: string }): string {
-  return loc.level != null && loc.slot != null ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}` : loc.code;
+// Prefixed with the bay code (e.g. "B-01 · P-0501") whenever it's known —
+// the whole rack's bays render together on canvas, and level/slot numbers
+// repeat across bays, so the bare pallet ID alone is ambiguous once more
+// than one bay is in view.
+function palletIdFor(loc: { level?: number; slot?: number; code: string }, bayCode?: string): string {
+  const base = loc.level != null && loc.slot != null ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}` : loc.code;
+  return bayCode ? `${bayCode} · ${base}` : base;
 }
 
 // variation-3: a selection-driven flow instead of variation-2's free-scan-
@@ -46,23 +51,27 @@ function palletIdFor(loc: { level?: number; slot?: number; code: string }): stri
 export function RackViewScreen() {
   const { tokens } = useTheme();
   const params = useLocalSearchParams<Params>();
-  const { auditId, layout } = params;
+  const { auditId } = params;
   const { data: audits } = useAudits();
   const audit = audits?.find((a) => a.audit_id === auditId);
   const { data: tree, isLoading } = useLocationsTree(auditId);
   const { saveRecord } = useCountSheetMutations(auditId);
 
+  const [layoutName, setLayoutName] = useState(params.layout);
   const [rackCode, setRackCode] = useState(params.rackId);
-  const [pickerField, setPickerField] = useState<'rack' | 'pallet' | null>(null);
+  // 'all' keeps every bay's pallets in the picker — the canvas always shows
+  // the whole rack regardless, this only narrows the Pallet dropdown list
+  // (handy once a rack has several bays' worth of pallets to scroll past).
+  const [bayFilter, setBayFilter] = useState<string>('all');
+  const [pickerField, setPickerField] = useState<'layout' | 'rack' | 'bay' | 'pallet' | null>(null);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
-  const [scanCycle, setScanCycle] = useState(0);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
   const [scanPallet, setScanPallet] = useState<string | null>(null);
   const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [skuScanCount, setSkuScanCount] = useState(0);
-  const [scannerOpen, setScannerOpen] = useState<'pallet' | 'sku' | null>(null);
+  const [scannerOpen, setScannerOpen] = useState<'sku' | null>(null);
   // Session-only flags (not persisted) — "Raise Issue" in the detail view
   // just gives the inspector visible confirmation; the underlying condition
   // already makes the line show up in Reported Audits once saved.
@@ -140,12 +149,13 @@ export function RackViewScreen() {
 
   // Bay is no longer a pickable dimension — the whole rack's bays render
   // together, so only the rack (and layout) identify what's on screen.
-  const seedKey = `${auditId}|${layout}|${rackCode}`;
+  const seedKey = `${auditId}|${layoutName}|${rackCode}`;
   const seedKeyRef = useRef<string | null>(seedKey);
   useEffect(() => {
     if (seedKeyRef.current !== seedKey) {
       seedKeyRef.current = seedKey;
       setSelectedLoc(null);
+      setBayFilter('all');
       scale.value = 1;
       savedScale.value = 1;
       translateX.value = 0;
@@ -159,8 +169,12 @@ export function RackViewScreen() {
   // selection) may not exist in this audit's tree — rather than dead-ending
   // on an error, fall back to the first rack so Rack View for this task
   // always renders something the inspector can act on.
-  const fallbackLayoutObj = tree ? (findLayoutIn(tree, layout) ?? tree.layouts[0]) : undefined;
+  const fallbackLayoutObj = tree ? (findLayoutIn(tree, layoutName) ?? tree.layouts[0]) : undefined;
   const fallbackRackObj = tree && fallbackLayoutObj ? (findRackIn(tree, fallbackLayoutObj.name, rackCode) ?? fallbackLayoutObj.racks[0]) : undefined;
+
+  useEffect(() => {
+    if (fallbackLayoutObj && fallbackLayoutObj.name !== layoutName) setLayoutName(fallbackLayoutObj.name);
+  }, [fallbackLayoutObj?.name]);
 
   useEffect(() => {
     if (fallbackRackObj && fallbackRackObj.code !== rackCode) setRackCode(fallbackRackObj.code);
@@ -202,6 +216,15 @@ export function RackViewScreen() {
   // the repo looks the location up by its real bay code, not just its own.
   const bayCodeForLoc = (locCode: string) => rackObj.bays.find((b) => b.locations.some((l) => l.code === locCode))?.code ?? rackObj.bays[0].code;
 
+  // Selecting a pallet — from the canvas, the Pallet dropdown, or an
+  // auto-advance — always syncs the Bay field to that pallet's actual bay
+  // too, so the toolbar reflects exactly where the current selection is
+  // instead of whatever bay filter happened to be set beforehand.
+  const selectLocation = (code: string) => {
+    setSelectedLoc(code);
+    setBayFilter(bayCodeForLoc(code));
+  };
+
   // When this audit has a target_sku (the admin's "SKU Type" field), only
   // pallets actually carrying that SKU are in scope to select/scan at all —
   // every other pallet is disabled on the canvas, absent from the Pallet
@@ -226,11 +249,27 @@ export function RackViewScreen() {
   const isManualOnly = (locCode: string) => manualMode && !!audit.target_sku && !matchesTargetSku(locCode);
   const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
 
+  const layoutOptions: SheetOption[] = tree.layouts.map((l) => ({ value: l.name, label: l.name }));
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
-  const palletOptions: SheetOption[] = scannableLocations.map((l) => ({
-    value: l.code,
-    label: palletIdFor(l),
-  }));
+  const bayOptions: SheetOption[] = [
+    { value: 'all', label: 'All Bays' },
+    ...rackObj.bays.map((b) => ({ value: b.code, label: `Bay ${b.code}` })),
+  ];
+  const palletOptions: SheetOption[] = scannableLocations
+    .filter((l) => bayFilter === 'all' || bayCodeForLoc(l.code) === bayFilter)
+    .map((l) => ({
+      value: l.code,
+      label: palletIdFor(l, bayCodeForLoc(l.code)),
+    }));
+
+  // Switching layout also resets the rack to that layout's first one — the
+  // previously-picked rack code almost certainly doesn't exist there.
+  const handlePickLayout = (name: string) => {
+    setLayoutName(name);
+    const nextLayout = tree.layouts.find((l) => l.name === name);
+    if (nextLayout?.racks[0]) setRackCode(nextLayout.racks[0].code);
+    setPickerField(null);
+  };
 
   const handlePickRack = (code: string) => {
     setRackCode(code);
@@ -240,22 +279,8 @@ export function RackViewScreen() {
   // selection (the cell gets the blue "selected" outline), same object of
   // truth (`selectedLoc`) as tapping the cell directly does.
   const handlePickPallet = (code: string) => {
-    setSelectedLoc(code);
+    selectLocation(code);
     setPickerField(null);
-  };
-
-  const handleSimulatedPalletScan = () => {
-    if (!scannableLocations.length) return;
-    const loc = scannableLocations[scanCycle % scannableLocations.length];
-    setScanCycle((c) => c + 1);
-    setSelectedLoc(loc.code);
-  };
-
-  const handleRealPalletScanned = (data: string) => {
-    setScannerOpen(null);
-    const code = data.trim();
-    const match = scannableLocations.find((l) => l.code === code);
-    if (match) setSelectedLoc(match.code);
   };
 
   // Drives the bay canvas cell colors: green once a pallet's scan resolves
@@ -314,6 +339,12 @@ export function RackViewScreen() {
       setManualLine(existing?.lines[0] ? { ...existing.lines[0] } : { sku: '', name: '', lot: '—', qty: 1, condition: 'Good' });
       setManualScanned(!!existing?.lines[0]);
       setManualReviewExpanded(false);
+      // A previously-saved issue (this session or an earlier one) should
+      // still read as raised, not reset back to a fresh unflagged state.
+      if (existing?.lines[0]?.issueRaised) {
+        setIssuesRaised((prev) => new Set(prev).add(existing.lines[0].sku));
+        setFlaggedLocs((prev) => new Set(prev).add(loc.code));
+      }
       return;
     }
     const existing = loc.pallets.find((p) => p.saved) ?? null;
@@ -322,6 +353,10 @@ export function RackViewScreen() {
     const expected = (EXPECTED_SKUS[loc.code] ?? []).slice(0, 1);
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
+    if (base[0]?.issueRaised) {
+      setIssuesRaised((prev) => new Set(prev).add(base[0].sku));
+      setFlaggedLocs((prev) => new Set(prev).add(loc.code));
+    }
     // Always land on the compare view (Expected vs Scanned), never straight
     // into the edit subform — true for a fresh pallet and equally true when
     // re-selecting one already resolved this session, so re-tapping a saved
@@ -364,7 +399,7 @@ export function RackViewScreen() {
       const idx = rackLocations.findIndex((l) => l.code === selectedLoc);
       const next = rackLocations.slice(idx + 1).find((l) => matchesTargetSku(l.code));
       if (next) {
-        setSelectedLoc(next.code);
+        selectLocation(next.code);
       } else {
         setSelectedLoc(null);
         setSkuPanelOpen(false);
@@ -380,8 +415,11 @@ export function RackViewScreen() {
   // Progresses across all of the rack's bays in sequence, not just the one
   // the current location happens to be in.
   const handleScanNext = async () => {
-    if (selectedLocObj && scanLines.length && !misplaced) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
+    // Misplaced/Mismatch pallets are saved too, not just Matched ones —
+    // otherwise a raised Mismatch issue (and the scan itself) would vanish
+    // the moment the inspector moves on, never reaching Reported Audits.
+    if (selectedLocObj && scanLines.length) {
+      await saveRecord(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
     const locs = scannableLocations;
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
@@ -390,7 +428,7 @@ export function RackViewScreen() {
       setSkuPanelOpen(false);
       return;
     }
-    setSelectedLoc(next.code);
+    selectLocation(next.code);
   };
 
   // One scan per pallet — a new scan replaces whatever was scanned before,
@@ -411,6 +449,7 @@ export function RackViewScreen() {
       lot: pick.lot,
       qty: matchesExpected ? expectedSkus[0].qty : 1,
       condition: 'Good',
+      source: 'scan',
     };
     setScanLines([line]);
     setNoScannerFound(false);
@@ -478,8 +517,13 @@ export function RackViewScreen() {
   // "Next Pallet" action instead of an implicit side effect of saving.
   const handleSaveManualIssue = async () => {
     if (!selectedLocObj) return;
-    await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, [manualLine]);
-    handleRaiseIssue(manualLine.sku);
+    // Every Manual Mode save both raises an issue and marks its origin —
+    // otherwise it's structurally identical to a normal in-scope scan once
+    // saved, and Reported Audits has no way to tell them apart.
+    const line: CountLine = { ...manualLine, issueRaised: true, source: 'manual' };
+    await saveRecord(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, [line]);
+    setManualLine(line);
+    handleRaiseIssue(line.sku);
     // Collapse back to the "tap to see details" summary once saved — same
     // resting state as re-selecting this pallet later.
     setManualReviewExpanded(false);
@@ -487,17 +531,51 @@ export function RackViewScreen() {
 
   const handleSaveSkuPanel = async () => {
     if (selectedLocObj && scanLines.length) {
-      await saveRecord(tree, { auditId, layout, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
+      await saveRecord(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
     }
     setSkuPanelOpen(false);
   };
 
+  // Tapping the header's back button while a pallet's record is open and
+  // has something on it worth keeping (scanned, not yet advanced past)
+  // asks first instead of silently discarding it by navigating away.
+  const handleBackPress = () => {
+    const hasPendingRecord = skuPanelOpen && (manualMode ? manualScanned : scanLines.length > 0);
+    if (!hasPendingRecord) {
+      router.back();
+      return;
+    }
+    confirm.ask('You have an open pallet record for this audit. Save it before going back?', async () => {
+      if (manualMode) {
+        await handleSaveManualIssue();
+      } else {
+        await handleSaveSkuPanel();
+      }
+      router.back();
+    });
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title={audit.audit_name} sub={audit.audit_id} showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} backgroundColor="#F7F8FA" />
+      <AppHeader
+        title={audit.audit_name}
+        sub={audit.audit_id}
+        showBack
+        onBack={handleBackPress}
+        menuItems={[{ label: 'Sync Now', onPress: () => {} }]}
+        backgroundColor="#F7F8FA"
+      />
 
       <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <ToolbarField label={layoutObj.name} fixed />
+        <View>
+          <ToolbarField label={layoutObj.name} open={pickerField === 'layout'} onPress={() => setPickerField(pickerField === 'layout' ? null : 'layout')} />
+          {pickerField === 'layout' ? (
+            <>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
+              <InlineDropdown options={layoutOptions} selectedValue={layoutName} onSelect={handlePickLayout} />
+            </>
+          ) : null}
+        </View>
         <View>
           <ToolbarField label={`Rack ${rackObj.code}`} open={pickerField === 'rack'} onPress={() => setPickerField(pickerField === 'rack' ? null : 'rack')} />
           {pickerField === 'rack' ? (
@@ -509,7 +587,27 @@ export function RackViewScreen() {
         </View>
         <View>
           <ToolbarField
-            label={selectedLocObj ? palletIdFor(selectedLocObj) : 'Select Pallet'}
+            label={bayFilter === 'all' ? 'All Bays' : `Bay ${bayFilter}`}
+            open={pickerField === 'bay'}
+            onPress={() => setPickerField(pickerField === 'bay' ? null : 'bay')}
+          />
+          {pickerField === 'bay' ? (
+            <>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
+              <InlineDropdown
+                options={bayOptions}
+                selectedValue={bayFilter}
+                onSelect={(v) => {
+                  setBayFilter(v);
+                  setPickerField(null);
+                }}
+              />
+            </>
+          ) : null}
+        </View>
+        <View>
+          <ToolbarField
+            label={selectedLocObj ? palletIdFor(selectedLocObj, bayCodeForLoc(selectedLocObj.code)) : 'Select Pallet'}
             open={pickerField === 'pallet'}
             onPress={() => setPickerField(pickerField === 'pallet' ? null : 'pallet')}
           />
@@ -521,16 +619,13 @@ export function RackViewScreen() {
           ) : null}
         </View>
         <ManualModeToggle value={manualMode} onToggle={handleToggleManualMode} />
-        <Pressable onPress={() => setScannerOpen('pallet')} style={[styles.scanIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
-        </Pressable>
       </View>
 
       {manualMode ? (
         <View style={[styles.manualModeBanner, { backgroundColor: tokens.rag.amber.soft, borderBottomColor: tokens.rag.amber.border }]}>
           <Ionicons name="warning-outline" size={14} color={tokens.rag.amber.strong} />
           <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
-            Manual Mode — every pallet in this rack is selectable, outside this audit's assigned scope too. No scanning: pick a location and report what you found.
+            Manual Mode — every pallet in this rack is selectable, outside this audit's assigned scope too. Pick a location, scan the SKU that's actually there, and report what you found.
           </Text>
         </View>
       ) : null}
@@ -630,7 +725,7 @@ export function RackViewScreen() {
                                         blinking={selected}
                                         dimmed={dimmed}
                                         flagged={flaggedLocs.has(cell.code)}
-                                        onPress={() => setSelectedLoc(cell.code)}
+                                        onPress={() => selectLocation(cell.code)}
                                       />
                                     );
                                   })}
@@ -799,7 +894,12 @@ export function RackViewScreen() {
                       {qtyMismatch || conditionFlagged ? (
                         <Pressable
                           disabled={raised}
-                          onPress={() => handleRaiseIssue(line.sku)}
+                          onPress={() => {
+                            const next = scanLines.slice();
+                            next[expandedIdx] = { ...next[expandedIdx], issueRaised: true };
+                            setScanLines(next);
+                            handleRaiseIssue(line.sku);
+                          }}
                           style={[
                             styles.raiseIssueBox,
                             {
@@ -971,7 +1071,12 @@ export function RackViewScreen() {
                           // directly rather than opening the qty/damage form.
                           <Pressable
                             disabled={raised}
-                            onPress={() => handleRaiseIssue(scannedLine.sku)}
+                            onPress={() => {
+                              const next = scanLines.slice();
+                              next[0] = { ...next[0], issueRaised: true };
+                              setScanLines(next);
+                              handleRaiseIssue(scannedLine.sku);
+                            }}
                             style={[
                               styles.raiseIssueBox,
                               {
@@ -1090,17 +1195,6 @@ export function RackViewScreen() {
       </View>
 
       <BarcodeScannerModal
-        visible={scannerOpen === 'pallet'}
-        title="Scan Pallet LPN"
-        hint="Point at the Pallet LPN QR code"
-        onScanned={handleRealPalletScanned}
-        onUseSimulated={() => {
-          setScannerOpen(null);
-          handleSimulatedPalletScan();
-        }}
-        onClose={() => setScannerOpen(null)}
-      />
-      <BarcodeScannerModal
         visible={scannerOpen === 'sku'}
         title="Scan SKU"
         hint="Point at the SKU QR code on the pallet"
@@ -1204,7 +1298,7 @@ function ManualModeToggle({ value, onToggle }: { value: boolean; onToggle: () =>
   const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: thumbX.value }] }));
 
   return (
-    <Pressable onPress={onToggle} style={[styles.manualModeWrap, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+    <Pressable onPress={onToggle} style={styles.manualModeWrap}>
       <Ionicons name={value ? 'construct' : 'construct-outline'} size={14} color={value ? tokens.rag.amber.strong : tokens.mutedForeground} />
       <Text style={{ color: value ? tokens.rag.amber.strong : tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Manual Mode</Text>
       <View style={[styles.switchTrack, { backgroundColor: value ? tokens.rag.amber.strong : tokens.slate300 }]}>
@@ -1277,8 +1371,7 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   toolbarField: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, height: 36, minWidth: 70 },
   toolbarFieldDropdown: { width: 118, justifyContent: 'space-between' },
-  scanIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  manualModeWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 10, borderWidth: 1 },
+  manualModeWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 6 },
   switchTrack: { width: 34, height: 20, borderRadius: 10 },
   switchThumb: { position: 'absolute', top: 2, left: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
   manualModeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },

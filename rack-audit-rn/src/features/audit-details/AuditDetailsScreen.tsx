@@ -230,7 +230,10 @@ export function AuditDetailsScreen() {
           {bayBody}
         </Card>
 
-        <Pressable onPress={() => router.push('/progress')} style={styles.linkBtn}>
+        <Pressable
+          onPress={() => router.push({ pathname: '/audit/[auditId]/progress', params: { auditId: audit.audit_id } } as never)}
+          style={styles.linkBtn}
+        >
           <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
             View Full Rack/Bay Breakdown
           </Text>

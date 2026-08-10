@@ -1,4 +1,4 @@
-import { INSPECTOR, MASTER_INVENTORY, TODAY } from './mockData';
+import { EXPECTED_SKUS, INSPECTOR, MASTER_INVENTORY, TODAY } from './mockData';
 import type { Audit, AuditLocationsTree, Condition, Evidence, LocationNode, MasterSlot, Priority } from './types';
 
 // Pure domain logic ported from rack-audit-app.html (~lines 1475-1555).
@@ -126,6 +126,14 @@ export type FlaggedLine = {
   skuCount: number;
   lot: string;
   evidence?: Evidence;
+  // Whether the inspector explicitly raised this via Rack View's Raise
+  // Issue (Mismatch, quantity/damage discrepancy, or any Manual Mode
+  // report) — distinct from a line just happening to have a non-Good
+  // condition without ever being flagged.
+  issueRaised?: boolean;
+  // 'manual' marks a Rack View Manual Mode report — outside the audit's
+  // assigned target_sku scope, only reportable because Manual Mode was on.
+  source?: 'scan' | 'manual';
 };
 
 export type SummaryStats = {
@@ -157,7 +165,12 @@ export function summaryStats(tree: AuditLocationsTree | undefined): SummaryStats
         lineCount++;
         qtyTotal += line.qty;
         byCondition[line.condition] = (byCondition[line.condition] ?? 0) + line.qty;
-        if (line.condition !== 'Good') {
+        // A line is worth a second look either because its condition says
+        // so, or because an inspector explicitly raised it — a Mismatch or
+        // Manual Mode report can carry issueRaised with condition still
+        // 'Good' (e.g. a qty-only or wrong-SKU issue), and would otherwise
+        // never surface here.
+        if (line.condition !== 'Good' || line.issueRaised) {
           flagged.push({
             layout,
             rack,
@@ -171,6 +184,8 @@ export function summaryStats(tree: AuditLocationsTree | undefined): SummaryStats
             skuCount: (p.lines || []).length,
             lot: line.lot,
             evidence: line.evidence,
+            issueRaised: line.issueRaised,
+            source: line.source,
           });
         }
       });
@@ -232,4 +247,66 @@ export function mismatchSeverity(m: SkuMismatch): 'Critical' | 'Medium' | 'Low' 
   if (m.foundSku !== m.expected.sku) return 'Critical';
   const diffPct = Math.abs(m.foundQty - m.expected.qty) / Math.max(1, m.expected.qty);
   return diffPct >= 0.1 ? 'Medium' : 'Low';
+}
+
+export type ScopedIssueKind = 'mismatch' | 'matched-issue';
+
+export type ScopedIssue = {
+  kind: ScopedIssueKind;
+  layout: string;
+  rack: string;
+  bay: string;
+  locCode: string;
+  pallet: string;
+  expectedSku: string;
+  expectedName: string;
+  expectedQty: number;
+  foundSku: string;
+  foundName: string;
+  foundLot: string;
+  foundQty: number;
+  condition: Condition;
+  issueRaised?: boolean;
+  evidence?: Evidence;
+};
+
+// Reconciles each location's actually-saved pallet (loc.pallets.find by
+// `saved`, never the unsaved mock-seeded pallets[0] — the same rule Rack
+// View itself uses) against EXPECTED_SKUS, the exact "what should be here"
+// list Rack View shows the inspector — splitting into the two in-scope
+// Reconciliation outcomes: the wrong SKU altogether ('mismatch'), or the
+// right SKU but a quantity/damage discrepancy ('matched-issue'). Manual
+// Mode saves are excluded — those have no expected SKU to compare against
+// at all and are a separate, out-of-scope concern (see FlaggedLine/
+// summaryStats, filtered by source==='manual').
+export function scopedIssues(tree: AuditLocationsTree | undefined): ScopedIssue[] {
+  const out: ScopedIssue[] = [];
+  allLocations(tree).forEach(({ layout, rack, bay, loc }) => {
+    const saved = loc.pallets.find((p) => p.saved);
+    const found = saved?.lines[0];
+    if (!saved || !found || found.source === 'manual') return;
+    const expected = EXPECTED_SKUS[loc.code]?.[0];
+    if (!expected) return;
+    const skuOk = found.sku === expected.sku;
+    if (skuOk && found.qty === expected.qty && found.condition === 'Good') return; // clean match — not an issue
+    out.push({
+      kind: skuOk ? 'matched-issue' : 'mismatch',
+      layout,
+      rack,
+      bay,
+      locCode: loc.code,
+      pallet: saved.pallet,
+      expectedSku: expected.sku,
+      expectedName: expected.name,
+      expectedQty: expected.qty,
+      foundSku: found.sku,
+      foundName: found.name,
+      foundLot: found.lot,
+      foundQty: found.qty,
+      condition: found.condition,
+      issueRaised: found.issueRaised,
+      evidence: found.evidence,
+    });
+  });
+  return out;
 }
