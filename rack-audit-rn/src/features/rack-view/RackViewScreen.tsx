@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -56,6 +56,33 @@ export function RackViewScreen() {
   const audit = audits?.find((a) => a.audit_id === auditId);
   const { data: tree, isLoading } = useLocationsTree(auditId);
   const { saveRecord } = useCountSheetMutations(auditId);
+  const navigation = useNavigation();
+
+  // Whether leaving right now would discard something worth keeping, and
+  // how to save it — both refs, updated fresh every render further down
+  // (after selectedLocObj/handleSaveSkuPanel/handleSaveManualIssue exist),
+  // so the listener registered once below always reads the latest state
+  // without needing those not-yet-declared values in its own dependency
+  // array (which would violate the hooks-before-any-early-return rule).
+  const hasPendingRecordRef = useRef(false);
+  const saveThenLeaveRef = useRef<() => Promise<void>>(async () => {});
+
+  // Intercepts EVERY way this screen can be left — the header's own back
+  // arrow, Android hardware/gesture back, and any other navigation away —
+  // not just a tap on AppHeader's back button, which only ever caught a
+  // direct press on that one icon.
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e) => {
+      if (!hasPendingRecordRef.current) return;
+      e.preventDefault();
+      confirm.ask('You have an open pallet record for this audit. Save it before going back?', async () => {
+        await saveThenLeaveRef.current();
+        navigation.dispatch(e.data.action);
+      });
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation]);
 
   const [layoutName, setLayoutName] = useState(params.layout);
   const [rackCode, setRackCode] = useState(params.rackId);
@@ -272,7 +299,12 @@ export function RackViewScreen() {
     const saved = loc.pallets.find((p) => p.saved);
     const line = saved?.lines[0];
     if (!line) return true;
-    return line.sku !== expected.sku || line.qty !== expected.qty || line.condition !== 'Good';
+    // A Mismatch (wrong SKU) is already a conclusive, known result the
+    // moment it's scanned — nothing left to resolve via this list. Only
+    // "not scanned yet" and "right SKU but qty/damage is off" genuinely
+    // still need the inspector's attention.
+    if (line.sku !== expected.sku) return false;
+    return line.qty !== expected.qty || line.condition !== 'Good';
   });
   // In-scope locations the inspector already flagged "no scanner code
   // found" this session — its own list rather than mixed into Pending, so
@@ -569,23 +601,18 @@ export function RackViewScreen() {
     setSkuPanelOpen(false);
   };
 
-  // Tapping the header's back button while a pallet's record is open and
-  // has something on it worth keeping (scanned, not yet advanced past)
-  // asks first instead of silently discarding it by navigating away.
-  const handleBackPress = () => {
-    const hasPendingRecord = skuPanelOpen && (manualMode ? manualScanned : scanLines.length > 0);
-    if (!hasPendingRecord) {
-      router.back();
-      return;
+  // Feeds the beforeRemove listener registered near the top of this
+  // component — kept in sync every render so leaving this screen any way
+  // (header back arrow, hardware/gesture back) asks first whenever a
+  // pallet's record is open with something on it worth keeping (scanned,
+  // not yet advanced past), instead of silently discarding it.
+  hasPendingRecordRef.current = skuPanelOpen && (manualMode ? manualScanned : scanLines.length > 0);
+  saveThenLeaveRef.current = async () => {
+    if (manualMode) {
+      await handleSaveManualIssue();
+    } else {
+      await handleSaveSkuPanel();
     }
-    confirm.ask('You have an open pallet record for this audit. Save it before going back?', async () => {
-      if (manualMode) {
-        await handleSaveManualIssue();
-      } else {
-        await handleSaveSkuPanel();
-      }
-      router.back();
-    });
   };
 
   return (
@@ -594,7 +621,6 @@ export function RackViewScreen() {
         title={audit.audit_name}
         sub={audit.audit_id}
         showBack
-        onBack={handleBackPress}
         menuItems={[{ label: 'Sync Now', onPress: () => {} }]}
         backgroundColor="#F7F8FA"
       />
@@ -657,7 +683,7 @@ export function RackViewScreen() {
           style={[styles.pendingBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg, marginLeft: 'auto' }]}
         >
           <Ionicons name="alert-circle-outline" size={16} color={tokens.rag.amber.strong} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Pending Locations to Scan</Text>
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Unresolved Locations</Text>
           {pendingLocations.length + emptyLocations.length ? (
             <View style={[styles.pendingCountBadge, { backgroundColor: tokens.rag.amber.strong, borderRadius: tokens.radius.xl }]}>
               <Text style={{ color: '#fff', fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{pendingLocations.length + emptyLocations.length}</Text>
@@ -1276,7 +1302,7 @@ export function RackViewScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="alert-circle-outline" size={18} color={tokens.rag.amber.strong} />
                 <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
-                  Pending Locations to Scan
+                  Unresolved Locations
                 </Text>
               </View>
               <Pressable onPress={() => setPendingModalOpen(false)} hitSlop={8}>
@@ -1303,7 +1329,7 @@ export function RackViewScreen() {
                     fontSize: tokens.text.xs,
                   }}
                 >
-                  Pending Locations ({pendingLocations.length})
+                  Unresolved ({pendingLocations.length})
                 </Text>
               </Pressable>
               <Pressable
@@ -1387,14 +1413,15 @@ export function RackViewScreen() {
                                   const expected = EXPECTED_SKUS[loc.code]?.[0];
                                   const saved = loc.pallets.find((p) => p.saved);
                                   const line = saved?.lines[0];
+                                  // Mismatch (wrong SKU) never appears in this list — it's
+                                  // excluded from pendingLocations entirely as an already-known,
+                                  // conclusive result. Only Not Scanned or Qty/Damage remain.
                                   const status =
                                     pendingTab === 'empty'
                                       ? { label: 'Empty', rag: tokens.rag.red }
                                       : !line
                                         ? { label: 'Not Scanned', rag: tokens.rag.amber }
-                                        : line.sku !== expected?.sku
-                                          ? { label: 'Mismatch', rag: tokens.rag.red }
-                                          : { label: 'Qty/Damage Issue', rag: tokens.rag.amber };
+                                        : { label: 'Qty/Damage Issue', rag: tokens.rag.amber };
                                   return (
                                     <Pressable
                                       key={loc.code}
