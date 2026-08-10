@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
@@ -63,6 +63,12 @@ export function RackViewScreen() {
   // the whole rack regardless, this only narrows the Pallet dropdown list
   // (handy once a rack has several bays' worth of pallets to scroll past).
   const [bayFilter, setBayFilter] = useState<string>('all');
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [pendingTab, setPendingTab] = useState<'pending' | 'empty'>('pending');
+  const [pendingSearch, setPendingSearch] = useState('');
+  // Bay-wise accordion in the Pending SKU modal — same "default open, mark
+  // closed" pattern as Audit Details' bay accordion, keyed by bay code.
+  const [closedPendingBays, setClosedPendingBays] = useState<Record<string, boolean>>({});
   const [pickerField, setPickerField] = useState<'layout' | 'rack' | 'bay' | 'pallet' | null>(null);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
@@ -248,6 +254,33 @@ export function RackViewScreen() {
   // marks them as "not originally in scope" without needing a fill color.
   const isManualOnly = (locCode: string) => manualMode && !!audit.target_sku && !matchesTargetSku(locCode);
   const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
+
+  // In-scope locations still waiting on a clean, confirmed match — either
+  // never scanned at all, or scanned and found to mismatch (wrong SKU, or
+  // the right SKU with a quantity/damage issue). Independent of Manual
+  // Mode's toggle: this always reflects the audit's real assigned scope
+  // (target_sku), not whatever Manual Mode has temporarily opened up.
+  const pendingLocations = rackLocations.filter((loc) => {
+    if (audit.target_sku && !matchesTargetSku(loc.code)) return false;
+    // Already resolved as "no scanner code physically here" — that's a
+    // real, valid outcome, not an unresolved pallet still waiting on a
+    // scan. Listing it as "pending" would send the inspector right back to
+    // a location where they already confirmed there's nothing to scan.
+    if (locationStatus[loc.code] === 'missing') return false;
+    const expected = EXPECTED_SKUS[loc.code]?.[0];
+    if (!expected) return false;
+    const saved = loc.pallets.find((p) => p.saved);
+    const line = saved?.lines[0];
+    if (!line) return true;
+    return line.sku !== expected.sku || line.qty !== expected.qty || line.condition !== 'Good';
+  });
+  // In-scope locations the inspector already flagged "no scanner code
+  // found" this session — its own list rather than mixed into Pending, so
+  // "Pending Locations" only ever means "still needs a scan".
+  const emptyLocations = rackLocations.filter((loc) => {
+    if (audit.target_sku && !matchesTargetSku(loc.code)) return false;
+    return locationStatus[loc.code] === 'missing';
+  });
 
   const layoutOptions: SheetOption[] = tree.layouts.map((l) => ({ value: l.name, label: l.name }));
   const rackOptions: SheetOption[] = layoutObj.racks.map((r) => ({ value: r.code, label: `Rack ${r.code}` }));
@@ -619,6 +652,18 @@ export function RackViewScreen() {
           ) : null}
         </View>
         <ManualModeToggle value={manualMode} onToggle={handleToggleManualMode} />
+        <Pressable
+          onPress={() => setPendingModalOpen(true)}
+          style={[styles.pendingBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg, marginLeft: 'auto' }]}
+        >
+          <Ionicons name="alert-circle-outline" size={16} color={tokens.rag.amber.strong} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Pending Locations to Scan</Text>
+          {pendingLocations.length + emptyLocations.length ? (
+            <View style={[styles.pendingCountBadge, { backgroundColor: tokens.rag.amber.strong, borderRadius: tokens.radius.xl }]}>
+              <Text style={{ color: '#fff', fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{pendingLocations.length + emptyLocations.length}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
       {manualMode ? (
@@ -1221,6 +1266,191 @@ export function RackViewScreen() {
           updateLineEvidence(idx, { images: [...ensureLineEvidence(scanLines[idx]).images, image] });
         }}
       />
+      <Modal visible={pendingModalOpen} transparent statusBarTranslucent animationType="fade" onRequestClose={() => setPendingModalOpen(false)}>
+        <Pressable style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setPendingModalOpen(false)}>
+          <Pressable
+            style={[styles.pendingModalCard, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.pendingModalHead}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="alert-circle-outline" size={18} color={tokens.rag.amber.strong} />
+                <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                  Pending Locations to Scan
+                </Text>
+              </View>
+              <Pressable onPress={() => setPendingModalOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={20} color={tokens.foreground} />
+              </Pressable>
+            </View>
+
+            <View style={styles.pendingTabRow}>
+              <Pressable
+                onPress={() => setPendingTab('pending')}
+                style={[
+                  styles.pendingTabBtn,
+                  {
+                    backgroundColor: pendingTab === 'pending' ? tokens.primary : tokens.muted,
+                    borderColor: pendingTab === 'pending' ? tokens.primary : tokens.border,
+                    borderRadius: tokens.radius.lg,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: pendingTab === 'pending' ? tokens.primaryForeground : tokens.foreground,
+                    fontWeight: tokens.fontWeight.bold,
+                    fontSize: tokens.text.xs,
+                  }}
+                >
+                  Pending Locations ({pendingLocations.length})
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setPendingTab('empty')}
+                style={[
+                  styles.pendingTabBtn,
+                  {
+                    backgroundColor: pendingTab === 'empty' ? tokens.primary : tokens.muted,
+                    borderColor: pendingTab === 'empty' ? tokens.primary : tokens.border,
+                    borderRadius: tokens.radius.lg,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: pendingTab === 'empty' ? tokens.primaryForeground : tokens.foreground,
+                    fontWeight: tokens.fontWeight.bold,
+                    fontSize: tokens.text.xs,
+                  }}
+                >
+                  Location Found as Empty ({emptyLocations.length})
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.pendingSearchBox, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+              <Ionicons name="search" size={15} color={tokens.mutedForeground} />
+              <TextInput
+                value={pendingSearch}
+                onChangeText={setPendingSearch}
+                placeholder="Search location, pallet, SKU..."
+                placeholderTextColor={tokens.slate400}
+                style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 6 }}
+              />
+            </View>
+
+            {(() => {
+              const q = pendingSearch.trim().toLowerCase();
+              const sourceList = pendingTab === 'pending' ? pendingLocations : emptyLocations;
+              const filtered = sourceList.filter((loc) => {
+                if (!q) return true;
+                const expected = EXPECTED_SKUS[loc.code]?.[0];
+                return [loc.code, palletIdFor(loc, bayCodeForLoc(loc.code)), expected?.sku, expected?.name].join(' ').toLowerCase().includes(q);
+              });
+              // Bay-wise groups, in the rack's actual bay order — cuts the
+              // scroll length down a lot on multi-bay racks, same accordion
+              // pattern as Audit Details' bay breakdown.
+              const byBay = rackObj.bays
+                .map((b) => ({ bay: b, items: filtered.filter((loc) => bayCodeForLoc(loc.code) === b.code) }))
+                .filter((g) => g.items.length);
+
+              return (
+                <>
+                  <View style={[styles.pendingTotalBadge, { backgroundColor: tokens.rag.amber.soft, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.rag.amber.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>
+                      Total : {String(filtered.length).padStart(2, '0')}
+                    </Text>
+                  </View>
+                  <ScrollView style={{ maxHeight: 420 }}>
+                    {byBay.length ? (
+                      byBay.map(({ bay, items }) => {
+                        const open = !closedPendingBays[bay.code];
+                        return (
+                          <View key={bay.code} style={styles.pendingBaySection}>
+                            <Pressable
+                              onPress={() => setClosedPendingBays((prev) => ({ ...prev, [bay.code]: !prev[bay.code] }))}
+                              style={styles.pendingBayHead}
+                            >
+                              <Ionicons name="server-outline" size={18} color="#667085" />
+                              <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Bay {bay.code}</Text>
+                              <View style={[styles.pendingBayBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                                <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>
+                                  {String(items.length).padStart(2, '0')}
+                                </Text>
+                              </View>
+                              <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
+                            </Pressable>
+                            {open ? (
+                              <View style={styles.pendingGrid}>
+                                {items.map((loc) => {
+                                  const expected = EXPECTED_SKUS[loc.code]?.[0];
+                                  const saved = loc.pallets.find((p) => p.saved);
+                                  const line = saved?.lines[0];
+                                  const status =
+                                    pendingTab === 'empty'
+                                      ? { label: 'Empty', rag: tokens.rag.red }
+                                      : !line
+                                        ? { label: 'Not Scanned', rag: tokens.rag.amber }
+                                        : line.sku !== expected?.sku
+                                          ? { label: 'Mismatch', rag: tokens.rag.red }
+                                          : { label: 'Qty/Damage Issue', rag: tokens.rag.amber };
+                                  return (
+                                    <Pressable
+                                      key={loc.code}
+                                      onPress={() => {
+                                        setPendingModalOpen(false);
+                                        setBayFilter(bayCodeForLoc(loc.code));
+                                        selectLocation(loc.code);
+                                        setSkuPanelOpen(true);
+                                      }}
+                                      style={[styles.pendingCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                                    >
+                                      <View style={styles.pendingCardHead}>
+                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+                                          {loc.code}
+                                        </Text>
+                                        <View style={[styles.pendingStatusPill, { backgroundColor: status.rag.soft, borderColor: status.rag.border, borderRadius: tokens.radius.lg }]}>
+                                          <Text style={{ color: status.rag.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{status.label}</Text>
+                                        </View>
+                                      </View>
+                                      <View style={styles.pendingFieldRow}>
+                                        <View style={styles.pendingField}>
+                                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Pallet</Text>
+                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>{palletIdFor(loc)}</Text>
+                                        </View>
+                                        {pendingTab === 'pending' ? (
+                                        <View style={styles.pendingField}>
+                                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Expected SKU</Text>
+                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }} numberOfLines={1}>
+                                            {expected?.sku ?? '—'}
+                                          </Text>
+                                        </View>
+                                        ) : null}
+                                      </View>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <View style={{ alignItems: 'center', gap: 8, paddingVertical: 40 }}>
+                        <Ionicons name="checkmark-circle-outline" size={28} color={tokens.mutedForeground} />
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Nothing pending</Text>
+                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Every in-scope pallet in this rack is matched.</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                </>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {confirm.element}
     </View>
   );
@@ -1424,4 +1654,22 @@ const styles = StyleSheet.create({
   statusPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  pendingBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderWidth: 1 },
+  pendingCountBadge: { minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
+  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  pendingModalCard: { width: '100%', maxWidth: 720, maxHeight: '85%', padding: 20 },
+  pendingModalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  pendingSearchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12, marginBottom: 12 },
+  pendingTotalBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 12 },
+  pendingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 },
+  pendingCard: { flexGrow: 1, flexBasis: 220, borderWidth: 1, padding: 12, gap: 8 },
+  pendingCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  pendingStatusPill: { paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+  pendingFieldRow: { flexDirection: 'row', gap: 16 },
+  pendingField: { gap: 2 },
+  pendingBaySection: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e2e8f0', paddingVertical: 12 },
+  pendingBayHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pendingBayBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  pendingTabRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  pendingTabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 38, borderWidth: 1, paddingHorizontal: 8 },
 });

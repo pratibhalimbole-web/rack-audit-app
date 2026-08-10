@@ -6,15 +6,14 @@ import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useTheme } from '@/theme/ThemeProvider';
 
 // Ports renderTabBar (rack-audit-app.html ~1693-1710): Home / Audit Schedule
-// / Tasks / Progress — "Scan" has been dropped from the bottom bar entirely
-// (Live Scan is reached from within Rack View itself now, not a standalone
-// tab). Progress only shows while an audit is ongoing (source: `if
-// (ongoing) items.push(...)`), and opens as a screen over the current one
-// rather than a persistent tab destination — it always carries the ongoing
+// / Tasks / Scan / Progress, with Progress only shown while an audit is
+// ongoing (source: `if (ongoing) items.push(...)`). Both "Scan" and
+// "Progress" open as a screen over the current one rather than a persistent
+// tab destination — Progress specifically always carries the ongoing
 // audit's id (source: `railTo('progress', {auditId: ongoing.audit_id})`),
-// intercepted via `listeners.tabPress` rather than getting real tab screen
-// content. Same bottom bar on tablet as phone — Progress just reads
-// "Reported Audits" there (source line ~1704).
+// so both are intercepted via `listeners.tabPress` rather than getting real
+// tab screen content. Same bottom bar on tablet as phone — Progress just
+// reads "Reported Audits" there (source line ~1704).
 export default function PhoneTabsLayout() {
   const { tokens } = useTheme();
   const device = useDeviceClass();
@@ -40,13 +39,26 @@ export default function PhoneTabsLayout() {
         tabBarLabelStyle: { fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold },
       }}
     >
-      {NAV_ITEMS.filter((item) => item.key !== 'progress').map((item) => (
+      {NAV_ITEMS.filter((item) => item.key !== 'scan' && item.key !== 'progress').map((item) => (
         <Tabs.Screen
           key={item.key}
           name={item.key}
           options={{ title: item.label, tabBarIcon: ({ color }) => <NavIcon icon={item.icon} color={color} /> }}
         />
       ))}
+      <Tabs.Screen
+        name="scan-tab"
+        options={{
+          title: 'Scan',
+          tabBarIcon: ({ color }) => <NavIcon icon="scan" color={color} />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/scan');
+          },
+        }}
+      />
       <Tabs.Screen
         name="progress"
         options={{

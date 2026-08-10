@@ -13,5 +13,6 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'index', label: 'Home', icon: 'home' },
   { key: 'schedule', label: 'Audit Schedule', icon: 'calendar' },
   { key: 'tasks', label: 'Tasks', icon: 'tasks' },
+  { key: 'scan', label: 'Scan', icon: 'scan' },
   { key: 'progress', label: 'Progress', tabletLabel: 'Reported Audits', icon: 'progress' },
 ];
