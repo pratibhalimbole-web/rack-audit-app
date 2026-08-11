@@ -58,17 +58,17 @@ export const AUDITS: Audit[] = [
     audit_id: 'AUD-0231', audit_name: 'Zone A Full Count', audit_type: 'Full', count_method: 'Blind (Enforced)',
     scope_type: 'Rack', scope_values: ['Rack A-05', 'Rack A-06'],
     team_members: ['Arjun Sharma', 'Meera Kulkarni', 'Priya Singh'],
-    start_date: '2026-06-20', end_date: '2026-07-10', status: 'In Progress',
+    start_date: '2026-06-20', end_date: '2026-07-10', status: 'In Progress', target_sku: 'SKU-1042',
   },
   {
     audit_id: 'AUD-0233', audit_name: 'Spot Check — Layout C & E', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout C', 'Layout E'], team_members: ['Arjun Sharma'],
-    start_date: '2026-07-09', end_date: '2026-07-09', status: 'Scheduled',
+    start_date: '2026-07-09', end_date: '2026-07-09', status: 'Scheduled', target_sku: 'SKU-2218',
   },
   {
     audit_id: 'AUD-0234', audit_name: 'Cycle — Fast Movers, Layout B', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
-    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
   },
   {
     audit_id: 'AUD-0225', audit_name: 'Zone C Damaged Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
@@ -78,7 +78,7 @@ export const AUDITS: Audit[] = [
   {
     audit_id: 'AUD-0219', audit_name: 'Bay Recount — 01', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Bay', scope_values: ['Bay 03'], team_members: ['Arjun Sharma'],
-    start_date: '2026-06-28', end_date: '2026-07-05', status: 'In Progress',
+    start_date: '2026-06-28', end_date: '2026-07-05', status: 'In Progress', target_sku: 'SKU-9011',
   },
   {
     audit_id: 'AUD-0240', audit_name: 'Full Count — Layouts A & B', audit_type: 'Full', count_method: 'Blind (Enforced)',
