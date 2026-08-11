@@ -68,16 +68,13 @@ export function AuditDetailsScreen() {
   const toggleSection = (key: string) => setClosedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const isOpen = (key: string) => !closedSections[key];
 
+  // Same destination on phone and tablet — the Rack View canvas, with its
+  // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
+  // > Start Task. Count Sheet's plain list view is no longer where a bay
+  // chip lands on phone.
   const onPressBay = (bay: FlatBay) => {
     if (isSubmitted) return;
-    if (isTablet) {
-      router.push({ pathname: '/audit/[auditId]/rack/[rackId]', params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code } } as never);
-    } else {
-      router.push({
-        pathname: '/audit/[auditId]/count-sheet',
-        params: { auditId: audit.audit_id, layout: bay.layout, rack: bay.rack, bay: bay.code, loc: bay.openLoc ?? '' },
-      } as never);
-    }
+    router.push({ pathname: '/audit/[auditId]/rack/[rackId]', params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code } } as never);
   };
 
   const onPressStart = () => {

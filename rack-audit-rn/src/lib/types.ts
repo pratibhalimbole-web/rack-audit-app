@@ -80,6 +80,10 @@ export type CountLine = {
   // options offered depend on which Activity Phase is selected.
   activityPhase?: ActivityPhase;
   observation?: string;
+  // Overall read on the physical pallet at this location, answered right
+  // after Selected Location Details and independent of the SKU-level
+  // Quantity/Damage findings below it.
+  palletConditionGood?: boolean;
 };
 
 export type ActivityPhase = 'Installation' | 'Operation & Maintenance' | 'Design Discrepancy';

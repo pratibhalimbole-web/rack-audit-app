@@ -166,6 +166,11 @@ export function RackViewScreen() {
   // the selected location — lets them resolve and move past it without a
   // scan, instead of getting stuck waiting for a code that doesn't exist.
   const [noScannerFound, setNoScannerFound] = useState(false);
+  // Asked right after Selected Location Details, independent of whether the
+  // pallet's been scanned yet — a quick overall read on the physical pallet
+  // at this location, separate from the SKU-level Quantity/Damage findings
+  // below. Answered per-location; carries into whichever line ends up saved.
+  const [palletConditionGood, setPalletConditionGood] = useState<boolean | null>(null);
 
   // Figma-style canvas: pinch to zoom, drag to pan, the toolbar/footer stay
   // put since only this transformed layer moves — not the whole screen.
@@ -412,10 +417,22 @@ export function RackViewScreen() {
       setDamageChecked(false);
       setQtyEditing(false);
       setDamageEditing(false);
+      setPalletConditionGood(null);
       setLocationStatus((prev) => ({ ...prev, [selectedLocObj.code]: 'missing' }));
     } else {
       applyLocationStatus(selectedLocObj.code, scanLines[0] ?? null, expectedSkus[0] ?? null, qtyChecked, damageChecked);
     }
+  };
+
+  // Answerable the moment a location is selected, independent of whether
+  // it's been scanned yet — writes straight into scanLines[0] if a scan is
+  // already on record, so the two stay in sync no matter which happens first.
+  const handleSelectPalletCondition = (good: boolean) => {
+    setPalletConditionGood(good);
+    if (!scanLines[0]) return;
+    const next = scanLines.slice();
+    next[0] = { ...next[0], palletConditionGood: good };
+    setScanLines(next);
   };
 
   // Shared by "Start Audit" (from the canvas) and "Scan Next SKU" (from
@@ -464,6 +481,7 @@ export function RackViewScreen() {
     setDamageEditing(false);
     setExpectedSkus(expected);
     setNoScannerFound(false);
+    setPalletConditionGood(base[0]?.palletConditionGood ?? null);
     applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null, !!base.length, !!base.length);
   };
 
@@ -548,6 +566,9 @@ export function RackViewScreen() {
       qty: 0,
       condition: 'Good',
       source: 'scan',
+      // Carries forward whatever was already answered before this scan —
+      // the pallet condition question doesn't depend on the SKU scan at all.
+      palletConditionGood: palletConditionGood ?? undefined,
     };
     setScanLines([line]);
     setNoScannerFound(false);
@@ -1024,6 +1045,31 @@ export function RackViewScreen() {
               </ScrollView>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
+                <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                  <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Pallet Condition</Text>
+                  </View>
+                  <View style={styles.fieldCardBody}>
+                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>Is the pallet condition at this location good?</Text>
+                    <View style={styles.condGrid}>
+                      {([
+                        { label: 'Good', value: true },
+                        { label: 'Not Good', value: false },
+                      ] as const).map((opt) => {
+                        const selected = palletConditionGood === opt.value;
+                        return (
+                          <Pressable key={opt.label} onPress={() => handleSelectPalletCondition(opt.value)} style={styles.condChip}>
+                            <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                              {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                            </View>
+                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{opt.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+
                 {noScannerFound ? (
                   <View style={[styles.noScannerRow, { backgroundColor: tokens.slate300, borderColor: tokens.mutedForeground, borderRadius: tokens.radius.lg }]}>
                     <Ionicons name="alert-circle" size={20} color={tokens.mutedForeground} />
@@ -1147,11 +1193,8 @@ export function RackViewScreen() {
                           // rather than a single combined subform.
                           <>
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                              <View style={styles.fieldCardHead}>
-                                <View>
-                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Issue 1</Text>
-                                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 1 }}>Quantity</Text>
-                                </View>
+                              <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 1: Quantity</Text>
                                 {qtyChecked ? (
                                   <View
                                     style={[
@@ -1175,58 +1218,58 @@ export function RackViewScreen() {
                                   </View>
                                 ) : null}
                               </View>
-                              {qtyEditing ? (
-                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                                  <TextInput
-                                    value={qtyInputText}
-                                    onChangeText={setQtyInputText}
-                                    placeholder="Quantity you found"
-                                    keyboardType="number-pad"
-                                    placeholderTextColor={tokens.slate400}
-                                    autoFocus
-                                    style={[styles.qtyInput, { flex: 1, color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
-                                  />
-                                  <Pressable onPress={handleConfirmQty} style={[styles.smallPrimaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-                                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                              <View style={styles.fieldCardBody}>
+                                {qtyEditing ? (
+                                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                    <TextInput
+                                      value={qtyInputText}
+                                      onChangeText={setQtyInputText}
+                                      placeholder="Quantity you found"
+                                      keyboardType="number-pad"
+                                      placeholderTextColor={tokens.slate400}
+                                      autoFocus
+                                      style={[styles.qtyInput, { flex: 1, color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
+                                    />
+                                    <Pressable onPress={handleConfirmQty} style={[styles.smallPrimaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                                      <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                    </Pressable>
+                                  </View>
+                                ) : (
+                                  <Pressable
+                                    onPress={() => {
+                                      setQtyInputText(qtyChecked ? String(scannedLine.qty) : '');
+                                      setQtyEditing(true);
+                                    }}
+                                    style={styles.fieldValueRow}
+                                  >
+                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                      Qty found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{qtyChecked ? scannedLine.qty : '-'}</Text>
+                                    </Text>
+                                    <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                      <Ionicons name={qtyChecked ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                    </View>
                                   </Pressable>
-                                </View>
-                              ) : (
-                                <Pressable
-                                  onPress={() => {
-                                    setQtyInputText(qtyChecked ? String(scannedLine.qty) : '');
-                                    setQtyEditing(true);
-                                  }}
-                                  style={{ marginTop: 8 }}
-                                >
-                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
-                                    Qty found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{qtyChecked ? scannedLine.qty : '-'}</Text>
-                                  </Text>
-                                  <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 4 }}>
-                                    {qtyChecked ? 'Tap to edit' : 'Tap to enter quantity you found'}
-                                  </Text>
-                                </Pressable>
-                              )}
-                              {qtyChecked && scannedLine.qty !== expectedSku.qty ? (
-                                <Pressable
-                                  disabled={!!scannedLine.qtyIssueRaised}
-                                  onPress={() => raiseFieldIssue('qty')}
-                                  style={[
-                                    styles.raiseIssueBox,
-                                    {
-                                      marginTop: 8,
-                                      backgroundColor: scannedLine.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                                      borderColor: scannedLine.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
-                                      borderRadius: tokens.radius.lg,
-                                    },
-                                  ]}
-                                >
-                                  <Ionicons name={scannedLine.qtyIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                                  <Text style={{ color: scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
-                                    {scannedLine.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
-                                  </Text>
-                                </Pressable>
-                              ) : null}
-                              <View style={{ marginTop: 10 }}>
+                                )}
+                                {qtyChecked && scannedLine.qty !== expectedSku.qty ? (
+                                  <Pressable
+                                    disabled={!!scannedLine.qtyIssueRaised}
+                                    onPress={() => raiseFieldIssue('qty')}
+                                    style={[
+                                      styles.raiseIssueBox,
+                                      {
+                                        backgroundColor: scannedLine.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                                        borderColor: scannedLine.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
+                                        borderRadius: tokens.radius.lg,
+                                      },
+                                    ]}
+                                  >
+                                    <Ionicons name={scannedLine.qtyIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                                    <Text style={{ color: scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
+                                      {scannedLine.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Evidence</Text>
                                 <EvidenceBlock
                                   evidence={ensureFieldEvidence('qtyEvidence')}
                                   onOpenNote={() => updateFieldEvidence('qtyEvidence', { noteOpen: true })}
@@ -1247,11 +1290,8 @@ export function RackViewScreen() {
                             </View>
 
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                              <View style={styles.fieldCardHead}>
-                                <View>
-                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Issue 2</Text>
-                                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 1 }}>Damage</Text>
-                                </View>
+                              <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 2: Damage</Text>
                                 {damageChecked ? (
                                   <View
                                     style={[
@@ -1275,112 +1315,108 @@ export function RackViewScreen() {
                                   </View>
                                 ) : null}
                               </View>
-                              {damageEditing ? (
-                                <>
-                                  <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
-                                    Activity Phase <Text style={{ color: tokens.rag.red.strong }}>*</Text>
-                                  </Text>
-                                  <View style={styles.condGrid}>
-                                    {ACTIVITY_PHASES.map((phase) => {
-                                      const selected = damagePhaseDraft === phase;
-                                      return (
-                                        <Pressable
-                                          key={phase}
-                                          onPress={() => handleSelectActivityPhase(phase)}
-                                          style={[
-                                            styles.condChip,
-                                            { borderColor: selected ? tokens.primary : tokens.border, backgroundColor: selected ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg },
-                                          ]}
-                                        >
-                                          <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
-                                            {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
-                                          </View>
-                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{phase}</Text>
-                                        </Pressable>
-                                      );
-                                    })}
-                                  </View>
-
-                                  <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
-                                    Observations <Text style={{ color: tokens.rag.red.strong }}>*</Text>
-                                  </Text>
-                                  {damagePhaseDraft ? (
+                              <View style={styles.fieldCardBody}>
+                                {damageEditing ? (
+                                  <>
+                                    <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                      Activity Phase <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                    </Text>
                                     <View style={styles.condGrid}>
-                                      {OBSERVATIONS_BY_PHASE[damagePhaseDraft].map((obs) => {
-                                        const selected = damageObservationDraft === obs;
+                                      {ACTIVITY_PHASES.map((phase) => {
+                                        const selected = damagePhaseDraft === phase;
                                         return (
                                           <Pressable
-                                            key={obs}
-                                            onPress={() => setDamageObservationDraft(obs)}
-                                            style={[
-                                              styles.condChip,
-                                              { borderColor: selected ? tokens.primary : tokens.border, backgroundColor: selected ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg },
-                                            ]}
+                                            key={phase}
+                                            onPress={() => handleSelectActivityPhase(phase)}
+                                            style={styles.condChip}
                                           >
                                             <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
                                               {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
                                             </View>
-                                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{obs}</Text>
+                                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{phase}</Text>
                                           </Pressable>
                                         );
                                       })}
                                     </View>
-                                  ) : (
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Pick an Activity Phase first.</Text>
-                                  )}
 
+                                    <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                      Observations <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                    </Text>
+                                    {damagePhaseDraft ? (
+                                      <View style={styles.condGrid}>
+                                        {OBSERVATIONS_BY_PHASE[damagePhaseDraft].map((obs) => {
+                                          const selected = damageObservationDraft === obs;
+                                          return (
+                                            <Pressable
+                                              key={obs}
+                                              onPress={() => setDamageObservationDraft(obs)}
+                                              style={styles.condChip}
+                                            >
+                                              <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                                {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                              </View>
+                                              <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{obs}</Text>
+                                            </Pressable>
+                                          );
+                                        })}
+                                      </View>
+                                    ) : (
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Pick an Activity Phase first.</Text>
+                                    )}
+
+                                    <Pressable
+                                      disabled={!damagePhaseDraft || !damageObservationDraft}
+                                      onPress={handleConfirmDamage}
+                                      style={[
+                                        styles.smallPrimaryBtn,
+                                        { alignSelf: 'flex-start', backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: damagePhaseDraft && damageObservationDraft ? 1 : 0.5 },
+                                      ]}
+                                    >
+                                      <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                    </Pressable>
+                                  </>
+                                ) : (
                                   <Pressable
-                                    disabled={!damagePhaseDraft || !damageObservationDraft}
-                                    onPress={handleConfirmDamage}
+                                    onPress={() => {
+                                      setDamagePhaseDraft(damageChecked ? (scannedLine.activityPhase ?? null) : null);
+                                      setDamageObservationDraft(damageChecked ? (scannedLine.observation ?? null) : null);
+                                      setDamageEditing(true);
+                                    }}
+                                    style={styles.fieldValueRow}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                        Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{damageChecked ? (scannedLine.observation ?? scannedLine.condition) : '-'}</Text>
+                                      </Text>
+                                      {damageChecked && scannedLine.activityPhase ? (
+                                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{scannedLine.activityPhase}</Text>
+                                      ) : null}
+                                    </View>
+                                    <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                      <Ionicons name={damageChecked ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                    </View>
+                                  </Pressable>
+                                )}
+                                {damageChecked && scannedLine.condition !== 'Good' ? (
+                                  <Pressable
+                                    disabled={!!scannedLine.damageIssueRaised}
+                                    onPress={() => raiseFieldIssue('damage')}
                                     style={[
-                                      styles.smallPrimaryBtn,
-                                      { alignSelf: 'flex-start', marginTop: 10, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: damagePhaseDraft && damageObservationDraft ? 1 : 0.5 },
+                                      styles.raiseIssueBox,
+                                      {
+                                        backgroundColor: scannedLine.damageIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                                        borderColor: scannedLine.damageIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
+                                        borderRadius: tokens.radius.lg,
+                                      },
                                     ]}
                                   >
-                                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                    <Ionicons name={scannedLine.damageIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                                    <Text style={{ color: scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
+                                      {scannedLine.damageIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
+                                    </Text>
                                   </Pressable>
-                                </>
-                              ) : (
-                                <Pressable
-                                  onPress={() => {
-                                    setDamagePhaseDraft(damageChecked ? (scannedLine.activityPhase ?? null) : null);
-                                    setDamageObservationDraft(damageChecked ? (scannedLine.observation ?? null) : null);
-                                    setDamageEditing(true);
-                                  }}
-                                  style={{ marginTop: 8 }}
-                                >
-                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
-                                    Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{damageChecked ? (scannedLine.observation ?? scannedLine.condition) : '-'}</Text>
-                                  </Text>
-                                  {damageChecked && scannedLine.activityPhase ? (
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{scannedLine.activityPhase}</Text>
-                                  ) : null}
-                                  <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 4 }}>
-                                    {damageChecked ? 'Tap to edit' : 'Tap to enter damage you found'}
-                                  </Text>
-                                </Pressable>
-                              )}
-                              {damageChecked && scannedLine.condition !== 'Good' ? (
-                                <Pressable
-                                  disabled={!!scannedLine.damageIssueRaised}
-                                  onPress={() => raiseFieldIssue('damage')}
-                                  style={[
-                                    styles.raiseIssueBox,
-                                    {
-                                      marginTop: 8,
-                                      backgroundColor: scannedLine.damageIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                                      borderColor: scannedLine.damageIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
-                                      borderRadius: tokens.radius.lg,
-                                    },
-                                  ]}
-                                >
-                                  <Ionicons name={scannedLine.damageIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                                  <Text style={{ color: scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
-                                    {scannedLine.damageIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
-                                  </Text>
-                                </Pressable>
-                              ) : null}
-                              <View style={{ marginTop: 10 }}>
+                                ) : null}
+                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Evidence</Text>
                                 <EvidenceBlock
                                   evidence={ensureFieldEvidence('damageEvidence')}
                                   onOpenNote={() => updateFieldEvidence('damageEvidence', { noteOpen: true })}
@@ -1875,16 +1911,23 @@ const styles = StyleSheet.create({
   compareCol: { flex: 1, borderWidth: 1, padding: 12 },
   manualSummaryBox: { borderWidth: 1, padding: 14 },
   noScannerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12 },
-  raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginTop: 4 },
+  raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12 },
   statusPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 },
-  fieldCard: { borderWidth: 1, padding: 14, marginBottom: 10 },
-  fieldCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionLabel: { fontSize: 12, fontWeight: '700', marginBottom: 8, marginTop: 10 },
+  // Full-bleed banded head + its own padded body — same technique as the
+  // Reconciliation Form's own header, escaping fieldCard's border so the
+  // title/status band reads as a distinct strip from the filled-in content
+  // beneath it, instead of everything running together edge to edge.
+  fieldCard: { borderWidth: 1, overflow: 'hidden', marginBottom: 10 },
+  fieldCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
+  fieldCardBody: { padding: 14, gap: 10 },
+  fieldValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editIconBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  sectionLabel: { fontSize: 12, fontWeight: '700' },
   qtyInput: { height: 40, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
   smallPrimaryBtn: { height: 40, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
-  condGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  condChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  condGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  condChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
   radioDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   radioDotFill: { width: 7, height: 7, borderRadius: 3.5 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
