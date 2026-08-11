@@ -73,7 +73,7 @@ export function TasksBoard() {
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>View Tasks on 3D</Text>
         </Pressable>
       </View>
-      <ScrollView horizontal contentContainerStyle={styles.board} showsHorizontalScrollIndicator={false}>
+      <View style={styles.board}>
         {DUE_BUCKETS.map(({ key, color }) => {
           const items = byBucket[key];
           const toneKey = COLUMN_COLOR[color];
@@ -98,7 +98,7 @@ export function TasksBoard() {
             </View>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
   mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, height: 40, paddingHorizontal: 12 },
-  board: { padding: 16, gap: 12 },
-  column: { width: 260 },
+  board: { flex: 1, flexDirection: 'row', padding: 16, gap: 12 },
+  column: { flex: 1 },
   columnHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
   countBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   columnBody: { flex: 1 },

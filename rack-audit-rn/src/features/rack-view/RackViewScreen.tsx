@@ -55,7 +55,7 @@ export function RackViewScreen() {
   const { data: audits } = useAudits();
   const audit = audits?.find((a) => a.audit_id === auditId);
   const { data: tree, isLoading } = useLocationsTree(auditId);
-  const { saveRecord } = useCountSheetMutations(auditId);
+  const { saveRecord, completeLocation } = useCountSheetMutations(auditId);
   const navigation = useNavigation();
 
   // Whether leaving right now would discard something worth keeping, and
@@ -86,10 +86,14 @@ export function RackViewScreen() {
 
   const [layoutName, setLayoutName] = useState(params.layout);
   const [rackCode, setRackCode] = useState(params.rackId);
-  // 'all' keeps every bay's pallets in the picker — the canvas always shows
-  // the whole rack regardless, this only narrows the Pallet dropdown list
-  // (handy once a rack has several bays' worth of pallets to scroll past).
-  const [bayFilter, setBayFilter] = useState<string>('all');
+  // Arriving with a specific bay in the params (a bay chip tap, Resume
+  // Audit, etc.) locks selectability to that one bay — every other bay's
+  // pallets are disabled on the canvas and absent from the Pallet picker —
+  // without forcing a trip back to Audit Details to work a different bay:
+  // picking one from the Bay dropdown re-scopes selectability to it instead.
+  // No `bay` param (e.g. opening the rack generally) leaves everything
+  // selectable, same as before.
+  const [bayFilter, setBayFilter] = useState<string>(params.bay ?? 'all');
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
   const [pendingTab, setPendingTab] = useState<'pending' | 'empty'>('pending');
   const [pendingSearch, setPendingSearch] = useState('');
@@ -289,7 +293,8 @@ export function RackViewScreen() {
   // every pallet in the physical rack becomes selectable/reportable, not
   // just the ones this audit was scoped to.
   const matchesTargetSku = (locCode: string) => !!audit.target_sku && (EXPECTED_SKUS[locCode] ?? []).some((l) => l.sku === audit.target_sku);
-  const isLocSelectable = (locCode: string) => manualMode || !audit.target_sku || matchesTargetSku(locCode);
+  const inBayFilter = (locCode: string) => bayFilter === 'all' || bayCodeForLoc(locCode) === bayFilter;
+  const isLocSelectable = (locCode: string) => manualMode || (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode)));
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before) — this is purely cosmetic and separate from selectability.
@@ -537,7 +542,17 @@ export function RackViewScreen() {
     // otherwise a raised Mismatch issue (and the scan itself) would vanish
     // the moment the inspector moves on, never reaching Reported Audits.
     if (selectedLocObj && scanLines.length) {
-      await saveRecord(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
+      const ref = { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code };
+      await saveRecord(tree, ref, scanLines);
+      // Its expected SKU has now been scanned (Matched, Mismatch, or
+      // Issue — any resolved outcome) — completing it here, rather than
+      // requiring a separate action, is what lets a bay's chip turn green
+      // on Audit Details once every one of its locations is resolved.
+      await completeLocation(tree, ref);
+    } else if (selectedLocObj && noScannerFound) {
+      // "Empty" is also a resolved outcome — nothing to scan, but the
+      // location has been checked, so it counts toward the bay same as one.
+      await completeLocation(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code });
     }
     const locs = scannableLocations;
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
@@ -709,7 +724,9 @@ export function RackViewScreen() {
 
   const handleSaveSkuPanel = async () => {
     if (selectedLocObj && scanLines.length) {
-      await saveRecord(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code }, scanLines);
+      const ref = { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code };
+      await saveRecord(tree, ref, scanLines);
+      await completeLocation(tree, ref);
     }
     setSkuPanelOpen(false);
   };

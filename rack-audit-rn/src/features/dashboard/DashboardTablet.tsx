@@ -86,9 +86,18 @@ export function DashboardTablet() {
                   return;
                 }
                 // Resume Audit skips Audit Details entirely — straight to
-                // the Rack View canvas + form, on whichever bay still has
-                // work left (or the first one, if the tree hasn't loaded
-                // yet and "done" can't be determined).
+                // the Rack View canvas + form, picking up exactly where
+                // the inspector left off (the last-touched location).
+                if (bannerProgress.lastSaved) {
+                  const { lastSaved } = bannerProgress;
+                  router.push({
+                    pathname: '/audit/[auditId]/rack/[rackId]',
+                    params: { auditId: banner.audit_id, rackId: lastSaved.rack, layout: lastSaved.layout, bay: lastSaved.bay, loc: lastSaved.loc.code },
+                  } as never);
+                  return;
+                }
+                // Nothing touched yet — fall back to the first bay with
+                // work left (or the first bay overall).
                 const flatBays = flattenBays(bannerTree);
                 const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
                 if (targetBay) {
@@ -159,6 +168,8 @@ export function DashboardTablet() {
                 <DetailField label="Rack" value={String(bannerProgress.rollup.rackTotal)} />
                 <DetailField label="Total Bays" value={String(bannerProgress.rollup.bayTotal)} />
                 <DetailField label="Pending Bays" value={String(bannerProgress.rollup.bayTotal - bannerProgress.rollup.bayDone)} />
+                <DetailField label="Locations Scanned" value={String(bannerProgress.rollup.locDone)} />
+                <DetailField label="Locations Pending" value={String(bannerProgress.rollup.locTotal - bannerProgress.rollup.locDone)} />
               </View>
             </Card>
           ) : (
@@ -218,7 +229,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 function DetailField({ label, value }: { label: string; value: string }) {
   const { tokens } = useTheme();
   return (
-    <View style={{ width: '50%', marginBottom: 10 }}>
+    <View style={{ width: '25%', marginBottom: 10 }}>
       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{label}</Text>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 2 }}>{value}</Text>
     </View>

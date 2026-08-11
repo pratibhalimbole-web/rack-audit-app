@@ -95,9 +95,17 @@ export function DashboardPhone() {
                     return;
                   }
                   // Resume Audit skips Audit Details entirely — straight to
-                  // the Rack View canvas + form, on whichever bay still has
-                  // work left (or the first one, if the tree hasn't loaded
-                  // yet and "done" can't be determined).
+                  // the Rack View canvas + form, picking up exactly where
+                  // the inspector left off (the last-touched location).
+                  if (lastSaved) {
+                    router.push({
+                      pathname: '/audit/[auditId]/rack/[rackId]',
+                      params: { auditId: ongoing.audit_id, rackId: lastSaved.rack, layout: lastSaved.layout, bay: lastSaved.bay, loc: lastSaved.loc.code },
+                    } as never);
+                    return;
+                  }
+                  // Nothing touched yet — fall back to the first bay with
+                  // work left (or the first bay overall).
                   const flatBays = flattenBays(ongoingTree);
                   const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
                   if (targetBay) {
