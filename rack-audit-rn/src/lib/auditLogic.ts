@@ -79,6 +79,27 @@ export function allLocations(tree: AuditLocationsTree | undefined): LocationEntr
   return out;
 }
 
+// One row per bay, with the location to open by default (its first
+// not-yet-completed location, or its first location if every one's done).
+// Shared by Audit Details' bay pill grid and Dashboard's Resume Audit
+// shortcut, so both land on the exact same "next thing to do" bay.
+export type FlatBay = { layout: string; rack: string; code: string; done: boolean; openLoc: string | null };
+
+export function flattenBays(tree: AuditLocationsTree | undefined): FlatBay[] {
+  const layouts = tree?.layouts ?? [];
+  const out: FlatBay[] = [];
+  layouts.forEach((ly) =>
+    ly.racks.forEach((rack) =>
+      rack.bays.forEach((b) => {
+        const done = b.locations.length > 0 && b.locations.every((l) => l.status === 'Completed');
+        const openLoc = b.locations.find((l) => l.status !== 'Completed') ?? b.locations[0];
+        out.push({ layout: ly.name, rack: rack.code, code: b.code, done, openLoc: openLoc ? openLoc.code : null });
+      }),
+    ),
+  );
+  return out;
+}
+
 export type Rollup = { rackDone: number; rackTotal: number; bayDone: number; bayTotal: number; locDone: number; locTotal: number };
 
 export function rollup(tree: AuditLocationsTree | undefined): Rollup {

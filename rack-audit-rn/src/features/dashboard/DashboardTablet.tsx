@@ -7,8 +7,8 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { Pill } from '@/components/Pill';
 import { AUDIT_TYPE_ICON } from '@/lib/auditTypeIcon';
 import { useAuthStore } from '@/store/useAuthStore';
-import { fmtDate, uiStatus } from '@/lib/auditLogic';
-import { useAuditProgress, useAuditProgressMap } from '@/hooks/useLocationsTree';
+import { flattenBays, fmtDate, uiStatus } from '@/lib/auditLogic';
+import { useAuditProgress, useAuditProgressMap, useLocationsTree } from '@/hooks/useLocationsTree';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCurrentOngoing, useMyAudits } from './hooks';
@@ -27,6 +27,7 @@ export function DashboardTablet() {
   const auditIds = myTasks.map((a) => a.audit_id);
   const { map } = useAuditProgressMap(auditIds);
   const bannerProgress = useAuditProgress(banner?.audit_id);
+  const { data: bannerTree } = useLocationsTree(banner?.audit_id);
 
   const totalAudits = myTasks.length;
   const ongoingCount = myTasks.filter((a) => uiStatus(a) === 'In Progress').length;
@@ -75,7 +76,30 @@ export function DashboardTablet() {
             <BannerField label="Total Locations" value={String(bannerProgress.rollup.locTotal)} />
             <BannerField label="Last Counted" value={bannerProgress.lastSaved ? bannerProgress.lastSaved.loc.code : '—'} />
             <Pressable
-              onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: banner.audit_id } } as never)}
+              onPress={() => {
+                if (!isOngoingBanner) {
+                  router.push({ pathname: '/audit/[auditId]', params: { auditId: banner.audit_id } } as never);
+                  return;
+                }
+                if (isFullyCounted) {
+                  router.push({ pathname: '/audit/[auditId]/summary', params: { auditId: banner.audit_id } } as never);
+                  return;
+                }
+                // Resume Audit skips Audit Details entirely — straight to
+                // the Rack View canvas + form, on whichever bay still has
+                // work left (or the first one, if the tree hasn't loaded
+                // yet and "done" can't be determined).
+                const flatBays = flattenBays(bannerTree);
+                const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
+                if (targetBay) {
+                  router.push({
+                    pathname: '/audit/[auditId]/rack/[rackId]',
+                    params: { auditId: banner.audit_id, rackId: targetBay.rack, layout: targetBay.layout, bay: targetBay.code },
+                  } as never);
+                  return;
+                }
+                router.push({ pathname: '/audit/[auditId]', params: { auditId: banner.audit_id } } as never);
+              }}
               style={[styles.bannerBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
             >
               <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>

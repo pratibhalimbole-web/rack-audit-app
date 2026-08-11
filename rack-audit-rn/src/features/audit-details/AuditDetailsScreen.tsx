@@ -5,30 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
-import { fmtDate, priorityFor, rollup, uiStatus } from '@/lib/auditLogic';
+import { flattenBays, fmtDate, priorityFor, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { useAuthStore } from '@/store/useAuthStore';
-import type { AuditLocationsTree } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
-
-type FlatBay = { layout: string; rack: string; code: string; done: boolean; openLoc: string | null };
-
-function flattenBays(tree: AuditLocationsTree | undefined): FlatBay[] {
-  const layouts = tree?.layouts ?? [];
-  const out: FlatBay[] = [];
-  layouts.forEach((ly) =>
-    ly.racks.forEach((rack) =>
-      rack.bays.forEach((b) => {
-        const done = b.locations.length > 0 && b.locations.every((l) => l.status === 'Completed');
-        const openLoc = b.locations.find((l) => l.status !== 'Completed') ?? b.locations[0];
-        out.push({ layout: ly.name, rack: rack.code, code: b.code, done, openLoc: openLoc ? openLoc.code : null });
-      }),
-    ),
-  );
-  return out;
-}
 
 // Ports renderAuditDetails() (rack-audit-app.html ~2374-2508): schedule
 // card, bay-completion summary + pill grid (accordion once scope spans more
