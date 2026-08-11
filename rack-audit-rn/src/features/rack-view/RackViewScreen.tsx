@@ -16,7 +16,7 @@ import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
 import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, type ExpectedSkuLine } from '@/lib/mockData';
-import { CONDITIONS, type CountLine, type Evidence, type LocationNode } from '@/lib/types';
+import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase, type CountLine, type Evidence, type LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
@@ -102,9 +102,25 @@ export function RackViewScreen() {
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
   const [scanPallet, setScanPallet] = useState<string | null>(null);
   const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [skuScanCount, setSkuScanCount] = useState(0);
   const [scannerOpen, setScannerOpen] = useState<'sku' | null>(null);
+  // Quantity and damage are unknown at scan time — a scan only proves SKU
+  // identity — so each starts unchecked ("-" shown instead of a number)
+  // until the inspector deliberately enters what they actually found.
+  // *Editing is the input row being open right now; *Checked is "a real
+  // value has been entered this session" (or this pallet already had a
+  // saved record when selected), which is what unlocks the Matched/
+  // Mismatch badge and the Raise Issue button for that field.
+  const [qtyChecked, setQtyChecked] = useState(false);
+  const [qtyEditing, setQtyEditing] = useState(false);
+  const [qtyInputText, setQtyInputText] = useState('');
+  const [damageChecked, setDamageChecked] = useState(false);
+  const [damageEditing, setDamageEditing] = useState(false);
+  // Draft selections while the Damage editor is open — Observations is a
+  // second cascading radio group whose options depend on Activity Phase, so
+  // both need to be picked before Confirm can commit either.
+  const [damagePhaseDraft, setDamagePhaseDraft] = useState<ActivityPhase | null>(null);
+  const [damageObservationDraft, setDamageObservationDraft] = useState<string | null>(null);
   // Session-only flags (not persisted) — "Raise Issue" in the detail view
   // just gives the inspector visible confirmation; the underlying condition
   // already makes the line show up in Reported Audits once saved.
@@ -113,7 +129,7 @@ export function RackViewScreen() {
   // pallet's canvas cell, so a flagged location stays visible even after
   // the panel closes or a different pallet gets selected.
   const [flaggedLocs, setFlaggedLocs] = useState<Set<string>>(new Set());
-  const [attachmentTarget, setAttachmentTarget] = useState<number | null>(null);
+  const [attachmentTarget, setAttachmentTarget] = useState<'manual' | 'qty' | 'damage' | null>(null);
   // Manual Mode: for reporting a real-world issue (e.g. a damaged pallet)
   // found anywhere in the physical rack, not just the audit's assigned
   // scope — every pallet becomes selectable and the panel skips scanning
@@ -355,7 +371,19 @@ export function RackViewScreen() {
   // Called from every place the scan/edit state for the open pallet can
   // change, so the canvas behind the panel always reflects what's on
   // screen right now.
-  const applyLocationStatus = (locCode: string, line: CountLine | null, expected: ExpectedSkuLine | null) => {
+  // `qtyChecked`/`damageChecked` are whether the inspector has actually
+  // entered a real value for that field yet — an unchecked field can never
+  // read as "off" (its placeholder value isn't real), only a checked field
+  // that disagrees with what's expected counts toward the amber "issue"
+  // status. Both default true for a prior saved record, which is already
+  // real data the moment it's loaded.
+  const applyLocationStatus = (
+    locCode: string,
+    line: CountLine | null,
+    expected: ExpectedSkuLine | null,
+    qtyChecked = true,
+    damageChecked = true,
+  ) => {
     setLocationStatus((prev) => {
       if (!line) {
         if (!(locCode in prev)) return prev;
@@ -364,7 +392,9 @@ export function RackViewScreen() {
         return next;
       }
       const skuMatches = !!expected && line.sku === expected.sku;
-      const status: 'matched' | 'issue' | 'mismatch' = !skuMatches ? 'mismatch' : line.qty === expected.qty && line.condition === 'Good' ? 'matched' : 'issue';
+      const qtyOff = qtyChecked && line.qty !== expected?.qty;
+      const damageOff = damageChecked && line.condition !== 'Good';
+      const status: 'matched' | 'issue' | 'mismatch' = !skuMatches ? 'mismatch' : qtyOff || damageOff ? 'issue' : 'matched';
       return prev[locCode] === status ? prev : { ...prev, [locCode]: status };
     });
   };
@@ -378,10 +408,13 @@ export function RackViewScreen() {
     if (!selectedLocObj) return;
     if (checked) {
       setScanLines([]);
-      setExpandedIdx(null);
+      setQtyChecked(false);
+      setDamageChecked(false);
+      setQtyEditing(false);
+      setDamageEditing(false);
       setLocationStatus((prev) => ({ ...prev, [selectedLocObj.code]: 'missing' }));
     } else {
-      applyLocationStatus(selectedLocObj.code, scanLines[0] ?? null, expectedSkus[0] ?? null);
+      applyLocationStatus(selectedLocObj.code, scanLines[0] ?? null, expectedSkus[0] ?? null, qtyChecked, damageChecked);
     }
   };
 
@@ -422,14 +455,16 @@ export function RackViewScreen() {
       setIssuesRaised((prev) => new Set(prev).add(base[0].sku));
       setFlaggedLocs((prev) => new Set(prev).add(loc.code));
     }
-    // Always land on the compare view (Expected vs Scanned), never straight
-    // into the edit subform — true for a fresh pallet and equally true when
-    // re-selecting one already resolved this session, so re-tapping a saved
-    // pallet always shows its saved details again instead of nothing.
-    setExpandedIdx(null);
+    // A pallet already saved this audit shows its real qty/damage right
+    // away; a fresh one starts unchecked ("-") until the inspector enters
+    // what they actually found.
+    setQtyChecked(!!base.length);
+    setDamageChecked(!!base.length);
+    setQtyEditing(false);
+    setDamageEditing(false);
     setExpectedSkus(expected);
     setNoScannerFound(false);
-    applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null);
+    applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null, !!base.length, !!base.length);
   };
 
   // Loads whichever pallet is currently selected into the panel — covers
@@ -501,28 +536,26 @@ export function RackViewScreen() {
   // happens next: right SKU opens the qty/condition form, wrong SKU is
   // "Misplaced" with nothing further to fill in.
   const applySkuScan = (pick: { sku: string; name: string; lot: string }) => {
-    const matchesExpected = !!expectedSkus[0] && expectedSkus[0].sku === pick.sku;
     // Scanning only ever confirms SKU identity — quantity and damage are
-    // NOT known from the scan itself, so default them to "assume it's fine"
-    // (expected qty, Good) rather than a fixed qty:1 that would read as a
-    // false Quantity Mismatch the instant the scan resolves. The inspector
-    // only sees a real qty/damage mismatch after they deliberately open
-    // "Raise Issue" and correct these values to what they actually found.
+    // NOT known from the scan itself. These placeholder values never reach
+    // the screen: the compare view shows "-" and the two field cards stay
+    // unchecked until the inspector deliberately enters what they actually
+    // found for each.
     const line: CountLine = {
       sku: pick.sku,
       name: pick.name,
       lot: pick.lot,
-      qty: matchesExpected ? expectedSkus[0].qty : 1,
+      qty: 0,
       condition: 'Good',
       source: 'scan',
     };
     setScanLines([line]);
     setNoScannerFound(false);
-    // Land on the comparison view, not straight into the edit subform — the
-    // inspector reads Expected vs Scanned first and only opens the subform
-    // deliberately, via Raise Issue, if something actually looks off.
-    setExpandedIdx(null);
-    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null);
+    setQtyChecked(false);
+    setDamageChecked(false);
+    setQtyEditing(false);
+    setDamageEditing(false);
+    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null, false, false);
   };
 
   // Manual Mode's scan just identifies what's on the pallet — there's no
@@ -565,14 +598,73 @@ export function RackViewScreen() {
     if (selectedLocObj) setFlaggedLocs((prev) => new Set(prev).add(selectedLocObj.code));
   };
 
-  const updateLineEvidence = (idx: number, patch: Partial<Evidence>) => {
+  const updateManualEvidence = (patch: Partial<Evidence>) => {
+    setManualLine((prev) => ({ ...prev, evidence: { ...ensureLineEvidence(prev), ...patch } }));
+  };
+
+  // Quantity and damage are independent findings on a matched-SKU pallet —
+  // each gets its own evidence, kept on the single scanLines[0] record (this
+  // screen's flow never has more than one line open at a time).
+  const ensureFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence'): Evidence =>
+    scanLines[0]?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
+
+  const updateFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence', patch: Partial<Evidence>) => {
+    if (!scanLines[0]) return;
     const next = scanLines.slice();
-    next[idx] = { ...next[idx], evidence: { ...ensureLineEvidence(next[idx]), ...patch } };
+    next[0] = { ...next[0], [field]: { ...ensureFieldEvidence(field), ...patch } };
     setScanLines(next);
   };
 
-  const updateManualEvidence = (patch: Partial<Evidence>) => {
-    setManualLine((prev) => ({ ...prev, evidence: { ...ensureLineEvidence(prev), ...patch } }));
+  const raiseFieldIssue = (kind: 'qty' | 'damage') => {
+    if (!selectedLocObj || !scanLines[0]) return;
+    const next = scanLines.slice();
+    next[0] = {
+      ...next[0],
+      issueRaised: true,
+      qtyIssueRaised: kind === 'qty' ? true : next[0].qtyIssueRaised,
+      damageIssueRaised: kind === 'damage' ? true : next[0].damageIssueRaised,
+    };
+    setScanLines(next);
+    handleRaiseIssue(next[0].sku);
+  };
+
+  // Commits the quantity the inspector says they actually found — parses the
+  // input, updates the line, marks Quantity as checked (unlocking its
+  // Matched/Mismatched badge), and refreshes the canvas cell color.
+  const handleConfirmQty = () => {
+    if (!scanLines[0] || !selectedLocObj) return;
+    const n = parseInt(qtyInputText, 10);
+    const qty = Number.isNaN(n) ? 0 : Math.max(0, n);
+    const next = scanLines.slice();
+    next[0] = { ...next[0], qty };
+    setScanLines(next);
+    setQtyChecked(true);
+    setQtyEditing(false);
+    applyLocationStatus(selectedLocObj.code, next[0], expectedSkus[0] ?? null, true, damageChecked);
+  };
+
+  // Same as quantity, but damage is chosen from the chip picker rather than
+  // typed — selecting a chip both records the value and confirms it in one
+  // tap, so there's no separate "Confirm" step.
+  // Picking an Activity Phase resets whatever Observation was drafted for
+  // the previous phase — the two options lists don't overlap in general, so
+  // an old selection could otherwise silently carry over as invalid.
+  const handleSelectActivityPhase = (phase: ActivityPhase) => {
+    setDamagePhaseDraft(phase);
+    setDamageObservationDraft(null);
+  };
+
+  // Commits both Activity Phase and Observation together — selecting either
+  // one alone doesn't describe the damage found, so Damage only becomes
+  // "checked" once both are picked and confirmed.
+  const handleConfirmDamage = () => {
+    if (!scanLines[0] || !selectedLocObj || !damagePhaseDraft || !damageObservationDraft) return;
+    const next = scanLines.slice();
+    next[0] = { ...next[0], condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft };
+    setScanLines(next);
+    setDamageChecked(true);
+    setDamageEditing(false);
+    applyLocationStatus(selectedLocObj.code, next[0], expectedSkus[0] ?? null, qtyChecked, true);
   };
 
   // Manual Mode's whole point is reporting a problem, so saving it always
@@ -832,16 +924,16 @@ export function RackViewScreen() {
 
         {skuPanelOpen ? (
           <Card style={styles.skuPanel}>
-            {/* Header carries only the form name — the location/pallet
-                identity is its own precise detail block right below the
-                divider, and scanning happens from the dotted scan target
-                further down, not a header icon. */}
-            <View style={styles.skuPanelHead}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+            {/* Header carries only the form name, banded the same way as
+                the canvas card's "Front View" header — location/pallet
+                identity is its own precise detail block below, and
+                scanning happens from the dotted scan target further down,
+                not a header icon. */}
+            <View style={[styles.skuPanelHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
                 {manualMode ? 'Manual Issue Report' : 'Reconciliation Form'}
               </Text>
             </View>
-            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
             <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginBottom: 8 }}>
               Selected Location Details
@@ -852,6 +944,7 @@ export function RackViewScreen() {
               <DetailRow label="Bay" value={selectedLocObj ? bayCodeForLoc(selectedLocObj.code) : '—'} tokens={tokens} />
               <DetailRow label="Pallet" value={selectedLocObj ? palletIdFor(selectedLocObj) : '—'} tokens={tokens} />
             </View>
+            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
             {manualMode ? (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 10 }}>
@@ -920,7 +1013,7 @@ export function RackViewScreen() {
                           updateManualEvidence({ audio: { ...ev.audio, playing: !ev.audio.playing } });
                         }}
                         onRemoveAudio={() => updateManualEvidence({ audio: null })}
-                        onAddImage={() => setAttachmentTarget(-1)}
+                        onAddImage={() => setAttachmentTarget('manual')}
                         onRemoveImage={(i) => updateManualEvidence({ images: ensureLineEvidence(manualLine).images.filter((_, ii) => ii !== i) })}
                         onAddVideo={() => updateManualEvidence({ videos: [...ensureLineEvidence(manualLine).videos, { durationSec: 20 }] })}
                         onRemoveVideo={(i) => updateManualEvidence({ videos: ensureLineEvidence(manualLine).videos.filter((_, ii) => ii !== i) })}
@@ -928,123 +1021,6 @@ export function RackViewScreen() {
                     }
                   />
                 )}
-              </ScrollView>
-            ) : expandedIdx !== null && scannedLine && skuMatched && expectedSku ? (
-              // The SKU form only appears once the identity check passes —
-              // a misplaced scan (wrong SKU for this pallet) has nothing to
-              // fill in, it's handled by the view below instead. Status here
-              // is only ever Quantity/Condition mismatch or a clean Matched,
-              // since "wrong SKU" can't happen in this branch.
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10 }}>
-                {(() => {
-                  // Primary status is SKU identity only — this branch only
-                  // ever renders once the SKU has already matched, so it's
-                  // always "Matched" here. Quantity/condition are secondary,
-                  // smaller pills layered next to it, not a replacement for it.
-                  const line = scannedLine;
-                  const qtyMismatch = line.qty !== expectedSku.qty;
-                  const conditionFlagged = line.condition !== 'Good';
-                  const raised = issuesRaised.has(line.sku);
-                  return (
-                    <>
-                      <View style={styles.statusPillRow}>
-                        <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.green.soft, borderColor: tokens.rag.green.border, borderRadius: tokens.radius.lg }]}>
-                          <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Matched</Text>
-                        </View>
-                        {qtyMismatch ? (
-                          <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                            <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Quantity Mismatch</Text>
-                          </View>
-                        ) : null}
-                        {conditionFlagged ? (
-                          <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                            <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Damage Mismatch</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      {qtyMismatch || conditionFlagged ? (
-                        <Pressable
-                          disabled={raised}
-                          onPress={() => {
-                            const next = scanLines.slice();
-                            next[expandedIdx] = { ...next[expandedIdx], issueRaised: true };
-                            setScanLines(next);
-                            handleRaiseIssue(line.sku);
-                          }}
-                          style={[
-                            styles.raiseIssueBox,
-                            {
-                              backgroundColor: raised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                              borderColor: raised ? tokens.rag.green.border : tokens.rag.red.border,
-                              borderRadius: tokens.radius.lg,
-                            },
-                          ]}
-                        >
-                          <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                          <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
-                            {raised
-                              ? 'Issue raised for this SKU'
-                              : qtyMismatch
-                                ? `Raise Issue — expected ${expectedSku.qty}, found ${line.qty}`
-                                : `Raise Issue — damage: ${line.condition}`}
-                          </Text>
-                          {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
-                        </Pressable>
-                      ) : null}
-                    </>
-                  );
-                })()}
-                <SkuLineCard
-                  line={scanLines[expandedIdx]}
-                  active
-                  conditionLabel="Damage"
-                  conditionOptions={CONDITIONS.filter((c) => c !== 'Damaged')}
-                  onQtyChange={(qty) => {
-                    const next = scanLines.slice();
-                    next[expandedIdx] = { ...next[expandedIdx], qty };
-                    setScanLines(next);
-                    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next[expandedIdx], expectedSku);
-                  }}
-                  onConditionChange={(condition) => {
-                    const next = scanLines.slice();
-                    next[expandedIdx] = { ...next[expandedIdx], condition };
-                    setScanLines(next);
-                    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next[expandedIdx], expectedSku);
-                  }}
-                  onSave={() => setExpandedIdx(null)}
-                  onDelete={() =>
-                    confirm.ask(`Remove ${scanLines[expandedIdx].sku} from this record?`, () => {
-                      setScanLines(scanLines.filter((_, i) => i !== expandedIdx));
-                      setExpandedIdx(null);
-                      if (selectedLocObj) applyLocationStatus(selectedLocObj.code, null, expectedSku);
-                    })
-                  }
-                  onEdit={() => {}}
-                  evidenceSlot={
-                    <EvidenceBlock
-                      evidence={ensureLineEvidence(scanLines[expandedIdx])}
-                      onOpenNote={() => updateLineEvidence(expandedIdx, { noteOpen: true })}
-                      onChangeNote={(note) => updateLineEvidence(expandedIdx, { note })}
-                      onRecordAudio={() => updateLineEvidence(expandedIdx, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                      onToggleAudioPlay={() => {
-                        const ev = ensureLineEvidence(scanLines[expandedIdx]);
-                        if (!ev.audio) return;
-                        updateLineEvidence(expandedIdx, { audio: { ...ev.audio, playing: !ev.audio.playing } });
-                      }}
-                      onRemoveAudio={() => updateLineEvidence(expandedIdx, { audio: null })}
-                      onAddImage={() => setAttachmentTarget(expandedIdx)}
-                      onRemoveImage={(i) =>
-                        updateLineEvidence(expandedIdx, { images: ensureLineEvidence(scanLines[expandedIdx]).images.filter((_, ii) => ii !== i) })
-                      }
-                      onAddVideo={() =>
-                        updateLineEvidence(expandedIdx, { videos: [...ensureLineEvidence(scanLines[expandedIdx]).videos, { durationSec: 20 }] })
-                      }
-                      onRemoveVideo={(i) =>
-                        updateLineEvidence(expandedIdx, { videos: ensureLineEvidence(scanLines[expandedIdx]).videos.filter((_, ii) => ii !== i) })
-                      }
-                    />
-                  }
-                />
               </ScrollView>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
@@ -1087,9 +1063,8 @@ export function RackViewScreen() {
                     // the SKU itself is right, so they render as smaller
                     // secondary pills alongside "Matched", never in place of it.
                     const primary = misplaced ? { label: 'Mismatch', rag: tokens.rag.red } : { label: 'Matched', rag: tokens.rag.green };
-                    const qtyMismatch = !misplaced && scannedLine.qty !== expectedSku?.qty;
-                    const conditionFlagged = !misplaced && scannedLine.condition !== 'Good';
-                    const hasIssue = misplaced || qtyMismatch || conditionFlagged;
+                    const qtyMismatch = !misplaced && qtyChecked && scannedLine.qty !== expectedSku?.qty;
+                    const conditionFlagged = !misplaced && damageChecked && scannedLine.condition !== 'Good';
                     const raised = issuesRaised.has(scannedLine.sku);
                     return (
                       <>
@@ -1128,7 +1103,7 @@ export function RackViewScreen() {
                                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
                                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
                                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                  Qty {scannedLine.qty} · {scannedLine.condition}
+                                  Qty {qtyChecked ? scannedLine.qty : '-'} · {damageChecked ? scannedLine.condition : '-'}
                                 </Text>
                               </>
                             ) : (
@@ -1164,36 +1139,267 @@ export function RackViewScreen() {
                             {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
                           </Pressable>
                         ) : (
-                          // SKU matched — quantity/damage are still unknown
-                          // right now (the scan didn't capture them), so
-                          // there's nothing to auto-flag. The inspector
-                          // decides for themselves after eyeballing Expected
-                          // vs Scanned, and only enters the real qty/damage
-                          // (and raises an issue if it's actually off) inside
-                          // this subform, opened deliberately.
-                          <Pressable
-                            onPress={() => setExpandedIdx(0)}
-                            style={[
-                              styles.raiseIssueBox,
-                              {
-                                backgroundColor: hasIssue ? tokens.rag.red.soft : tokens.card,
-                                borderColor: hasIssue ? tokens.rag.red.border : tokens.border,
-                                borderRadius: tokens.radius.lg,
-                              },
-                            ]}
-                          >
-                            <Ionicons name={hasIssue ? 'flag' : 'create-outline'} size={18} color={hasIssue ? tokens.rag.red.strong : tokens.mutedForeground} />
-                            <Text
-                              style={{
-                                color: hasIssue ? tokens.rag.red.strong : tokens.foreground,
-                                fontWeight: tokens.fontWeight.bold,
-                                fontSize: tokens.text.sm,
-                                flex: 1,
-                              }}
-                            >
-                              {hasIssue ? 'Quantity/Damage issue found — tap to review' : 'Enter actual quantity & damage found'}
-                            </Text>
-                          </Pressable>
+                          // SKU matched — quantity and damage are two
+                          // independent findings on this pallet (an inspector
+                          // can raise one, the other, both, or neither), so
+                          // each gets its own entry control, its own Matched/
+                          // Mismatched status, and its own Raise Issue button
+                          // rather than a single combined subform.
+                          <>
+                            <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                              <View style={styles.fieldCardHead}>
+                                <View>
+                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Issue 1</Text>
+                                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 1 }}>Quantity</Text>
+                                </View>
+                                {qtyChecked ? (
+                                  <View
+                                    style={[
+                                      styles.editStatusPill,
+                                      {
+                                        backgroundColor: scannedLine.qty === expectedSku.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                        borderColor: scannedLine.qty === expectedSku.qty ? tokens.rag.green.border : tokens.rag.amber.border,
+                                        borderRadius: tokens.radius.lg,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={{
+                                        color: scannedLine.qty === expectedSku.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
+                                        fontWeight: tokens.fontWeight.bold,
+                                        fontSize: tokens.text.xs,
+                                      }}
+                                    >
+                                      {scannedLine.qty === expectedSku.qty ? 'Matched' : 'Mismatched'}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                              {qtyEditing ? (
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                                  <TextInput
+                                    value={qtyInputText}
+                                    onChangeText={setQtyInputText}
+                                    placeholder="Quantity you found"
+                                    keyboardType="number-pad"
+                                    placeholderTextColor={tokens.slate400}
+                                    autoFocus
+                                    style={[styles.qtyInput, { flex: 1, color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
+                                  />
+                                  <Pressable onPress={handleConfirmQty} style={[styles.smallPrimaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                  </Pressable>
+                                </View>
+                              ) : (
+                                <Pressable
+                                  onPress={() => {
+                                    setQtyInputText(qtyChecked ? String(scannedLine.qty) : '');
+                                    setQtyEditing(true);
+                                  }}
+                                  style={{ marginTop: 8 }}
+                                >
+                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                    Qty found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{qtyChecked ? scannedLine.qty : '-'}</Text>
+                                  </Text>
+                                  <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 4 }}>
+                                    {qtyChecked ? 'Tap to edit' : 'Tap to enter quantity you found'}
+                                  </Text>
+                                </Pressable>
+                              )}
+                              {qtyChecked && scannedLine.qty !== expectedSku.qty ? (
+                                <Pressable
+                                  disabled={!!scannedLine.qtyIssueRaised}
+                                  onPress={() => raiseFieldIssue('qty')}
+                                  style={[
+                                    styles.raiseIssueBox,
+                                    {
+                                      marginTop: 8,
+                                      backgroundColor: scannedLine.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                                      borderColor: scannedLine.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
+                                      borderRadius: tokens.radius.lg,
+                                    },
+                                  ]}
+                                >
+                                  <Ionicons name={scannedLine.qtyIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                                  <Text style={{ color: scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
+                                    {scannedLine.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
+                                  </Text>
+                                </Pressable>
+                              ) : null}
+                              <View style={{ marginTop: 10 }}>
+                                <EvidenceBlock
+                                  evidence={ensureFieldEvidence('qtyEvidence')}
+                                  onOpenNote={() => updateFieldEvidence('qtyEvidence', { noteOpen: true })}
+                                  onChangeNote={(note) => updateFieldEvidence('qtyEvidence', { note })}
+                                  onRecordAudio={() => updateFieldEvidence('qtyEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                                  onToggleAudioPlay={() => {
+                                    const ev = ensureFieldEvidence('qtyEvidence');
+                                    if (!ev.audio) return;
+                                    updateFieldEvidence('qtyEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
+                                  }}
+                                  onRemoveAudio={() => updateFieldEvidence('qtyEvidence', { audio: null })}
+                                  onAddImage={() => setAttachmentTarget('qty')}
+                                  onRemoveImage={(i) => updateFieldEvidence('qtyEvidence', { images: ensureFieldEvidence('qtyEvidence').images.filter((_, ii) => ii !== i) })}
+                                  onAddVideo={() => updateFieldEvidence('qtyEvidence', { videos: [...ensureFieldEvidence('qtyEvidence').videos, { durationSec: 20 }] })}
+                                  onRemoveVideo={(i) => updateFieldEvidence('qtyEvidence', { videos: ensureFieldEvidence('qtyEvidence').videos.filter((_, ii) => ii !== i) })}
+                                />
+                              </View>
+                            </View>
+
+                            <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                              <View style={styles.fieldCardHead}>
+                                <View>
+                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Issue 2</Text>
+                                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 1 }}>Damage</Text>
+                                </View>
+                                {damageChecked ? (
+                                  <View
+                                    style={[
+                                      styles.editStatusPill,
+                                      {
+                                        backgroundColor: scannedLine.condition === 'Good' ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                        borderColor: scannedLine.condition === 'Good' ? tokens.rag.green.border : tokens.rag.amber.border,
+                                        borderRadius: tokens.radius.lg,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={{
+                                        color: scannedLine.condition === 'Good' ? tokens.rag.green.strong : tokens.rag.amber.strong,
+                                        fontWeight: tokens.fontWeight.bold,
+                                        fontSize: tokens.text.xs,
+                                      }}
+                                    >
+                                      {scannedLine.condition === 'Good' ? 'Matched' : 'Mismatched'}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                              {damageEditing ? (
+                                <>
+                                  <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                    Activity Phase <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                  </Text>
+                                  <View style={styles.condGrid}>
+                                    {ACTIVITY_PHASES.map((phase) => {
+                                      const selected = damagePhaseDraft === phase;
+                                      return (
+                                        <Pressable
+                                          key={phase}
+                                          onPress={() => handleSelectActivityPhase(phase)}
+                                          style={[
+                                            styles.condChip,
+                                            { borderColor: selected ? tokens.primary : tokens.border, backgroundColor: selected ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg },
+                                          ]}
+                                        >
+                                          <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                            {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                          </View>
+                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{phase}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+
+                                  <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                    Observations <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                  </Text>
+                                  {damagePhaseDraft ? (
+                                    <View style={styles.condGrid}>
+                                      {OBSERVATIONS_BY_PHASE[damagePhaseDraft].map((obs) => {
+                                        const selected = damageObservationDraft === obs;
+                                        return (
+                                          <Pressable
+                                            key={obs}
+                                            onPress={() => setDamageObservationDraft(obs)}
+                                            style={[
+                                              styles.condChip,
+                                              { borderColor: selected ? tokens.primary : tokens.border, backgroundColor: selected ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg },
+                                            ]}
+                                          >
+                                            <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                              {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                            </View>
+                                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{obs}</Text>
+                                          </Pressable>
+                                        );
+                                      })}
+                                    </View>
+                                  ) : (
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Pick an Activity Phase first.</Text>
+                                  )}
+
+                                  <Pressable
+                                    disabled={!damagePhaseDraft || !damageObservationDraft}
+                                    onPress={handleConfirmDamage}
+                                    style={[
+                                      styles.smallPrimaryBtn,
+                                      { alignSelf: 'flex-start', marginTop: 10, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: damagePhaseDraft && damageObservationDraft ? 1 : 0.5 },
+                                    ]}
+                                  >
+                                    <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                  </Pressable>
+                                </>
+                              ) : (
+                                <Pressable
+                                  onPress={() => {
+                                    setDamagePhaseDraft(damageChecked ? (scannedLine.activityPhase ?? null) : null);
+                                    setDamageObservationDraft(damageChecked ? (scannedLine.observation ?? null) : null);
+                                    setDamageEditing(true);
+                                  }}
+                                  style={{ marginTop: 8 }}
+                                >
+                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                    Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{damageChecked ? (scannedLine.observation ?? scannedLine.condition) : '-'}</Text>
+                                  </Text>
+                                  {damageChecked && scannedLine.activityPhase ? (
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{scannedLine.activityPhase}</Text>
+                                  ) : null}
+                                  <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 4 }}>
+                                    {damageChecked ? 'Tap to edit' : 'Tap to enter damage you found'}
+                                  </Text>
+                                </Pressable>
+                              )}
+                              {damageChecked && scannedLine.condition !== 'Good' ? (
+                                <Pressable
+                                  disabled={!!scannedLine.damageIssueRaised}
+                                  onPress={() => raiseFieldIssue('damage')}
+                                  style={[
+                                    styles.raiseIssueBox,
+                                    {
+                                      marginTop: 8,
+                                      backgroundColor: scannedLine.damageIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
+                                      borderColor: scannedLine.damageIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
+                                      borderRadius: tokens.radius.lg,
+                                    },
+                                  ]}
+                                >
+                                  <Ionicons name={scannedLine.damageIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+                                  <Text style={{ color: scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
+                                    {scannedLine.damageIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
+                                  </Text>
+                                </Pressable>
+                              ) : null}
+                              <View style={{ marginTop: 10 }}>
+                                <EvidenceBlock
+                                  evidence={ensureFieldEvidence('damageEvidence')}
+                                  onOpenNote={() => updateFieldEvidence('damageEvidence', { noteOpen: true })}
+                                  onChangeNote={(note) => updateFieldEvidence('damageEvidence', { note })}
+                                  onRecordAudio={() => updateFieldEvidence('damageEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                                  onToggleAudioPlay={() => {
+                                    const ev = ensureFieldEvidence('damageEvidence');
+                                    if (!ev.audio) return;
+                                    updateFieldEvidence('damageEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
+                                  }}
+                                  onRemoveAudio={() => updateFieldEvidence('damageEvidence', { audio: null })}
+                                  onAddImage={() => setAttachmentTarget('damage')}
+                                  onRemoveImage={(i) => updateFieldEvidence('damageEvidence', { images: ensureFieldEvidence('damageEvidence').images.filter((_, ii) => ii !== i) })}
+                                  onAddVideo={() => updateFieldEvidence('damageEvidence', { videos: [...ensureFieldEvidence('damageEvidence').videos, { durationSec: 20 }] })}
+                                  onRemoveVideo={(i) => updateFieldEvidence('damageEvidence', { videos: ensureFieldEvidence('damageEvidence').videos.filter((_, ii) => ii !== i) })}
+                                />
+                              </View>
+                            </View>
+                          </>
                         )}
                       </>
                     );
@@ -1227,17 +1433,6 @@ export function RackViewScreen() {
                   <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
                     {manualRaised && !manualReviewExpanded ? 'Issue Raised ✓' : 'Raise Issue'}
                   </Text>
-                </Pressable>
-              </View>
-            ) : expandedIdx !== null ? (
-              // Editing a matched line's qty/condition — Back returns to the
-              // main view without advancing, Save commits just that edit.
-              <View style={[styles.skuPanelFooter, { borderTopColor: tokens.border }]}>
-                <Pressable onPress={() => setExpandedIdx(null)} style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Back</Text>
-                </Pressable>
-                <Pressable onPress={handleSaveSkuPanel} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
                 </Pressable>
               </View>
             ) : (
@@ -1284,12 +1479,12 @@ export function RackViewScreen() {
         onClose={() => setAttachmentTarget(null)}
         onSave={(image) => {
           if (attachmentTarget === null) return;
-          if (attachmentTarget === -1) {
+          if (attachmentTarget === 'manual') {
             updateManualEvidence({ images: [...ensureLineEvidence(manualLine).images, image] });
             return;
           }
-          const idx = attachmentTarget;
-          updateLineEvidence(idx, { images: [...ensureLineEvidence(scanLines[idx]).images, image] });
+          const field = attachmentTarget === 'qty' ? 'qtyEvidence' : 'damageEvidence';
+          updateFieldEvidence(field, { images: [...ensureFieldEvidence(field).images, image] });
         }}
       />
       <Modal visible={pendingModalOpen} transparent statusBarTranslucent animationType="fade" onRequestClose={() => setPendingModalOpen(false)}>
@@ -1667,9 +1862,12 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
   footerBtn: { flex: 0, paddingHorizontal: 18 },
   skuPanel: { flex: 1 },
-  skuPanelHead: { marginBottom: 12 },
-  divider: { height: StyleSheet.hairlineWidth, marginBottom: 14 },
+  // Full-bleed banded header, matching the canvas card's "Front View" head
+  // row — negative margins escape the Card's own 16px padding just for
+  // this row, rather than de-padding the whole panel.
+  skuPanelHead: { marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   locDetailsBox: { gap: 8, marginBottom: 16 },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
   detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
   scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
@@ -1680,6 +1878,15 @@ const styles = StyleSheet.create({
   raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12, marginTop: 4 },
   statusPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 },
+  fieldCard: { borderWidth: 1, padding: 14, marginBottom: 10 },
+  fieldCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionLabel: { fontSize: 12, fontWeight: '700', marginBottom: 8, marginTop: 10 },
+  qtyInput: { height: 40, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
+  smallPrimaryBtn: { height: 40, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  condGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  condChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  radioDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  radioDotFill: { width: 7, height: 7, borderRadius: 3.5 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   pendingBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderWidth: 1 },
   pendingCountBadge: { minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },

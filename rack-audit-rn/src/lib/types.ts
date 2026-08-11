@@ -65,6 +65,33 @@ export type CountLine = {
   // downstream views distinguish an out-of-scope report from a normal
   // in-scope one, which is otherwise structurally identical.
   source?: 'scan' | 'manual';
+  // Quantity and damage are independently-entered, independently-raisable
+  // findings on a matched-SKU pallet (an inspector can find a quantity
+  // problem, a damage problem, both, or neither) — each gets its own
+  // evidence and its own raised flag rather than sharing the line's single
+  // `evidence`/`issueRaised`, which stay reserved for the SKU-identity
+  // level (Mismatch) and Manual Mode reports.
+  qtyEvidence?: Evidence;
+  damageEvidence?: Evidence;
+  qtyIssueRaised?: boolean;
+  damageIssueRaised?: boolean;
+  // Damage's own cascading detail: which phase of the pallet's lifecycle the
+  // damage relates to, and what was actually observed — the Observation
+  // options offered depend on which Activity Phase is selected.
+  activityPhase?: ActivityPhase;
+  observation?: string;
+};
+
+export type ActivityPhase = 'Installation' | 'Operation & Maintenance' | 'Design Discrepancy';
+
+export const ACTIVITY_PHASES: ActivityPhase[] = ['Installation', 'Operation & Maintenance', 'Design Discrepancy'];
+
+// Same 5 observations for every phase for now — swap in real per-phase lists
+// once they're defined.
+export const OBSERVATIONS_BY_PHASE: Record<ActivityPhase, string[]> = {
+  Installation: ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+  'Operation & Maintenance': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+  'Design Discrepancy': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
 };
 
 export type Pallet = {
