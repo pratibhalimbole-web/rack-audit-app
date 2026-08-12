@@ -13,6 +13,14 @@ function zoneLabel(zone: string): string {
   return zone.replace('Layout', 'Zone');
 }
 
+// A real scan is timestamped the moment the device's camera fires it —
+// same as any handheld scanner or POS terminal — so this is just the
+// device clock at scan time, not a simulated value.
+function formatScanTime(ts: number): string {
+  const d = new Date(ts);
+  return `${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} · ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 // Quick Scan — an inspector scans a SKU wherever it's actually found, on the
 // open floor or inside a rack, and the app checks it against the WMS's
 // expected zone for that SKU (SKU_ZONE_EXPECTATIONS). A rack find already
@@ -34,6 +42,8 @@ type ScannedSku = {
   needsPin: boolean;
   pinnedZone?: string;
   issueRaised?: boolean;
+  scannedAt: number; // device clock at the moment the camera scan fired
+  pinnedAt?: number; // device clock at the moment the map pin was confirmed
 };
 
 export function QuickScanScreen() {
@@ -65,6 +75,7 @@ export function QuickScanScreen() {
         expectedZone,
         matched: inRack ? (expectedZone && code.zone ? expectedZone === code.zone : null) : null,
         needsPin: !inRack,
+        scannedAt: Date.now(),
       },
       ...prev,
     ]);
@@ -95,7 +106,7 @@ export function QuickScanScreen() {
       prev.map((it) => {
         if (it.id !== mapTargetId) return it;
         const matched = it.expectedZone ? it.expectedZone === zone : null;
-        return { ...it, scannedZone: zone, pinnedZone: zone, matched, needsPin: false, issueRaised: matched === false };
+        return { ...it, scannedZone: zone, pinnedZone: zone, matched, needsPin: false, issueRaised: matched === false, pinnedAt: Date.now() };
       }),
     );
     setMapTargetId(null);
@@ -188,19 +199,22 @@ function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }
         </View>
       </View>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{item.sku}</Text>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginBottom: 8 }}>{item.name}</Text>
-
-      {hasExpectation ? <KvRow label="Expected Zone" value={zoneLabel(item.expectedZone as string)} last={item.needsPin && !inRack} /> : null}
-      {/* Scanned Zone stays hidden for a floor find until it's pinned — the
-          inspector determines it, the card doesn't hand it to them. */}
-      {item.scannedZone ? <KvRow label="Scanned Zone" value={zoneLabel(item.scannedZone)} last={!inRack} /> : null}
-      {inRack ? (
-        <>
-          {item.rack ? <KvRow label="Rack" value={item.rack} /> : null}
-          {item.bay ? <KvRow label="Bay" value={item.bay} /> : null}
-          {item.loc ? <KvRow label="Storage Location" value={item.loc} last /> : null}
-        </>
-      ) : null}
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginBottom: 4 }}>{item.name}</Text>
+      <View style={styles.fieldGrid}>
+        <Field label="Scanned" value={formatScanTime(item.scannedAt)} />
+        {item.pinnedAt ? <Field label="Pinned" value={formatScanTime(item.pinnedAt)} /> : null}
+        {hasExpectation ? <Field label="Expected Zone" value={zoneLabel(item.expectedZone as string)} /> : null}
+        {/* Scanned Zone stays hidden for a floor find until it's pinned —
+            the inspector determines it, the card doesn't hand it to them. */}
+        {item.scannedZone ? <Field label="Scanned Zone" value={zoneLabel(item.scannedZone)} /> : null}
+        {inRack ? (
+          <>
+            {item.rack ? <Field label="Rack" value={item.rack} /> : null}
+            {item.bay ? <Field label="Bay" value={item.bay} /> : null}
+            {item.loc ? <Field label="Storage Location" value={item.loc} full /> : null}
+          </>
+        ) : null}
+      </View>
 
       {item.needsPin ? (
         <Pressable onPress={onPin} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg, marginTop: 10 }]}>
@@ -220,12 +234,14 @@ function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }
   );
 }
 
-function KvRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
   const { tokens } = useTheme();
   return (
-    <View style={[styles.kvRow, last ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.border }]}>
-      <Text style={{ color: tokens.mutedForeground, fontSize: 11 }}>{label}</Text>
-      <Text style={{ color: tokens.foreground, fontWeight: '600', fontSize: 13 }}>{value}</Text>
+    <View style={full ? styles.fieldFull : styles.field}>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 2 }}>{label}</Text>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }} numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -238,7 +254,9 @@ const styles = StyleSheet.create({
   sectionTitleRow: { paddingBottom: 12, marginBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   sectionHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12, marginBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   countBadge: { paddingHorizontal: 8, paddingVertical: 2, minWidth: 22, alignItems: 'center' },
-  kvRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  fieldGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 2 },
+  field: { width: '50%', marginBottom: 8, paddingRight: 8 },
+  fieldFull: { width: '100%', marginBottom: 8 },
   outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderWidth: 1 },
   banner: { borderWidth: 1, borderRadius: 10, padding: 12 },
   scanBlock: { alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderStyle: 'dashed', padding: 20 },
