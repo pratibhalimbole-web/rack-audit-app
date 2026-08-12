@@ -167,7 +167,29 @@ export type QrPayload = {
   loc: string;
 };
 
-export type QuickScanEntry =
-  | { kind: 'location'; code: QrPayload }
-  | { kind: 'pallet'; code: string }
-  | { kind: 'sku'; code: { sku: string; name: string; lot: string } };
+// Quick Scan's single scan point: an inspector scans a SKU wherever it's
+// actually found — on the open floor (rack/bay/loc absent), or inside a rack
+// (rack/bay/loc present, alongside the zone it's in — already unambiguous,
+// so it's shown immediately). A floor find's `zone` is deliberately NOT
+// trusted/shown up front: the inspector must pin it on the warehouse map
+// (Quick Scan's WarehouseMapModal) before the app reveals a match/mismatch,
+// so the check reflects what they actually verified rather than the QR's
+// own claim. Zones reuse the same Layout names already used to group racks
+// (Layout A/B/C…) rather than a separate warehouse hierarchy.
+export type SkuScanCode = {
+  sku: string;
+  zone?: string;
+  rack?: string;
+  bay?: string;
+  loc?: string;
+};
+
+// What the WMS says a SKU's zone SHOULD be — the SKU-keyed counterpart to
+// MasterSlot (which is keyed by location instead). Quick Scan compares a
+// scan's actual zone against this regardless of whether the SKU turned up
+// on the floor or in a rack.
+export type SkuZoneExpectation = {
+  sku: string;
+  name: string;
+  expectedZone: string;
+};

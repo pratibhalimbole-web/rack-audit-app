@@ -1,281 +1,250 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
-import { Pill } from '@/components/Pill';
-import { mine, uiStatus } from '@/lib/auditLogic';
-import { useDeviceClass } from '@/hooks/useDeviceClass';
-import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { INVENTORY_POOL, QUICK_SCAN_POOL } from '@/lib/mockData';
-import type { QrPayload, QuickScanEntry } from '@/lib/types';
+import { WarehouseMapModal } from '@/components/WarehouseMapModal';
+import { INVENTORY_POOL, SKU_ZONE_EXPECTATIONS } from '@/lib/mockData';
+import type { SkuScanCode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useAudits } from '../dashboard/hooks';
 
-// Ports renderQuickScan() (rack-audit-app.html ~3926-3989) — the global
-// "Scan" tab. A real camera scan can't know the code's location scope in
-// advance, so a matched location is checked against every one of the
-// inspector's non-completed assigned audits (In Progress ones preferred),
-// same as findAuditForScan(). Non-location codes (pallet/SKU) only make
-// sense inside an already-open count sheet, so they're rejected here with a
-// shortcut back to wherever counting was last in progress, if anywhere.
-function openAuditLocation(isTablet: boolean, loc: { auditId: string; layout: string; rack: string; bay: string; loc: string }) {
-  if (isTablet) {
-    router.push({
-      pathname: '/audit/[auditId]/rack/[rackId]',
-      params: { auditId: loc.auditId, rackId: loc.rack, layout: loc.layout, bay: loc.bay, loc: loc.loc },
-    } as never);
-  } else {
-    router.push({
-      pathname: '/audit/[auditId]/count-sheet',
-      params: { auditId: loc.auditId, layout: loc.layout, rack: loc.rack, bay: loc.bay, loc: loc.loc },
-    } as never);
-  }
+function zoneLabel(zone: string): string {
+  return zone.replace('Layout', 'Zone');
 }
+
+// Quick Scan — an inspector scans a SKU wherever it's actually found, on the
+// open floor or inside a rack, and the app checks it against the WMS's
+// expected zone for that SKU (SKU_ZONE_EXPECTATIONS). A rack find already
+// carries unambiguous evidence (rack/bay/loc), so its zone and match state
+// show immediately. A floor find's zone is NOT shown up front — the
+// inspector must tap "Pin Exact Location" and mark it on the warehouse map
+// themselves; only once pinned does the card reveal the scanned zone and
+// whether it's a match (no issue) or a mismatch (issue raised).
+type ScannedSku = {
+  id: string;
+  sku: string;
+  name: string;
+  scannedZone?: string; // known immediately for a rack find; set only after pinning for a floor find
+  rack?: string;
+  bay?: string;
+  loc?: string;
+  expectedZone: string | null;
+  matched: boolean | null; // null until determined — no WMS expectation, or a floor find awaiting its pin
+  needsPin: boolean;
+  pinnedZone?: string;
+  issueRaised?: boolean;
+};
 
 export function QuickScanScreen() {
   const { tokens } = useTheme();
-  const device = useDeviceClass();
-  const isTablet = device === 'tablet';
-  const { data: audits = [] } = useAudits();
-  const [scanCount, setScanCount] = useState(0);
-  const [code, setCode] = useState<QrPayload | null>(null);
-  const [matchedAuditId, setMatchedAuditId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [wrongKind, setWrongKind] = useState<'pallet' | 'sku' | null>(null);
-  const [wrongLabel, setWrongLabel] = useState<string | null>(null);
+  const [items, setItems] = useState<ScannedSku[]>([]);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [mapTargetId, setMapTargetId] = useState<string | null>(null);
+  const idRef = useRef(0);
+  const nextId = () => `s${idRef.current++}`;
 
-  const candidates = useMemo(
-    () => mine(audits).filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)),
-    [audits],
-  );
-  const { map } = useAuditProgressMap(candidates.map((a) => a.audit_id));
-  const ongoing = candidates.find((a) => a.status === 'In Progress');
-  const ongoingLastSaved = ongoing ? map[ongoing.audit_id]?.lastSaved : null;
-
-  const matched = matchedAuditId ? audits.find((a) => a.audit_id === matchedAuditId) : null;
-
-  const findAuditForScan = (qrCode: QrPayload): string | null => {
-    const inProgress = candidates.filter((a) => a.status === 'In Progress');
-    const rest = candidates.filter((a) => a.status !== 'In Progress');
-    for (const list of [inProgress, rest]) {
-      const hit = list.find((a) =>
-        map[a.audit_id]?.allLocations.some((x) => x.layout === qrCode.layout && x.rack === qrCode.rack && x.bay === qrCode.bay && x.loc.code === qrCode.loc),
-      );
-      if (hit) return hit.audit_id;
-    }
-    return null;
+  const processSkuCode = (code: SkuScanCode) => {
+    const expectation = SKU_ZONE_EXPECTATIONS.find((e) => e.sku === code.sku);
+    const inv = INVENTORY_POOL.find((p) => p.sku === code.sku);
+    const name = expectation?.name ?? inv?.name ?? code.sku;
+    const expectedZone = expectation?.expectedZone ?? null;
+    const inRack = !!(code.rack || code.bay || code.loc);
+    setItems((prev) => [
+      {
+        id: nextId(),
+        sku: code.sku,
+        name,
+        // A rack find's location is already unambiguous evidence, so reveal
+        // it immediately; a floor find withholds it until the inspector
+        // pins it themselves.
+        scannedZone: inRack ? code.zone : undefined,
+        rack: code.rack,
+        bay: code.bay,
+        loc: code.loc,
+        expectedZone,
+        matched: inRack ? (expectedZone && code.zone ? expectedZone === code.zone : null) : null,
+        needsPin: !inRack,
+      },
+      ...prev,
+    ]);
   };
 
-  const processLocationCode = (qrCode: QrPayload) => {
-    setWrongKind(null);
-    setWrongLabel(null);
-    const auditId = findAuditForScan(qrCode);
-    if (auditId) {
-      setCode(qrCode);
-      setError(null);
-      setMatchedAuditId(auditId);
-    } else {
-      setCode(null);
-      setMatchedAuditId(null);
-      setError(`No assigned audit covers ${qrCode.layout} · Rack ${qrCode.rack} · Bay ${qrCode.bay}. It may be outside your scope.`);
-    }
-  };
-
-  const processWrongKind = (kind: 'pallet' | 'sku', label: string) => {
-    setCode(null);
-    setMatchedAuditId(null);
-    setError(null);
-    setWrongKind(kind);
-    setWrongLabel(label);
-  };
-
-  // Fixture-cycle fallback ("Use test scan instead") — kept available for
-  // demoing without a printed QR code, same convention as every other real
-  // camera scan point in this app (Rack View's pallet/batch scans, Count
-  // Sheet's location/SKU scans).
-  const handleSimulatedScan = () => {
-    const item: QuickScanEntry = QUICK_SCAN_POOL[scanCount % QUICK_SCAN_POOL.length];
-    setScanCount((c) => c + 1);
-    if (item.kind !== 'location') {
-      processWrongKind(item.kind, item.kind === 'pallet' ? item.code : `${item.code.sku} · ${item.code.name}`);
-    } else {
-      processLocationCode(item.code);
-    }
-  };
-
-  // Real camera scan — storage-location QR codes encode JSON
-  // {layout,rack,bay,loc} (same shape Count Sheet's location scan expects);
-  // pallet/SKU QR codes are plain text ("P-..." / "SKU-...").
+  // Real camera scan — a SKU's QR encodes JSON {sku} (plus zone) when found
+  // on the open floor, or {sku,zone,rack,bay,loc} when found inside a rack.
   const handleRealScanned = (data: string) => {
     setScannerOpen(false);
-    const trimmed = data.trim();
-    let parsed: QrPayload | null = null;
+    let parsed: Partial<SkuScanCode> | null = null;
     try {
-      parsed = JSON.parse(trimmed);
+      parsed = JSON.parse(data.trim());
     } catch {
       parsed = null;
     }
-    if (parsed && parsed.layout && parsed.rack && parsed.bay && parsed.loc) {
-      processLocationCode(parsed);
-      return;
-    }
-    if (trimmed.startsWith('P-')) {
-      processWrongKind('pallet', trimmed);
-      return;
-    }
-    const inv = INVENTORY_POOL.find((p) => p.sku === trimmed);
-    processWrongKind('sku', inv ? `${inv.sku} · ${inv.name}` : trimmed);
+    if (!parsed || !parsed.sku) return;
+    processSkuCode(parsed as SkuScanCode);
   };
 
-  let body: React.ReactNode;
-  if (code && matched) {
-    const uis = uiStatus(matched);
-    body = (
-      <View style={{ gap: 14 }}>
-        <Card style={{ borderColor: tokens.rag.green.border, backgroundColor: tokens.rag.green.soft }}>
-          <View style={styles.cardTitleRow}>
-            <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Scanned Location</Text>
-            <Ionicons name="checkmark-circle" size={20} color={tokens.rag.green.strong} />
-          </View>
-          <KvRow label="Layout" value={code.layout} />
-          <KvRow label="Rack" value={code.rack} />
-          <KvRow label="Bay" value={code.bay} />
-          <KvRow label="Storage Location" value={code.loc} last />
-        </Card>
-        <Card>
-          <View style={styles.cardTitleRow}>
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Matched Audit</Text>
-            <Pill label={uis} tone={uis} />
-          </View>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{matched.audit_name}</Text>
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{matched.audit_id}</Text>
-        </Card>
-        <Pressable
-          onPress={() => openAuditLocation(isTablet, { auditId: matched.audit_id, layout: code.layout, rack: code.rack, bay: code.bay, loc: code.loc })}
-          style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
-        >
-          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-            {isTablet ? 'Open Rack View' : 'Open Count Sheet'}
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
-        </Pressable>
-        <Pressable onPress={() => setScannerOpen(true)} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="scan-outline" size={16} color={tokens.foreground} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Scan Another Location</Text>
-        </Pressable>
-      </View>
+  const mapTarget = mapTargetId ? items.find((it) => it.id === mapTargetId) : null;
+
+  // A pin only ever applies to a floor find awaiting its zone — the
+  // inspector's tap is the ground truth, compared straight against the
+  // WMS's expected zone to decide match (no issue) vs mismatch (issue
+  // raised), rather than trusting whatever the QR itself claimed.
+  const handleConfirmPin = (zone: string) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== mapTargetId) return it;
+        const matched = it.expectedZone ? it.expectedZone === zone : null;
+        return { ...it, scannedZone: zone, pinnedZone: zone, matched, needsPin: false, issueRaised: matched === false };
+      }),
     );
-  } else if (wrongKind) {
-    body = (
-      <View style={{ gap: 14 }}>
-        <Card style={{ borderColor: tokens.rag.amber.border, backgroundColor: tokens.rag.amber.soft }}>
-          <View style={styles.cardTitleRow}>
-            <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Wrong Code Type</Text>
-            <Ionicons name="close-circle" size={20} color={tokens.rag.amber.strong} />
-          </View>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base, marginBottom: 4 }}>
-            This is a {wrongKind === 'pallet' ? 'Pallet' : 'SKU'} code, not a storage location.
-          </Text>
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{wrongLabel}</Text>
-        </Card>
-        <View style={[styles.banner, { backgroundColor: tokens.accentBlue.soft, borderColor: tokens.accentBlue.border }]}>
-          <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.sm }}>
-            Pallet and SKU codes only make sense inside an already-open location's count sheet. Scan the storage location QR first.
-          </Text>
-        </View>
-        {ongoing && ongoingLastSaved ? (
-          <Pressable
-            onPress={() =>
-              openAuditLocation(isTablet, {
-                auditId: ongoing.audit_id,
-                layout: ongoingLastSaved.layout,
-                rack: ongoingLastSaved.rack,
-                bay: ongoingLastSaved.bay,
-                loc: ongoingLastSaved.loc.code,
-              })
-            }
-            style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
-          >
-            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-              Continue at {ongoingLastSaved.loc.code}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={tokens.primaryForeground} />
-          </Pressable>
-        ) : null}
-        <Pressable onPress={() => setScannerOpen(true)} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="scan-outline" size={16} color={tokens.foreground} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Scan Again</Text>
-        </Pressable>
-      </View>
-    );
-  } else {
-    body = (
-      <View style={styles.centeredEmpty}>
-        <View style={[styles.scanBlock, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-          <View style={[styles.glyphCircle, { backgroundColor: tokens.muted }]}>
-            <Ionicons name="camera-outline" size={26} color="#667085" />
-          </View>
-          <Pressable onPress={() => setScannerOpen(true)} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Location QR</Text>
-          </Pressable>
-        </View>
-        <View
-          style={[
-            styles.banner,
-            { marginTop: 14 },
-            error ? { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border } : { backgroundColor: tokens.accentBlue.soft, borderColor: tokens.accentBlue.border },
-          ]}
-        >
-          <Text style={{ color: error ? tokens.rag.amber.strong : tokens.accentBlue.strong, fontSize: tokens.text.sm }}>
-            {error ?? 'Scan any storage location QR to jump straight to its count sheet — checked against all of your assigned audits.'}
-          </Text>
-        </View>
-      </View>
-    );
-  }
+    setMapTargetId(null);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Quick Scan" sub="Jump to any assigned location" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
-      <ScrollView contentContainerStyle={styles.body}>{body}</ScrollView>
+      <AppHeader title="Quick Scan" sub="Check any SKU against its expected zone" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
+      <View style={styles.splitRow}>
+        <View style={styles.paneCol}>
+          <Card style={{ flex: 1 }}>
+            <View style={[styles.sectionHeadRow, { borderBottomColor: tokens.border }]}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Scanned SKUs</Text>
+              {items.length ? (
+                <View style={[styles.countBadge, { backgroundColor: tokens.rag.green.soft, borderRadius: tokens.radius.sm }]}>
+                  <Text style={{ color: tokens.rag.green.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{items.length}</Text>
+                </View>
+              ) : null}
+            </View>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.paneListContent}>
+              {items.length ? (
+                items.map((item) => <ScannedSkuCard key={item.id} item={item} onPin={() => setMapTargetId(item.id)} />)
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="scan-outline" size={26} color="#667085" />
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center' }}>Scanned SKUs will appear here.</Text>
+                </View>
+              )}
+            </ScrollView>
+          </Card>
+        </View>
+
+        <View style={styles.paneCol}>
+          <Card style={{ flex: 1 }}>
+            <View style={[styles.sectionTitleRow, { borderBottomColor: tokens.border }]}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Scan</Text>
+            </View>
+            <View style={[styles.scanBlock, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+              <View style={[styles.glyphCircle, { backgroundColor: tokens.muted }]}>
+                <Ionicons name="camera-outline" size={22} color="#667085" />
+              </View>
+              <Pressable onPress={() => setScannerOpen(true)} style={[styles.primarySmallBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan SKU</Text>
+              </Pressable>
+            </View>
+            <View style={[styles.banner, { marginTop: 10, backgroundColor: tokens.accentBlue.soft, borderColor: tokens.accentBlue.border }]}>
+              <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.sm }}>
+                Scan a SKU wherever it's found — on the open floor or inside a rack — to check it against its expected zone.
+              </Text>
+            </View>
+          </Card>
+        </View>
+      </View>
       <BarcodeScannerModal
         visible={scannerOpen}
-        title="Scan Location QR"
-        hint="Point at a storage location QR code"
+        title="Scan SKU"
+        hint="Point at a SKU's zone or rack-location QR code"
         onScanned={handleRealScanned}
-        onUseSimulated={() => {
-          setScannerOpen(false);
-          handleSimulatedScan();
-        }}
         onClose={() => setScannerOpen(false)}
       />
+      <WarehouseMapModal
+        visible={!!mapTarget}
+        skuLabel={mapTarget ? `${mapTarget.sku} · ${mapTarget.name}` : ''}
+        expectedZone={mapTarget?.expectedZone ?? ''}
+        onConfirm={handleConfirmPin}
+        onClose={() => setMapTargetId(null)}
+      />
     </View>
+  );
+}
+
+function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }) {
+  const { tokens } = useTheme();
+  const hasExpectation = item.expectedZone !== null;
+  const resolved = item.matched !== null;
+  const tone = !resolved ? tokens.accentBlue : item.matched ? tokens.rag.green : tokens.rag.amber;
+  const inRack = !!(item.rack || item.bay || item.loc);
+
+  return (
+    <Card>
+      <View style={styles.cardTitleRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name={inRack ? 'grid-outline' : 'cube-outline'} size={16} color={tokens.mutedForeground} />
+          <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{inRack ? 'Rack Find' : 'Floor Find'}</Text>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: tone.soft, borderRadius: tokens.radius.xl }]}>
+          <Text style={{ color: tone.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>
+            {item.needsPin ? 'Pin Required' : !resolved ? 'No Expectation on Record' : item.matched ? 'Zone Matched' : 'Location Mismatch'}
+          </Text>
+        </View>
+      </View>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{item.sku}</Text>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginBottom: 8 }}>{item.name}</Text>
+
+      {hasExpectation ? <KvRow label="Expected Zone" value={zoneLabel(item.expectedZone as string)} last={item.needsPin && !inRack} /> : null}
+      {/* Scanned Zone stays hidden for a floor find until it's pinned — the
+          inspector determines it, the card doesn't hand it to them. */}
+      {item.scannedZone ? <KvRow label="Scanned Zone" value={zoneLabel(item.scannedZone)} last={!inRack} /> : null}
+      {inRack ? (
+        <>
+          {item.rack ? <KvRow label="Rack" value={item.rack} /> : null}
+          {item.bay ? <KvRow label="Bay" value={item.bay} /> : null}
+          {item.loc ? <KvRow label="Storage Location" value={item.loc} last /> : null}
+        </>
+      ) : null}
+
+      {item.needsPin ? (
+        <Pressable onPress={onPin} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg, marginTop: 10 }]}>
+          <Ionicons name="location-outline" size={16} color={tokens.foreground} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Pin Exact Location</Text>
+        </Pressable>
+      ) : null}
+      {item.issueRaised && item.pinnedZone ? (
+        <View style={[styles.pinnedBanner, { borderColor: tokens.border, marginTop: 10 }]}>
+          <Ionicons name="alert-circle" size={16} color={tokens.rag.amber.strong} />
+          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, flex: 1 }}>
+            Issue raised — found in <Text style={{ fontWeight: tokens.fontWeight.bold }}>{zoneLabel(item.pinnedZone)}</Text>
+          </Text>
+        </View>
+      ) : null}
+    </Card>
   );
 }
 
 function KvRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
   const { tokens } = useTheme();
   return (
-    <View style={[styles.kvRow, last ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.rag.green.border }]}>
-      <Text style={{ color: tokens.rag.green.strong, fontSize: tokens.text.xs }}>{label}</Text>
-      <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{value}</Text>
+    <View style={[styles.kvRow, last ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.border }]}>
+      <Text style={{ color: tokens.mutedForeground, fontSize: 11 }}>{label}</Text>
+      <Text style={{ color: tokens.foreground, fontWeight: '600', fontSize: 13 }}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { flexGrow: 1, padding: 16 },
+  splitRow: { flex: 1, flexDirection: 'row', gap: 16, padding: 16 },
+  paneCol: { flex: 1 },
+  paneListContent: { gap: 14, flexGrow: 1 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  sectionTitleRow: { paddingBottom: 12, marginBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  sectionHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12, marginBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  countBadge: { paddingHorizontal: 8, paddingVertical: 2, minWidth: 22, alignItems: 'center' },
   kvRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48 },
   outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderWidth: 1 },
   banner: { borderWidth: 1, borderRadius: 10, padding: 12 },
-  centeredEmpty: { flex: 1, justifyContent: 'center' },
-  scanBlock: { alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderStyle: 'dashed', padding: 22 },
-  glyphCircle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  primarySmallBtn: { paddingHorizontal: 20, height: 40, alignItems: 'center', justifyContent: 'center' },
+  scanBlock: { alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderStyle: 'dashed', padding: 20 },
+  glyphCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  primarySmallBtn: { paddingHorizontal: 20, height: 38, alignItems: 'center', justifyContent: 'center' },
+  pinnedBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, padding: 10 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 40 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4 },
 });

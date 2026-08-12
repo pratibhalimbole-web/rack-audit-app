@@ -294,7 +294,27 @@ export function RackViewScreen() {
   // just the ones this audit was scoped to.
   const matchesTargetSku = (locCode: string) => !!audit.target_sku && (EXPECTED_SKUS[locCode] ?? []).some((l) => l.sku === audit.target_sku);
   const inBayFilter = (locCode: string) => bayFilter === 'all' || bayCodeForLoc(locCode) === bayFilter;
-  const isLocSelectable = (locCode: string) => manualMode || (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode)));
+  // Still waiting on a clean, confirmed match at this location — either
+  // never scanned, or scanned and found to mismatch on qty/damage. Shared
+  // by isLocSelectable (below) and pendingLocations, so a location with an
+  // expected SKU still due stays directly tappable on the canvas even when
+  // arriving via Resume Audit/a bay chip has locked bayFilter to a
+  // different bay — only the toolbar's Pallet dropdown was ever meant to be
+  // gated by the lock, not every other bay's still-outstanding work.
+  const isLocPending = (locCode: string) => {
+    if (audit.target_sku && !matchesTargetSku(locCode)) return false;
+    if (locationStatus[locCode] === 'missing') return false;
+    const loc = rackLocations.find((l) => l.code === locCode);
+    const expected = EXPECTED_SKUS[locCode]?.[0];
+    if (!expected || !loc) return false;
+    const saved = loc.pallets.find((p) => p.saved);
+    const line = saved?.lines[0];
+    if (!line) return true;
+    if (line.sku !== expected.sku) return false;
+    return line.qty !== expected.qty || line.condition !== 'Good';
+  };
+  const isLocSelectable = (locCode: string) =>
+    manualMode || (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode))) || isLocPending(locCode);
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before) — this is purely cosmetic and separate from selectability.
@@ -313,25 +333,7 @@ export function RackViewScreen() {
   // the right SKU with a quantity/damage issue). Independent of Manual
   // Mode's toggle: this always reflects the audit's real assigned scope
   // (target_sku), not whatever Manual Mode has temporarily opened up.
-  const pendingLocations = rackLocations.filter((loc) => {
-    if (audit.target_sku && !matchesTargetSku(loc.code)) return false;
-    // Already resolved as "no scanner code physically here" — that's a
-    // real, valid outcome, not an unresolved pallet still waiting on a
-    // scan. Listing it as "pending" would send the inspector right back to
-    // a location where they already confirmed there's nothing to scan.
-    if (locationStatus[loc.code] === 'missing') return false;
-    const expected = EXPECTED_SKUS[loc.code]?.[0];
-    if (!expected) return false;
-    const saved = loc.pallets.find((p) => p.saved);
-    const line = saved?.lines[0];
-    if (!line) return true;
-    // A Mismatch (wrong SKU) is already a conclusive, known result the
-    // moment it's scanned — nothing left to resolve via this list. Only
-    // "not scanned yet" and "right SKU but qty/damage is off" genuinely
-    // still need the inspector's attention.
-    if (line.sku !== expected.sku) return false;
-    return line.qty !== expected.qty || line.condition !== 'Good';
-  });
+  const pendingLocations = rackLocations.filter((loc) => isLocPending(loc.code));
   // In-scope locations the inspector already flagged "no scanner code
   // found" this session — its own list rather than mixed into Pending, so
   // "Pending Locations" only ever means "still needs a scan".

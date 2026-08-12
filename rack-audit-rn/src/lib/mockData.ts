@@ -25,8 +25,8 @@ import type {
   MasterSlot,
   Pallet,
   QrPayload,
-  QuickScanEntry,
   RackNode,
+  SkuZoneExpectation,
 } from './types';
 import { CONDITIONS } from './types';
 
@@ -299,13 +299,21 @@ export const QR_POOL: QrPayload[] = [
   { layout: 'Layout A', rack: 'A-09', bay: 'B-01', loc: 'A-09-B01-01' },
 ];
 
-export const QUICK_SCAN_POOL: QuickScanEntry[] = [
-  { kind: 'location', code: QR_POOL[0] },
-  { kind: 'location', code: QR_POOL[1] },
-  { kind: 'pallet', code: 'P-10483' },
-  { kind: 'location', code: QR_POOL[3] },
-  { kind: 'sku', code: { sku: 'SKU-2218', name: 'Pallet Support Pin', lot: 'L-2292' } },
-  { kind: 'location', code: QR_POOL[2] },
+// Every zone in the warehouse floor plan — reuses the same Layout names
+// already used to group racks (Layout A/B/C/D/E), since a "zone" is the same
+// physical area whether or not the SKU inside it is racked. Drives Quick
+// Scan's "Pin Exact Location" warehouse map.
+export const WAREHOUSE_ZONES: string[] = ['Layout A', 'Layout B', 'Layout C', 'Layout D', 'Layout E'];
+
+// What the WMS says a SKU's zone should be, keyed by SKU (the reverse of
+// MasterSlot/EXPECTED_SKUS, which are keyed by location) — Quick Scan
+// compares a scan's actual zone against this to flag a mismatch, whether
+// the SKU turned up on the open floor or inside a rack.
+export const SKU_ZONE_EXPECTATIONS: SkuZoneExpectation[] = [
+  { sku: 'SKU-1001', name: 'iPhone 15 Box', expectedZone: 'Layout A' },
+  { sku: 'SKU-3301', name: 'Plastic Crate Blue', expectedZone: 'Layout B' },
+  { sku: 'SKU-5088', name: 'Corner Protector', expectedZone: 'Layout C' },
+  { sku: 'SKU-9011', name: 'Rack Label Kit', expectedZone: 'Layout D' },
 ];
 
 // Pads every bay in a locations map up to a full multi-level rack (source
