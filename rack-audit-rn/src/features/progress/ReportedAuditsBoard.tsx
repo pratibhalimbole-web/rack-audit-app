@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
-import { mismatchSeverity, mismatchType, skuMismatches, summaryStats, type FlaggedLine, type SkuMismatch } from '@/lib/auditLogic';
+import { scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } from '@/lib/auditLogic';
 import { conditionSeverity } from '@/lib/conditionSeverity';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { CONDITIONS, type Condition } from '@/lib/types';
@@ -47,8 +47,19 @@ function worstSeverity(lines: FlaggedLine[]): Severity {
   }, 'green');
 }
 
-function mismatchKey(m: SkuMismatch): string {
-  return [m.layout, m.rack, m.bay, m.locCode, m.pallet].map(encodeURIComponent).join('~');
+// A wrong SKU altogether is always the worst severity, regardless of its
+// (irrelevant, since it's not even the right item) condition — matches how
+// the existing SKU-mismatch severity already treats identity mismatches.
+// A matched pallet's severity follows whichever is worse: its damage
+// condition, or plain amber if the only issue is a quantity difference.
+function scopedIssueSeverity(s: ScopedIssue): Severity {
+  if (s.kind === 'mismatch') return 'red';
+  if (s.condition !== 'Good') return conditionSeverity(s.condition);
+  return 'amber';
+}
+
+function scopedIssueKey(s: ScopedIssue): string {
+  return [s.layout, s.rack, s.bay, s.locCode, s.pallet].map(encodeURIComponent).join('~');
 }
 
 function locationLabel(layout: string, rack: string, bay: string, locCode: string): string {
@@ -63,19 +74,13 @@ const SEVERITY_BADGE: Record<Severity, { label: string; ragKey: Severity }> = {
   red: { label: 'Red', ragKey: 'red' },
 };
 
-const MISMATCH_SEVERITY_BADGE: Record<'Critical' | 'Medium' | 'Low', { label: string; ragKey: Severity }> = {
-  Critical: { label: 'Red', ragKey: 'red' },
-  Medium: { label: 'Amber', ragKey: 'amber' },
-  Low: { label: 'Green', ragKey: 'green' },
-};
-
 const SEVERITY_ICON: Record<Severity, keyof typeof Ionicons.glyphMap> = {
   green: 'shield-checkmark-outline',
   amber: 'warning-outline',
   red: 'alert-circle-outline',
 };
 
-const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay: 'Bay Name', condition: 'Condition' };
+const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay: 'Bay Name', condition: 'Damage' };
 
 // Ports renderProgressIssuesBoard() (rack-audit-app.html ~4094-4166) —
 // tablet-only redesign of the Progress tab: search + sort-by-qty + rack/bay/
@@ -105,9 +110,18 @@ export function ReportedAuditsBoard() {
   const [filterSeverities, setFilterSeverities] = useState<Severity[]>([]);
 
   const stats = useMemo(() => summaryStats(tree), [tree]);
-  const racks = useMemo(() => [...new Set(stats.flagged.map((f) => f.rack))].sort(), [stats]);
-  const bays = useMemo(() => [...new Set(stats.flagged.map((f) => f.bay))].sort(), [stats]);
-  const conditions = useMemo(() => CONDITIONS.filter((c) => c !== 'Good' && stats.flagged.some((f) => f.condition === c)), [stats]);
+  // Case 1 (Mismatch) / Case 2 (Matched + qty/damage issue) — reconciled
+  // against EXPECTED_SKUS directly, independent of whether "Raise Issue"
+  // was ever tapped, since a real SKU/qty discrepancy is worth surfacing
+  // either way. Case 3 (Manual Mode) has no expected SKU to reconcile
+  // against at all, so it stays sourced from summaryStats/FlaggedLine below.
+  const scoped = useMemo(() => scopedIssues(tree), [tree]);
+  const racks = useMemo(() => [...new Set([...stats.flagged.map((f) => f.rack), ...scoped.map((s) => s.rack)])].sort(), [stats, scoped]);
+  const bays = useMemo(() => [...new Set([...stats.flagged.map((f) => f.bay), ...scoped.map((s) => s.bay)])].sort(), [stats, scoped]);
+  const conditions = useMemo(
+    () => CONDITIONS.filter((c) => c !== 'Good' && (stats.flagged.some((f) => f.condition === c) || scoped.some((s) => s.condition === c))),
+    [stats, scoped],
+  );
 
   const issueGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -123,13 +137,39 @@ export function ReportedAuditsBoard() {
     return groups.slice().sort((x, y) => (sortDir === 'asc' ? qty(x) - qty(y) : qty(y) - qty(x)));
   }, [stats, search, filterRacks, filterBays, filterConditions, filterSeverities, sortDir]);
 
-  const mismatches = useMemo(() => {
+  // Manual Mode reports (Case 3) still come from summaryStats/FlaggedLine —
+  // every Manual Mode save always carries issueRaised, so it's reliably in
+  // stats.flagged already. A group counts as Manual if any of its lines
+  // came from that flow (a Manual Mode pallet is always a single
+  // self-contained report, so in practice this is never a mix).
+  const manualIssueGroups = useMemo(() => issueGroups.filter((g) => g.lines.some((l) => l.source === 'manual')), [issueGroups]);
+
+  const filterScoped = (items: ScopedIssue[]) => {
     const q = search.trim().toLowerCase();
-    const all = skuMismatches(tree);
-    return all.filter(
-      (m) => !q || [m.expected.sku, m.foundSku, m.rack, m.locCode, m.pallet].join(' ').toLowerCase().includes(q),
-    );
-  }, [tree, search]);
+    return items.filter((s) => {
+      if (filterRacks.length && !filterRacks.includes(s.rack)) return false;
+      if (filterBays.length && !filterBays.includes(s.bay)) return false;
+      if (filterConditions.length && !filterConditions.includes(s.condition)) return false;
+      if (filterSeverities.length && !filterSeverities.includes(scopedIssueSeverity(s))) return false;
+      return !q || [s.foundSku, s.expectedSku, s.rack, s.locCode, s.pallet].join(' ').toLowerCase().includes(q);
+    });
+  };
+  const sortByQty = (items: ScopedIssue[]) => items.slice().sort((x, y) => (sortDir === 'asc' ? x.foundQty - y.foundQty : y.foundQty - x.foundQty));
+
+  // Case 1 — wrong SKU scanned at an in-scope location.
+  const case1Items = useMemo(
+    () => sortByQty(filterScoped(scoped.filter((s) => s.kind === 'mismatch'))),
+    [scoped, search, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
+  );
+  // Case 2 — right SKU, but a quantity or damage discrepancy.
+  const case2Items = useMemo(
+    () => sortByQty(filterScoped(scoped.filter((s) => s.kind === 'matched-issue'))),
+    [scoped, search, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
+  );
+  // Toggle OFF (default) — only matched-but-off-on-qty/damage pallets.
+  // Toggle ON ("Mismatch SKUs") — wrong-SKU pallets plus Manual Mode reports,
+  // since both are location-level discrepancies outside a clean match.
+  const viewTotal = view === 'issues' ? case2Items.length : case1Items.length + manualIssueGroups.length;
 
   const activeFilterCount = filterRacks.length + filterBays.length + filterConditions.length + filterSeverities.length;
 
@@ -176,8 +216,7 @@ export function ReportedAuditsBoard() {
         </View>
 
         <View style={styles.toolbarIcons}>
-          {view === 'issues' ? (
-            <View>
+          <View>
               <Pressable
                 onPress={() => {
                   setPickerOpen((o) => !o);
@@ -252,8 +291,7 @@ export function ReportedAuditsBoard() {
                   </View>
                 </>
               ) : null}
-            </View>
-          ) : null}
+          </View>
 
           <View>
             <Pressable
@@ -294,9 +332,9 @@ export function ReportedAuditsBoard() {
       {activeFilterCount ? (
         <View style={[styles.summary, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
           <View style={styles.summaryTop}>
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Total : {issueGroups.length}</Text>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Total : {viewTotal}</Text>
             <SummaryChips label="Severity" values={filterSeverities.map((s) => SEVERITY_BADGE[s].label)} onRemove={(label) => setFilterSeverities((l) => l.filter((s) => SEVERITY_BADGE[s].label !== label))} />
-            <SummaryChips label="Condition" values={filterConditions} onRemove={(v) => setFilterConditions((l) => l.filter((c) => c !== v))} />
+            <SummaryChips label="Damage" values={filterConditions} onRemove={(v) => setFilterConditions((l) => l.filter((c) => c !== v))} />
             <SummaryChips label="Rack" values={filterRacks} onRemove={(v) => setFilterRacks((l) => l.filter((r) => r !== v))} />
             <SummaryChips label="Bay" values={filterBays} onRemove={(v) => setFilterBays((l) => l.filter((b) => b !== v))} />
           </View>
@@ -310,36 +348,50 @@ export function ReportedAuditsBoard() {
       <ScrollView contentContainerStyle={styles.body}>
         {!activeFilterCount ? (
           <View style={[styles.totalBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>
-              Total : {view === 'issues' ? issueGroups.length : mismatches.length}
-            </Text>
+            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Total : {viewTotal}</Text>
           </View>
         ) : null}
         {view === 'issues' ? (
-          issueGroups.length ? (
-            <View style={styles.grid}>
-              {issueGroups.map((g) => (
-                <IssueCard key={g.key} auditId={auditId} group={g} />
-              ))}
-            </View>
+          // Toggle OFF (default) — only the right SKU found, but a
+          // quantity or damage discrepancy against what's expected.
+          case2Items.length ? (
+            <ScopedIssueSection
+              title="Matched SKUs — Quantity/Damage"
+              subtitle="Right item found, but the quantity or damage doesn't match what's expected"
+              icon="clipboard-outline"
+              items={case2Items}
+            />
           ) : (
             <View style={styles.empty}>
-              <Ionicons name="cube-outline" size={28} color="#667085" />
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No reported issues</Text>
+              <Ionicons name="checkmark-circle-outline" size={28} color="#667085" />
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No quantity/damage issues</Text>
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Nothing matches these filters.</Text>
             </View>
           )
-        ) : mismatches.length ? (
-          <View style={styles.grid}>
-            {mismatches.map((m) => (
-              <MismatchCard key={mismatchKey(m)} auditId={auditId} mismatch={m} />
-            ))}
-          </View>
+        ) : // Toggle ON ("Mismatch SKUs") — wrong SKU scanned at an
+        // in-scope location, plus Manual Mode reports (also location-level
+        // discrepancies, just outside the audit's assigned scope).
+        case1Items.length || manualIssueGroups.length ? (
+          <>
+            <ScopedIssueSection
+              title="Mismatch SKUs"
+              subtitle="Wrong SKU scanned at a location this audit expected a specific item"
+              icon="swap-horizontal-outline"
+              items={case1Items}
+            />
+            <IssueSection
+              title="Manually Reported"
+              subtitle="Raised via Manual Mode, outside this audit's assigned scope"
+              icon="hand-left-outline"
+              groups={manualIssueGroups}
+              auditId={auditId}
+            />
+          </>
         ) : (
           <View style={styles.empty}>
-            <Ionicons name="checkmark-circle-outline" size={28} color="#667085" />
+            <Ionicons name="cube-outline" size={28} color="#667085" />
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No SKU mismatches</Text>
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Every counted location matches the master inventory plan.</Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Nothing matches these filters.</Text>
           </View>
         )}
       </ScrollView>
@@ -405,6 +457,138 @@ function SummaryChips({ label, values, onRemove }: { label: string; values: stri
   );
 }
 
+// Shared header for a labeled block of issue cards — icon, title + count
+// badge, and a one-line explainer of what this section means. Used by all
+// three case sections so a supervisor always knows what they're looking at
+// without needing to infer it from the cards alone.
+function SectionHead({ title, subtitle, icon, count }: { title: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap; count: number }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.sectionHead}>
+      <View style={[styles.sectionIconWrap, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+        <Ionicons name={icon} size={16} color={tokens.accentBlue.strong} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>{title}</Text>
+          <View style={[styles.sectionCount, { backgroundColor: tokens.muted, borderRadius: tokens.radius.xl }]}>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{count}</Text>
+          </View>
+        </View>
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{subtitle}</Text>
+      </View>
+    </View>
+  );
+}
+
+// Case 3 (Manual Mode) — keeps the pallet/SKU-list card shape, since it's
+// sourced from FlaggedLine/summaryStats like before. Renders nothing when
+// empty, so an active filter that only matches one section doesn't leave a
+// dangling empty header.
+function IssueSection({
+  title,
+  subtitle,
+  icon,
+  groups,
+  auditId,
+}: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  groups: PalletIssueGroup[];
+  auditId: string;
+}) {
+  if (!groups.length) return null;
+  return (
+    <View style={styles.section}>
+      <SectionHead title={title} subtitle={subtitle} icon={icon} count={groups.length} />
+      <View style={styles.grid}>
+        {groups.map((g) => (
+          <IssueCard key={g.key} auditId={auditId} group={g} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Cases 1 & 2 — reconciled directly against EXPECTED_SKUS (scopedIssues),
+// so every card always shows Expected vs. Scanned, plus which location it's
+// at. Not pressable: unlike Case 3's cards, these aren't sourced from
+// summaryStats, so there's no existing detail screen that would resolve the
+// same identity.
+function ScopedIssueSection({
+  title,
+  subtitle,
+  icon,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  items: ScopedIssue[];
+}) {
+  if (!items.length) return null;
+  return (
+    <View style={styles.section}>
+      <SectionHead title={title} subtitle={subtitle} icon={icon} count={items.length} />
+      <View style={styles.grid}>
+        {items.map((s) => (
+          <ScopedIssueCard key={scopedIssueKey(s)} item={s} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ScopedIssueCard({ item }: { item: ScopedIssue }) {
+  const { tokens } = useTheme();
+  const badge = SEVERITY_BADGE[scopedIssueSeverity(item)];
+  return (
+    <View style={[styles.issueCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+      <View style={[styles.issueHeadRow, { backgroundColor: '#EEF3FF', borderTopLeftRadius: tokens.radius.xl, borderTopRightRadius: tokens.radius.xl }]}>
+        <View style={styles.issueHeadLeft}>
+          <Ionicons name={item.kind === 'mismatch' ? 'swap-horizontal-outline' : 'cube-outline'} size={16} color={tokens.primary} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Pallet :</Text>
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{item.pallet}</Text>
+        </View>
+        <StatusBadge label={badge.label} ragKey={badge.ragKey} />
+      </View>
+      <View style={styles.cardBody}>
+        <View style={styles.issueGrid}>
+          <IssueField label="Rack" value={item.rack} />
+          <IssueField label="Bay" value={item.bay} />
+        </View>
+        <View style={styles.compareRow}>
+          <View style={[styles.compareCol, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 4 }}>Expected</Text>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+              {item.expectedSku}
+            </Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>Qty {item.expectedQty}</Text>
+          </View>
+          <View style={[styles.compareCol, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 4 }}>Scanned</Text>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+              {item.foundSku}
+            </Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>Qty {item.foundQty}</Text>
+          </View>
+        </View>
+        <View style={styles.skuConditionRow}>
+          <View style={[styles.chipDot, { backgroundColor: tokens.rag[conditionSeverity(item.condition)].strong }]} />
+          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Damage: {item.condition}</Text>
+        </View>
+        <View style={[styles.locationRow, { borderTopColor: tokens.border }]}>
+          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 2 }}>Location</Text>
+          <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }} numberOfLines={1}>
+            {locationLabel(item.layout, item.rack, item.bay, item.locCode)}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function IssueCard({ auditId, group }: { auditId: string; group: PalletIssueGroup }) {
   const { tokens } = useTheme();
   const badge = SEVERITY_BADGE[worstSeverity(group.lines)];
@@ -457,43 +641,6 @@ function IssueCard({ auditId, group }: { auditId: string; group: PalletIssueGrou
   );
 }
 
-function MismatchCard({ auditId, mismatch }: { auditId: string; mismatch: SkuMismatch }) {
-  const { tokens } = useTheme();
-  const badge = MISMATCH_SEVERITY_BADGE[mismatchSeverity(mismatch)];
-  const type = mismatchType(mismatch);
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/audit/[auditId]/discrepancy/[key]', params: { auditId, key: mismatchKey(mismatch) } } as never)}
-      style={[styles.issueCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
-    >
-      <View style={[styles.issueHeadRow, { backgroundColor: '#EEF3FF', borderTopLeftRadius: tokens.radius.xl, borderTopRightRadius: tokens.radius.xl }]}>
-        <View style={styles.issueHeadLeft}>
-          <Ionicons name="git-compare-outline" size={16} color={tokens.primary} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{type} :</Text>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{mismatch.locCode}</Text>
-        </View>
-        <StatusBadge label={badge.label} ragKey={badge.ragKey} />
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.issueGrid}>
-          <IssueField label="Expected SKU" value={mismatch.expected.sku} />
-          <IssueField label="Found SKU" value={mismatch.foundSku} />
-          <IssueField label="Rack" value={mismatch.rack} />
-          <IssueField label="Bay" value={mismatch.bay} />
-          <IssueField label="Expected Qty" value={String(mismatch.expected.qty)} chip />
-          <IssueField label="Found Qty" value={String(mismatch.foundQty)} chip />
-        </View>
-        <View style={[styles.locationRow, { borderTopColor: tokens.border }]}>
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 2 }}>Location</Text>
-          <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }} numberOfLines={1}>
-            {locationLabel(mismatch.layout, mismatch.rack, mismatch.bay, mismatch.locCode)}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
 function IssueField({ label, value, chip }: { label: string; value: string; chip?: boolean }) {
   const { tokens } = useTheme();
   return (
@@ -539,6 +686,10 @@ const styles = StyleSheet.create({
   closeAllRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 8 },
   body: { padding: 16 },
   totalBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14 },
+  section: { marginBottom: 20 },
+  sectionHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
+  sectionIconWrap: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  sectionCount: { paddingHorizontal: 8, paddingVertical: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   // flexGrow+flexBasis (not a fixed width) so cards stretch to fill each
   // row evenly instead of leaving a blank column when they don't divide
@@ -550,6 +701,8 @@ const styles = StyleSheet.create({
   cardBody: { padding: 14 },
   issueGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   issueField: { width: '50%', marginBottom: 10 },
+  compareRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  compareCol: { flex: 1, borderWidth: 1, padding: 10 },
   numChip: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2 },
   skuList: { marginTop: 2, gap: 8 },
   skuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 9 },

@@ -25,6 +25,11 @@ export type Audit = {
   end_date: string; // ISO date
   status: AuditStatus;
   priority?: Priority;
+  // Set from the "SKU Type" field on the admin app's Create Audit form when
+  // this audit is only checking one specific SKU across its scope (e.g. only
+  // iPhone boxes) rather than every pallet — drives which pallets Rack View
+  // highlights as relevant to scan.
+  target_sku?: string;
 };
 
 export type EvidenceStroke = { color: string; points: { x: number; y: number }[] };
@@ -47,6 +52,50 @@ export type CountLine = {
   qty: number;
   condition: Condition;
   evidence?: Evidence;
+  // Persisted "Raise Issue" flag — set the moment an inspector raises an
+  // issue in Rack View (Mismatch, quantity/damage discrepancy, or any
+  // Manual Mode report), so it survives navigation/reload instead of living
+  // only in that screen's session state. Reported Audits/Audit Summary can
+  // surface these directly instead of only re-deriving issues from
+  // condition/qty comparisons at read-time.
+  issueRaised?: boolean;
+  // How this line was captured — 'manual' for a Rack View Manual Mode
+  // report (selectable outside the audit's assigned target_sku scope),
+  // 'scan' (the default) for the normal scoped Reconciliation flow. Lets
+  // downstream views distinguish an out-of-scope report from a normal
+  // in-scope one, which is otherwise structurally identical.
+  source?: 'scan' | 'manual';
+  // Quantity and damage are independently-entered, independently-raisable
+  // findings on a matched-SKU pallet (an inspector can find a quantity
+  // problem, a damage problem, both, or neither) — each gets its own
+  // evidence and its own raised flag rather than sharing the line's single
+  // `evidence`/`issueRaised`, which stay reserved for the SKU-identity
+  // level (Mismatch) and Manual Mode reports.
+  qtyEvidence?: Evidence;
+  damageEvidence?: Evidence;
+  qtyIssueRaised?: boolean;
+  damageIssueRaised?: boolean;
+  // Damage's own cascading detail: which phase of the pallet's lifecycle the
+  // damage relates to, and what was actually observed — the Observation
+  // options offered depend on which Activity Phase is selected.
+  activityPhase?: ActivityPhase;
+  observation?: string;
+  // Overall read on the physical pallet at this location, answered right
+  // after Selected Location Details and independent of the SKU-level
+  // Quantity/Damage findings below it.
+  palletConditionGood?: boolean;
+};
+
+export type ActivityPhase = 'Installation' | 'Operation & Maintenance' | 'Design Discrepancy';
+
+export const ACTIVITY_PHASES: ActivityPhase[] = ['Installation', 'Operation & Maintenance', 'Design Discrepancy'];
+
+// Same 5 observations for every phase for now — swap in real per-phase lists
+// once they're defined.
+export const OBSERVATIONS_BY_PHASE: Record<ActivityPhase, string[]> = {
+  Installation: ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+  'Operation & Maintenance': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+  'Design Discrepancy': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
 };
 
 export type Pallet = {
@@ -118,7 +167,29 @@ export type QrPayload = {
   loc: string;
 };
 
-export type QuickScanEntry =
-  | { kind: 'location'; code: QrPayload }
-  | { kind: 'pallet'; code: string }
-  | { kind: 'sku'; code: { sku: string; name: string; lot: string } };
+// Quick Scan's single scan point: an inspector scans a SKU wherever it's
+// actually found — on the open floor (rack/bay/loc absent), or inside a rack
+// (rack/bay/loc present, alongside the zone it's in — already unambiguous,
+// so it's shown immediately). A floor find's `zone` is deliberately NOT
+// trusted/shown up front: the inspector must pin it on the warehouse map
+// (Quick Scan's WarehouseMapModal) before the app reveals a match/mismatch,
+// so the check reflects what they actually verified rather than the QR's
+// own claim. Zones reuse the same Layout names already used to group racks
+// (Layout A/B/C…) rather than a separate warehouse hierarchy.
+export type SkuScanCode = {
+  sku: string;
+  zone?: string;
+  rack?: string;
+  bay?: string;
+  loc?: string;
+};
+
+// What the WMS says a SKU's zone SHOULD be — the SKU-keyed counterpart to
+// MasterSlot (which is keyed by location instead). Quick Scan compares a
+// scan's actual zone against this regardless of whether the SKU turned up
+// on the floor or in a rack.
+export type SkuZoneExpectation = {
+  sku: string;
+  name: string;
+  expectedZone: string;
+};

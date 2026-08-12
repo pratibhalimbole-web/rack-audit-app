@@ -17,6 +17,11 @@ export function SkuLineCard({
   onDelete,
   onEdit,
   evidenceSlot,
+  conditionLabel = 'Condition',
+  conditionOptions = CONDITIONS,
+  saveLabel = 'Save',
+  hideDelete,
+  hideFooter,
 }: {
   line: CountLine;
   active: boolean;
@@ -29,6 +34,20 @@ export function SkuLineCard({
   // Rack View's SKU panel passes an EvidenceBlock here (source: withEvidence
   // on renderScanLinesAccordion); Count Sheet's own accordion never does.
   evidenceSlot?: React.ReactNode;
+  // Rack View's Reconciliation Form calls this field "Damage" and drops the
+  // redundant "Damaged" choice from the picklist; Count Sheet leaves both
+  // defaults (label "Condition", full CONDITIONS list) untouched.
+  conditionLabel?: string;
+  conditionOptions?: Condition[];
+  // Manual Mode's report form has nothing pre-existing to delete and calls
+  // its primary action "Raise Issue" rather than "Save" — both default to
+  // Count Sheet/Rack View's existing look.
+  saveLabel?: string;
+  hideDelete?: boolean;
+  // Manual Mode moves the primary action down into Rack View's own footer
+  // (replacing "Next Pallet" there), so this card's own Save/Delete row
+  // would just be a redundant second button — hidden entirely in that case.
+  hideFooter?: boolean;
 }) {
   const { tokens } = useTheme();
 
@@ -86,10 +105,10 @@ export function SkuLineCard({
       />
 
       <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
-        Condition <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+        {conditionLabel} <Text style={{ color: tokens.rag.red.strong }}>*</Text>
       </Text>
       <View style={styles.condGrid}>
-        {CONDITIONS.map((c) => {
+        {conditionOptions.map((c) => {
           const selected = line.condition === c;
           return (
             <Pressable
@@ -112,14 +131,16 @@ export function SkuLineCard({
 
       {evidenceSlot}
 
-      {!disabled ? (
+      {!disabled && !hideFooter ? (
         <View style={styles.footerRow}>
           <Pressable onPress={onSave} style={[styles.saveBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save</Text>
+            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{saveLabel}</Text>
           </Pressable>
-          <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: tokens.rag.red.border, borderRadius: tokens.radius.lg }]}>
-            <Ionicons name="trash-outline" size={18} color={tokens.rag.red.strong} />
-          </Pressable>
+          {!hideDelete ? (
+            <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: tokens.rag.red.border, borderRadius: tokens.radius.lg }]}>
+              <Ionicons name="trash-outline" size={18} color={tokens.rag.red.strong} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>

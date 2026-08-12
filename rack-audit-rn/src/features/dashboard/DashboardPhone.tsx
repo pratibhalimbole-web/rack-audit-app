@@ -7,8 +7,8 @@ import { Donut } from '@/components/Donut';
 import { ProgressBar } from '@/components/ProgressBar';
 import { TaskCard } from '@/components/TaskCard';
 import { useAuthStore } from '@/store/useAuthStore';
-import { fmtDate, priorityFor, uiStatus } from '@/lib/auditLogic';
-import { useAuditProgress } from '@/hooks/useLocationsTree';
+import { flattenBays, fmtDate, priorityFor, uiStatus } from '@/lib/auditLogic';
+import { useAuditProgress, useLocationsTree } from '@/hooks/useLocationsTree';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCurrentOngoing, useMyAudits } from './hooks';
@@ -21,6 +21,7 @@ export function DashboardPhone() {
   const { data: myTasks = [] } = useMyAudits();
   const ongoing = useCurrentOngoing();
   const { rollup, lastSaved } = useAuditProgress(ongoing?.audit_id);
+  const { data: ongoingTree } = useLocationsTree(ongoing?.audit_id);
 
   const others = myTasks
     .filter((a) => a !== ongoing)
@@ -88,7 +89,34 @@ export function DashboardPhone() {
                 ) : null}
               </View>
               <Pressable
-                onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: ongoing.audit_id } } as never)}
+                onPress={() => {
+                  if (isFullyCounted) {
+                    router.push({ pathname: '/audit/[auditId]/summary', params: { auditId: ongoing.audit_id } } as never);
+                    return;
+                  }
+                  // Resume Audit skips Audit Details entirely — straight to
+                  // the Rack View canvas + form, picking up exactly where
+                  // the inspector left off (the last-touched location).
+                  if (lastSaved) {
+                    router.push({
+                      pathname: '/audit/[auditId]/rack/[rackId]',
+                      params: { auditId: ongoing.audit_id, rackId: lastSaved.rack, layout: lastSaved.layout, bay: lastSaved.bay, loc: lastSaved.loc.code },
+                    } as never);
+                    return;
+                  }
+                  // Nothing touched yet — fall back to the first bay with
+                  // work left (or the first bay overall).
+                  const flatBays = flattenBays(ongoingTree);
+                  const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
+                  if (targetBay) {
+                    router.push({
+                      pathname: '/audit/[auditId]/rack/[rackId]',
+                      params: { auditId: ongoing.audit_id, rackId: targetBay.rack, layout: targetBay.layout, bay: targetBay.code },
+                    } as never);
+                    return;
+                  }
+                  router.push({ pathname: '/audit/[auditId]', params: { auditId: ongoing.audit_id } } as never);
+                }}
                 style={[styles.actionBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
               >
                 <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>

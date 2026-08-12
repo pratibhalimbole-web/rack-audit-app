@@ -25,8 +25,8 @@ import type {
   MasterSlot,
   Pallet,
   QrPayload,
-  QuickScanEntry,
   RackNode,
+  SkuZoneExpectation,
 } from './types';
 import { CONDITIONS } from './types';
 
@@ -50,6 +50,7 @@ export const INVENTORY_POOL: InventoryItem[] = [
   { sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', lot: 'L-2340' },
   { sku: 'SKU-4411', name: 'Washer Pack Steel', lot: 'L-2341' },
   { sku: 'SKU-4412', name: 'Rubber Gasket Set', lot: 'L-2342' },
+  { sku: 'SKU-1001', name: 'iPhone 15 Box', lot: 'L-1090' },
 ];
 
 export const AUDITS: Audit[] = [
@@ -57,17 +58,17 @@ export const AUDITS: Audit[] = [
     audit_id: 'AUD-0231', audit_name: 'Zone A Full Count', audit_type: 'Full', count_method: 'Blind (Enforced)',
     scope_type: 'Rack', scope_values: ['Rack A-05', 'Rack A-06'],
     team_members: ['Arjun Sharma', 'Meera Kulkarni', 'Priya Singh'],
-    start_date: '2026-06-20', end_date: '2026-07-10', status: 'In Progress',
+    start_date: '2026-06-20', end_date: '2026-07-10', status: 'In Progress', target_sku: 'SKU-1042',
   },
   {
     audit_id: 'AUD-0233', audit_name: 'Spot Check — Layout C & E', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout C', 'Layout E'], team_members: ['Arjun Sharma'],
-    start_date: '2026-07-09', end_date: '2026-07-09', status: 'Scheduled',
+    start_date: '2026-07-09', end_date: '2026-07-09', status: 'Scheduled', target_sku: 'SKU-2218',
   },
   {
     audit_id: 'AUD-0234', audit_name: 'Cycle — Fast Movers, Layout B', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
-    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
   },
   {
     audit_id: 'AUD-0225', audit_name: 'Zone C Damaged Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
@@ -77,12 +78,12 @@ export const AUDITS: Audit[] = [
   {
     audit_id: 'AUD-0219', audit_name: 'Bay Recount — 01', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Bay', scope_values: ['Bay 03'], team_members: ['Arjun Sharma'],
-    start_date: '2026-06-28', end_date: '2026-07-05', status: 'In Progress',
+    start_date: '2026-06-28', end_date: '2026-07-05', status: 'In Progress', target_sku: 'SKU-9011',
   },
   {
     audit_id: 'AUD-0240', audit_name: 'Full Count — Layouts A & B', audit_type: 'Full', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout A', 'Layout B'], team_members: ['Arjun Sharma', 'Meera Kulkarni'],
-    start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled',
+    start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled', target_sku: 'SKU-1001',
   },
 ];
 
@@ -298,13 +299,21 @@ export const QR_POOL: QrPayload[] = [
   { layout: 'Layout A', rack: 'A-09', bay: 'B-01', loc: 'A-09-B01-01' },
 ];
 
-export const QUICK_SCAN_POOL: QuickScanEntry[] = [
-  { kind: 'location', code: QR_POOL[0] },
-  { kind: 'location', code: QR_POOL[1] },
-  { kind: 'pallet', code: 'P-10483' },
-  { kind: 'location', code: QR_POOL[3] },
-  { kind: 'sku', code: { sku: 'SKU-2218', name: 'Pallet Support Pin', lot: 'L-2292' } },
-  { kind: 'location', code: QR_POOL[2] },
+// Every zone in the warehouse floor plan — reuses the same Layout names
+// already used to group racks (Layout A/B/C/D/E), since a "zone" is the same
+// physical area whether or not the SKU inside it is racked. Drives Quick
+// Scan's "Pin Exact Location" warehouse map.
+export const WAREHOUSE_ZONES: string[] = ['Layout A', 'Layout B', 'Layout C', 'Layout D', 'Layout E'];
+
+// What the WMS says a SKU's zone should be, keyed by SKU (the reverse of
+// MasterSlot/EXPECTED_SKUS, which are keyed by location) — Quick Scan
+// compares a scan's actual zone against this to flag a mismatch, whether
+// the SKU turned up on the open floor or inside a rack.
+export const SKU_ZONE_EXPECTATIONS: SkuZoneExpectation[] = [
+  { sku: 'SKU-1001', name: 'iPhone 15 Box', expectedZone: 'Layout A' },
+  { sku: 'SKU-3301', name: 'Plastic Crate Blue', expectedZone: 'Layout B' },
+  { sku: 'SKU-5088', name: 'Corner Protector', expectedZone: 'Layout C' },
+  { sku: 'SKU-9011', name: 'Rack Label Kit', expectedZone: 'Layout D' },
 ];
 
 // Pads every bay in a locations map up to a full multi-level rack (source
@@ -381,6 +390,72 @@ export function seedEvidenceForFlaggedLines(locationsMap: Record<string, AuditLo
 fillAllBaysToFullLevels(LOCATIONS);
 seedEvidenceForFlaggedLines(LOCATIONS);
 
+// Gives the demo a genuinely, fully complete rack (every location in every
+// bay marked Completed) to show off the Warehouse Map's green "Completed"
+// state — fillAllBaysToFullLevels above pads every bay with extra Not
+// Started locations regardless of genRacks' fullyDoneRacks intent, so
+// without this explicit override no rack could ever actually read as fully
+// done. AUD-0234 (Scheduled, not overdue as of TODAY) touches this rack, so
+// it renders green rather than red/blue on the map.
+LOCATIONS['AUD-0234'].layouts[0].racks[0].bays.forEach((bay) => {
+  bay.locations.forEach((loc) => {
+    loc.status = 'Completed';
+  });
+});
+
+// AUD-0240's target_sku (SKU-1001, "iPhone 15 Box") is what its Rack View
+// should highlight — scattered across a subset of Rack A-21's pallets, on
+// every level and across all three bays, rather than one whole bay, so the
+// canvas shows a realistic "found randomly, not just in one spot" spread.
+// Runs before buildMasterInventory/buildExpectedSkus (below) so those derive
+// their SKU-1001 entries from this seed automatically, the same way every
+// other location's expected SKU is derived from its seeded pallet.
+{
+  const iphoneBox = { sku: 'SKU-1001', name: 'iPhone 15 Box', lot: 'L-1090' };
+  const rackA21 = LOCATIONS['AUD-0240'].layouts[0].racks.find((r) => r.code === 'A-21');
+  rackA21?.bays.forEach((bay) => {
+    bay.locations.forEach((loc, i) => {
+      const pallet = loc.pallets[0];
+      if (pallet?.lines[0] && i % 4 === 0) {
+        pallet.lines[0] = { ...pallet.lines[0], sku: iphoneBox.sku, name: iphoneBox.name, lot: iphoneBox.lot };
+      }
+    });
+  });
+  // Rack A-21 physically has a 4th bay that isn't part of AUD-0240's scope
+  // at all — added after the SKU-1001 scatter above so none of it ever gets
+  // the target SKU, letting Rack View show the whole physical rack (all 4
+  // bays) while this one reads as entirely out of scope, faded out the same
+  // way any other non-target pallet already does.
+  const bay4 = makeBay('B-04', fillBayLevels('A-21-B04', []));
+  // INVENTORY_POOL itself includes SKU-1001 (used elsewhere for the target-
+  // SKU demo), so the generic pallet-seeding cycle above can land on it by
+  // coincidence — swap any such pallet for a genuinely non-target item so
+  // this bay never accidentally lights up as in-scope.
+  const nonTargetPool = INVENTORY_POOL.filter((p) => p.sku !== iphoneBox.sku);
+  bay4.locations.forEach((loc, i) => {
+    const pallet = loc.pallets[0];
+    if (pallet?.lines[0]?.sku === iphoneBox.sku) {
+      const swap = nonTargetPool[i % nonTargetPool.length];
+      pallet.lines[0] = { ...pallet.lines[0], sku: swap.sku, name: swap.name, lot: swap.lot };
+    }
+  });
+  rackA21?.bays.push(bay4);
+}
+
+// Of Rack A-21's 38 target-SKU locations, these 4 are known up front to
+// physically have no scanner code at all (an empty pallet, or one that was
+// never labeled) — real-world "the pick list says it should be here, but
+// there's nothing to scan." Kept separate from EXPECTED_SKUS (which still
+// lists SKU-1001 for these — that's what SHOULD be here) so Rack View can
+// still count them among the 38 in-scope locations while marking them
+// permanently unscannable rather than just "not reached yet."
+export const NO_CODE_LOCATIONS: Record<string, true> = {
+  'A-21-B-01-0303': true,
+  'A-21-B-01-1002': true,
+  'A-21-B-02-0401': true,
+  'A-21-B-02-1201': true,
+};
+
 // The warehouse's master slotting plan — what SKU/quantity is SUPPOSED to be
 // at a location, independent of whatever an inspector actually finds there.
 // Keyed by location code, since a location's slot assignment doesn't vary
@@ -443,3 +518,22 @@ function buildExpectedSkus(locationsMap: Record<string, AuditLocationsTree>): vo
   });
 }
 buildExpectedSkus(LOCATIONS);
+
+// buildExpectedSkus can independently pick SKU-1001 as one of a location's
+// *secondary* expected lines (it cycles through the same INVENTORY_POOL,
+// which includes SKU-1001) even after the primary-pallet scrub above — so
+// re-check Rack A-21's Bay B-04 here, once EXPECTED_SKUS actually exists,
+// and swap out any lingering SKU-1001 line so this bay is guaranteed to
+// never match AUD-0240's target_sku.
+{
+  const rackA21ForBay4 = LOCATIONS['AUD-0240'].layouts[0].racks.find((r) => r.code === 'A-21');
+  const bay4Locs = rackA21ForBay4?.bays.find((b) => b.code === 'B-04')?.locations ?? [];
+  const nonTargetPool = INVENTORY_POOL.filter((p) => p.sku !== 'SKU-1001');
+  bay4Locs.forEach((loc, i) => {
+    const lines = EXPECTED_SKUS[loc.code];
+    if (!lines) return;
+    EXPECTED_SKUS[loc.code] = lines.map((line, j) =>
+      line.sku === 'SKU-1001' ? { ...line, ...nonTargetPool[(i + j) % nonTargetPool.length] } : line,
+    );
+  });
+}

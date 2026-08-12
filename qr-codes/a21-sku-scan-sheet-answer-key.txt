@@ -1,0 +1,41 @@
+Rack A-21 SKU Scan Sheet — Answer Key
+Expected SKU at every listed location: SKU-1001 (iPhone 15 Box)
+
+A-21-B-01-01         Bay B-01 L 1 P-0101   scan=SKU-1001   -> MATCH
+A-21-B-01-0202       Bay B-01 L 2 P-0202   scan=SKU-1001   -> MATCH
+A-21-B-01-0303       Bay B-01 L 3 P-0303   scan=SKU-1001   -> MATCH
+A-21-B-01-0401       Bay B-01 L 4 P-0401   scan=SKU-1001   -> MATCH
+A-21-B-01-0402       Bay B-01 L 4 P-0402   scan=SKU-1042   -> MISMATCH
+A-21-B-01-0503       Bay B-01 L 5 P-0503   scan=SKU-1001   -> MATCH
+A-21-B-01-0702       Bay B-01 L 7 P-0702   scan=SKU-1001   -> MATCH
+A-21-B-01-0802       Bay B-01 L 8 P-0802   scan=SKU-1001   -> MATCH
+A-21-B-01-0901       Bay B-01 L 9 P-0901   scan=SKU-1001   -> MATCH
+A-21-B-01-1002       Bay B-01 L10 P-1002   scan=SKU-1001   -> MATCH
+A-21-B-01-1201       Bay B-01 L12 P-1201   scan=SKU-2218   -> MISMATCH
+A-21-B-01-1202       Bay B-01 L12 P-1202   scan=SKU-1001   -> MATCH
+A-21-B-01-1303       Bay B-01 L13 P-1303   scan=SKU-1001   -> MATCH
+A-21-B-02-01         Bay B-02 L 1 P-0101   scan=SKU-1001   -> MATCH
+A-21-B-02-0202       Bay B-02 L 2 P-0202   scan=SKU-1001   -> MATCH
+A-21-B-02-0401       Bay B-02 L 4 P-0401   scan=SKU-1001   -> MATCH
+A-21-B-02-0402       Bay B-02 L 4 P-0402   scan=SKU-3301   -> MISMATCH
+A-21-B-02-0503       Bay B-02 L 5 P-0503   scan=SKU-1001   -> MATCH
+A-21-B-02-0702       Bay B-02 L 7 P-0702   scan=SKU-1001   -> MATCH
+A-21-B-02-0802       Bay B-02 L 8 P-0802   scan=SKU-1001   -> MATCH
+A-21-B-02-0901       Bay B-02 L 9 P-0901   scan=SKU-1001   -> MATCH
+A-21-B-02-1002       Bay B-02 L10 P-1002   scan=SKU-1001   -> MATCH
+A-21-B-02-1201       Bay B-02 L12 P-1201   scan=SKU-9011   -> MISMATCH
+A-21-B-02-1202       Bay B-02 L12 P-1202   scan=SKU-1001   -> MATCH
+A-21-B-02-1303       Bay B-02 L13 P-1303   scan=SKU-1001   -> MATCH
+A-21-B-03-01         Bay B-03 L 1 P-0101   scan=SKU-1001   -> MATCH
+A-21-B-03-02         Bay B-03 L 1 P-0102   scan=SKU-1001   -> MATCH
+A-21-B-03-0202       Bay B-03 L 2 P-0202   scan=SKU-1001   -> MATCH
+A-21-B-03-0401       Bay B-03 L 4 P-0401   scan=SKU-5088   -> MISMATCH
+A-21-B-03-0402       Bay B-03 L 4 P-0402   scan=SKU-1001   -> MATCH
+A-21-B-03-0503       Bay B-03 L 5 P-0503   scan=SKU-1001   -> MATCH
+A-21-B-03-0702       Bay B-03 L 7 P-0702   scan=SKU-1001   -> MATCH
+A-21-B-03-0802       Bay B-03 L 8 P-0802   scan=SKU-1001   -> MATCH
+A-21-B-03-1002       Bay B-03 L10 P-1002   scan=SKU-1001   -> MATCH
+A-21-B-03-1201       Bay B-03 L12 P-1201   scan=SKU-1180   -> MISMATCH
+A-21-B-03-1202       Bay B-03 L12 P-1202   scan=SKU-1001   -> MATCH
+A-21-B-03-1302       Bay B-03 L13 P-1302   scan=SKU-1001   -> MATCH
+A-21-B-03-1303       Bay B-03 L13 P-1303   scan=SKU-1001   -> MATCH

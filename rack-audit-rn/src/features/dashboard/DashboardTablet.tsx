@@ -7,8 +7,8 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { Pill } from '@/components/Pill';
 import { AUDIT_TYPE_ICON } from '@/lib/auditTypeIcon';
 import { useAuthStore } from '@/store/useAuthStore';
-import { fmtDate, uiStatus } from '@/lib/auditLogic';
-import { useAuditProgress, useAuditProgressMap } from '@/hooks/useLocationsTree';
+import { flattenBays, fmtDate, uiStatus } from '@/lib/auditLogic';
+import { useAuditProgress, useAuditProgressMap, useLocationsTree } from '@/hooks/useLocationsTree';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCurrentOngoing, useMyAudits } from './hooks';
@@ -27,6 +27,7 @@ export function DashboardTablet() {
   const auditIds = myTasks.map((a) => a.audit_id);
   const { map } = useAuditProgressMap(auditIds);
   const bannerProgress = useAuditProgress(banner?.audit_id);
+  const { data: bannerTree } = useLocationsTree(banner?.audit_id);
 
   const totalAudits = myTasks.length;
   const ongoingCount = myTasks.filter((a) => uiStatus(a) === 'In Progress').length;
@@ -75,7 +76,39 @@ export function DashboardTablet() {
             <BannerField label="Total Locations" value={String(bannerProgress.rollup.locTotal)} />
             <BannerField label="Last Counted" value={bannerProgress.lastSaved ? bannerProgress.lastSaved.loc.code : '—'} />
             <Pressable
-              onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: banner.audit_id } } as never)}
+              onPress={() => {
+                if (!isOngoingBanner) {
+                  router.push({ pathname: '/audit/[auditId]', params: { auditId: banner.audit_id } } as never);
+                  return;
+                }
+                if (isFullyCounted) {
+                  router.push({ pathname: '/audit/[auditId]/summary', params: { auditId: banner.audit_id } } as never);
+                  return;
+                }
+                // Resume Audit skips Audit Details entirely — straight to
+                // the Rack View canvas + form, picking up exactly where
+                // the inspector left off (the last-touched location).
+                if (bannerProgress.lastSaved) {
+                  const { lastSaved } = bannerProgress;
+                  router.push({
+                    pathname: '/audit/[auditId]/rack/[rackId]',
+                    params: { auditId: banner.audit_id, rackId: lastSaved.rack, layout: lastSaved.layout, bay: lastSaved.bay, loc: lastSaved.loc.code },
+                  } as never);
+                  return;
+                }
+                // Nothing touched yet — fall back to the first bay with
+                // work left (or the first bay overall).
+                const flatBays = flattenBays(bannerTree);
+                const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
+                if (targetBay) {
+                  router.push({
+                    pathname: '/audit/[auditId]/rack/[rackId]',
+                    params: { auditId: banner.audit_id, rackId: targetBay.rack, layout: targetBay.layout, bay: targetBay.code },
+                  } as never);
+                  return;
+                }
+                router.push({ pathname: '/audit/[auditId]', params: { auditId: banner.audit_id } } as never);
+              }}
               style={[styles.bannerBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.xxl }]}
             >
               <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
@@ -129,12 +162,14 @@ export function DashboardTablet() {
                 {ongoing.audit_name}
               </Text>
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{ongoing.audit_id}</Text>
-              <Text style={[styles.sectionLabel, { color: tokens.mutedForeground }]}>Inspection Details</Text>
+              <Text style={[styles.sectionLabel, { color: tokens.mutedForeground }]}>Audit Details</Text>
               <View style={styles.detailGrid}>
-                <DetailField label="Warehouse" value={inspector?.warehouse ?? '—'} />
+                <DetailField label="Layout" value={ongoing.scope_type === 'Layout' && ongoing.scope_values.length ? ongoing.scope_values.join(', ') : '—'} />
                 <DetailField label="Rack" value={String(bannerProgress.rollup.rackTotal)} />
                 <DetailField label="Total Bays" value={String(bannerProgress.rollup.bayTotal)} />
                 <DetailField label="Pending Bays" value={String(bannerProgress.rollup.bayTotal - bannerProgress.rollup.bayDone)} />
+                <DetailField label="Locations Scanned" value={String(bannerProgress.rollup.locDone)} />
+                <DetailField label="Locations Pending" value={String(bannerProgress.rollup.locTotal - bannerProgress.rollup.locDone)} />
               </View>
             </Card>
           ) : (
@@ -194,7 +229,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 function DetailField({ label, value }: { label: string; value: string }) {
   const { tokens } = useTheme();
   return (
-    <View style={{ width: '50%', marginBottom: 10 }}>
+    <View style={{ width: '25%', marginBottom: 10 }}>
       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{label}</Text>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 2 }}>{value}</Text>
     </View>

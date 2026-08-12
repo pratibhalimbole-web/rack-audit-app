@@ -23,6 +23,14 @@ export default function PhoneTabsLayout() {
 
   return (
     <Tabs
+      // Every pushed screen (Audit Details, Rack View, Count Sheet, Warehouse
+      // Map, ...) is registered here as a hidden Tabs.Screen (href: null),
+      // not a real Stack push — see the comment further down. The default
+      // backBehavior ('firstRoute') makes the hardware/header back button
+      // always collapse to the first tab (Dashboard) no matter how many
+      // screens deep the user actually navigated. 'history' makes back()
+      // follow the real order screens were focused in instead.
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: tokens.primary,
@@ -39,6 +47,19 @@ export default function PhoneTabsLayout() {
         />
       ))}
       <Tabs.Screen
+        name="scan-tab"
+        options={{
+          title: 'Scan',
+          tabBarIcon: ({ color }) => <NavIcon icon="scan" color={color} />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/scan');
+          },
+        }}
+      />
+      <Tabs.Screen
         name="progress"
         options={{
           title: progressLabel,
@@ -50,19 +71,6 @@ export default function PhoneTabsLayout() {
             if (!ongoing) return;
             e.preventDefault();
             router.push({ pathname: '/audit/[auditId]/progress', params: { auditId: ongoing.audit_id } } as never);
-          },
-        }}
-      />
-      <Tabs.Screen
-        name="scan-tab"
-        options={{
-          title: 'Scan',
-          tabBarIcon: ({ color }) => <NavIcon icon="scan" color={color} />,
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.push('/scan');
           },
         }}
       />
@@ -80,10 +88,12 @@ export default function PhoneTabsLayout() {
       <Tabs.Screen name="audit/[auditId]/count-sheet" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/progress" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/summary" options={{ href: null }} />
-      {/* Rack View already has its own back button (AppHeader), and its
-          canvas is meant to fill the whole screen — the bottom tab bar
-          would just eat into that space for no navigational benefit. */}
+      {/* Rack View and the Warehouse Map already have their own back button
+          (AppHeader), and their canvases are meant to fill the whole screen
+          — the bottom tab bar would just eat into that space for no
+          navigational benefit. */}
       <Tabs.Screen name="audit/[auditId]/rack/[rackId]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="tasks/map" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/issue/[lineId]" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/discrepancy/[key]" options={{ href: null }} />
     </Tabs>

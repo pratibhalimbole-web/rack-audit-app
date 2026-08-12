@@ -5,30 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
-import { fmtDate, priorityFor, rollup, uiStatus } from '@/lib/auditLogic';
+import { flattenBays, fmtDate, priorityFor, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { useAuthStore } from '@/store/useAuthStore';
-import type { AuditLocationsTree } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
-
-type FlatBay = { layout: string; rack: string; code: string; done: boolean; openLoc: string | null };
-
-function flattenBays(tree: AuditLocationsTree | undefined): FlatBay[] {
-  const layouts = tree?.layouts ?? [];
-  const out: FlatBay[] = [];
-  layouts.forEach((ly) =>
-    ly.racks.forEach((rack) =>
-      rack.bays.forEach((b) => {
-        const done = b.locations.length > 0 && b.locations.every((l) => l.status === 'Completed');
-        const openLoc = b.locations.find((l) => l.status !== 'Completed') ?? b.locations[0];
-        out.push({ layout: ly.name, rack: rack.code, code: b.code, done, openLoc: openLoc ? openLoc.code : null });
-      }),
-    ),
-  );
-  return out;
-}
 
 // Ports renderAuditDetails() (rack-audit-app.html ~2374-2508): schedule
 // card, bay-completion summary + pill grid (accordion once scope spans more
@@ -68,16 +50,19 @@ export function AuditDetailsScreen() {
   const toggleSection = (key: string) => setClosedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const isOpen = (key: string) => !closedSections[key];
 
+  // Same destination on phone and tablet — the Rack View canvas, with its
+  // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
+  // > Start Task. Count Sheet's plain list view is no longer where a bay
+  // chip lands on phone.
   const onPressBay = (bay: FlatBay) => {
     if (isSubmitted) return;
-    if (isTablet) {
-      router.push({ pathname: '/audit/[auditId]/rack/[rackId]', params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code } } as never);
-    } else {
-      router.push({
-        pathname: '/audit/[auditId]/count-sheet',
-        params: { auditId: audit.audit_id, layout: bay.layout, rack: bay.rack, bay: bay.code, loc: bay.openLoc ?? '' },
-      } as never);
-    }
+    // source: 'bay-chip' keeps Rack View's bay lock absolute for this entry
+    // point specifically — only this bay's SKUs are selectable on the
+    // canvas, and other bays' expected SKUs require the Bay dropdown.
+    router.push({
+      pathname: '/audit/[auditId]/rack/[rackId]',
+      params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code, source: 'bay-chip' },
+    } as never);
   };
 
   const onPressStart = () => {
@@ -123,7 +108,9 @@ export function AuditDetailsScreen() {
           return (
             <View key={ly.name} style={[styles.accSection, { borderBottomColor: tokens.border }]}>
               <Pressable onPress={() => toggleSection(layoutKey)} style={styles.accHeader}>
-                <Ionicons name="grid-outline" size={18} color="#667085" />
+                <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                  <Ionicons name="grid-outline" size={18} color={tokens.accentBlue.base} />
+                </View>
                 <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
                   {ly.name}
                 </Text>
@@ -142,7 +129,9 @@ export function AuditDetailsScreen() {
                     return (
                       <View key={rack.code} style={styles.accSubSection}>
                         <Pressable onPress={() => toggleSection(rackKey)} style={styles.accHeader}>
-                          <Ionicons name="server-outline" size={18} color="#667085" />
+                          <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                            <Ionicons name="server-outline" size={18} color={tokens.accentBlue.base} />
+                          </View>
                           <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
                             Rack {rack.code}
                           </Text>
@@ -183,7 +172,9 @@ export function AuditDetailsScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <Card>
           <View style={styles.sectionLabelRow}>
-            <Ionicons name="search-outline" size={16} color={tokens.foreground} />
+            <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+              <Ionicons name="search-outline" size={16} color={tokens.accentBlue.base} />
+            </View>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>
               Audit Schedule Details
             </Text>
@@ -198,13 +189,17 @@ export function AuditDetailsScreen() {
               </Text>
               <Pill label={priorityFor(audit)} tone={priorityFor(audit)} />
             </View>
+            <InspField label="Total Racks" value={String(totalRackCount)} />
+            <InspField label="Total Locations" value={String(r.locTotal)} />
           </View>
         </Card>
 
         <Card>
           <View style={styles.bayHeadRow}>
             <View style={styles.bayCountRow}>
-              <Ionicons name="cube-outline" size={16} color={tokens.foreground} />
+              <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                <Ionicons name="cube-outline" size={16} color={tokens.accentBlue.base} />
+              </View>
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Total Bay :</Text>
               <View style={[styles.badge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
                 <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.sm }}>
@@ -230,7 +225,10 @@ export function AuditDetailsScreen() {
           {bayBody}
         </Card>
 
-        <Pressable onPress={() => router.push('/progress')} style={styles.linkBtn}>
+        <Pressable
+          onPress={() => router.push({ pathname: '/audit/[auditId]/progress', params: { auditId: audit.audit_id } } as never)}
+          style={styles.linkBtn}
+        >
           <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
             View Full Rack/Bay Breakdown
           </Text>
@@ -261,8 +259,8 @@ const styles = StyleSheet.create({
   body: { padding: 16, gap: 14, paddingBottom: 40 },
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   inspGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
-  inspFieldWrap: { width: '50%', marginBottom: 14 },
-  bayHeadRow: { gap: 10, marginBottom: 6 },
+  inspFieldWrap: { width: '33.33%', marginBottom: 14 },
+  bayHeadRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 6 },
   bayCountRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   badge: { paddingHorizontal: 12, paddingVertical: 4 },
   legendRow: { flexDirection: 'row', gap: 16, flexWrap: 'wrap' },
@@ -274,6 +272,7 @@ const styles = StyleSheet.create({
   accSubSection: { marginTop: 10, marginLeft: 4 },
   accHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   accBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  accIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   linkBtn: { paddingVertical: 6, alignItems: 'center' },
   footerBar: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth },
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48 },
