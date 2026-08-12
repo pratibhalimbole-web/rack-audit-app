@@ -56,7 +56,13 @@ export function AuditDetailsScreen() {
   // chip lands on phone.
   const onPressBay = (bay: FlatBay) => {
     if (isSubmitted) return;
-    router.push({ pathname: '/audit/[auditId]/rack/[rackId]', params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code } } as never);
+    // source: 'bay-chip' keeps Rack View's bay lock absolute for this entry
+    // point specifically — only this bay's SKUs are selectable on the
+    // canvas, and other bays' expected SKUs require the Bay dropdown.
+    router.push({
+      pathname: '/audit/[auditId]/rack/[rackId]',
+      params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code, source: 'bay-chip' },
+    } as never);
   };
 
   const onPressStart = () => {

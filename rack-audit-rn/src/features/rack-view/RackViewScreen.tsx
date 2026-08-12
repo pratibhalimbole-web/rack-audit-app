@@ -22,7 +22,13 @@ import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
 import { buildBayDiagram } from './buildBayDiagram';
 
-type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string };
+// `source: 'bay-chip'` marks arriving from an Audit Details bay chip
+// specifically — the one entry point where the bay lock is meant to stay
+// absolute (other bays' pending SKUs only reachable via the Bay dropdown).
+// Every other entry point (Resume Audit, opening the rack generally, etc.)
+// leaves `source` unset and keeps pending locations directly tappable
+// across bays regardless of the lock — see isLocSelectable below.
+type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string; source?: 'bay-chip' };
 
 const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Completed: 'Completed' } as const;
 
@@ -296,11 +302,7 @@ export function RackViewScreen() {
   const inBayFilter = (locCode: string) => bayFilter === 'all' || bayCodeForLoc(locCode) === bayFilter;
   // Still waiting on a clean, confirmed match at this location — either
   // never scanned, or scanned and found to mismatch on qty/damage. Shared
-  // by isLocSelectable (below) and pendingLocations, so a location with an
-  // expected SKU still due stays directly tappable on the canvas even when
-  // arriving via Resume Audit/a bay chip has locked bayFilter to a
-  // different bay — only the toolbar's Pallet dropdown was ever meant to be
-  // gated by the lock, not every other bay's still-outstanding work.
+  // by isLocSelectable (below) and pendingLocations.
   const isLocPending = (locCode: string) => {
     if (audit.target_sku && !matchesTargetSku(locCode)) return false;
     if (locationStatus[locCode] === 'missing') return false;
@@ -313,15 +315,30 @@ export function RackViewScreen() {
     if (line.sku !== expected.sku) return false;
     return line.qty !== expected.qty || line.condition !== 'Good';
   };
+  // A pending location in another bay stays directly tappable on the
+  // canvas despite the lock — except when arriving from an Audit Details
+  // bay chip specifically, where the lock is meant to stay absolute: only
+  // the chip's own bay is highlighted/selectable, and reaching any other
+  // bay's SKUs requires picking it from the Bay dropdown first (which
+  // re-scopes bayFilter, same as ever).
   const isLocSelectable = (locCode: string) =>
-    manualMode || (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode))) || isLocPending(locCode);
+    manualMode ||
+    (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode))) ||
+    (params.source !== 'bay-chip' && isLocPending(locCode));
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
-  // (as before) — this is purely cosmetic and separate from selectability.
-  // Unaffected by Manual Mode — the expected-SKU pallets keep exactly the
-  // same plain gray look they always had, so Manual Mode reads as "extra
-  // pallets opened up", not "the whole canvas repainted".
-  const isLocHighlighted = (locCode: string) => (audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0);
+  // (as before). Unaffected by Manual Mode — the expected-SKU pallets keep
+  // exactly the same plain gray look they always had, so Manual Mode reads
+  // as "extra pallets opened up", not "the whole canvas repainted".
+  // From an Audit Details bay chip specifically, only the chip's own bay
+  // highlights — every other bay's expected SKUs stay plain, matching the
+  // absolute lock on selectability there. Every other entry point (Resume
+  // Audit, opening the rack from Audit Details generally, the 3D warehouse
+  // map) highlights every bay's expected SKUs at once.
+  const isLocHighlighted = (locCode: string) => {
+    if (params.source === 'bay-chip' && !inBayFilter(locCode)) return false;
+    return audit.target_sku ? matchesTargetSku(locCode) : (EXPECTED_SKUS[locCode]?.length ?? 0) > 0;
+  };
   // Manual Mode-only pallets — outside the audit's assigned scope, only
   // selectable/reportable because Manual Mode opened them up. Dashed border
   // marks them as "not originally in scope" without needing a fill color.
