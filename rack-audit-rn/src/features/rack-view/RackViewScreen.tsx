@@ -215,23 +215,34 @@ export function RackViewScreen() {
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
-  // Bay is no longer a pickable dimension — the whole rack's bays render
-  // together, so only the rack (and layout) identify what's on screen.
-  const seedKey = `${auditId}|${layoutName}|${rackCode}`;
-  const seedKeyRef = useRef<string | null>(seedKey);
+  // Re-syncs layoutName/rackCode/bayFilter/selectedLoc to the INCOMING
+  // ROUTE PARAMS, not just on first mount. Tapping a second bay chip within
+  // the same rack resolves to the exact same path
+  // (/audit/[auditId]/rack/[rackId]) — only `bay`, a non-path param,
+  // differs — so Expo Router reuses this exact screen instance instead of
+  // remounting it. Every piece of state above was seeded via
+  // useState(params...), which only ever runs on the very first mount, so
+  // without this effect a second bay-chip tap (or Resume Audit landing on
+  // a different location after a previous Rack View visit) would silently
+  // keep showing whichever rack/bay/location was open before, not the one
+  // just navigated to.
+  const paramsKey = `${auditId}|${params.layout}|${params.rackId}|${params.bay}|${params.loc ?? ''}|${params.source ?? ''}`;
+  const paramsKeyRef = useRef<string>(paramsKey);
   useEffect(() => {
-    if (seedKeyRef.current !== seedKey) {
-      seedKeyRef.current = seedKey;
-      setSelectedLoc(null);
-      setBayFilter('all');
-      scale.value = 1;
-      savedScale.value = 1;
-      translateX.value = 0;
-      translateY.value = 0;
-      savedTranslateX.value = 0;
-      savedTranslateY.value = 0;
-    }
-  }, [seedKey]);
+    if (paramsKeyRef.current === paramsKey) return;
+    paramsKeyRef.current = paramsKey;
+    setLayoutName(params.layout);
+    setRackCode(params.rackId);
+    setBayFilter(params.bay || 'all');
+    setSelectedLoc(params.loc ?? null);
+    scale.value = 1;
+    savedScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
 
   // The requested layout/rack (from route params or a stale picker
   // selection) may not exist in this audit's tree — rather than dead-ending
