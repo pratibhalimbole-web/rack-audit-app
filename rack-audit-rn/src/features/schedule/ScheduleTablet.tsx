@@ -156,7 +156,7 @@ export function ScheduleTablet() {
       </ScrollView>
 
       <Modal visible={!!modalDateISO} transparent animationType="fade" onRequestClose={() => setModalDateISO(null)}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: tokens.scrim }]} onPress={() => setModalDateISO(null)}>
+        <Pressable style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setModalDateISO(null)}>
           <Pressable
             style={[styles.modalPanel, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]}
             onPress={(e) => e.stopPropagation()}

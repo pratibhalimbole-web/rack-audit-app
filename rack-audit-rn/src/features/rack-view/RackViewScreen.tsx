@@ -98,8 +98,12 @@ export function RackViewScreen() {
   // without forcing a trip back to Audit Details to work a different bay:
   // picking one from the Bay dropdown re-scopes selectability to it instead.
   // No `bay` param (e.g. opening the rack generally) leaves everything
-  // selectable, same as before.
-  const [bayFilter, setBayFilter] = useState<string>(params.bay ?? 'all');
+  // selectable, same as before. `||` (not `??`) deliberately treats an
+  // empty string the same as absent — the 3D warehouse map's "Start Task"
+  // passes `bay: ''` (only a rack was tapped, not a specific bay), which
+  // `??` would let through as bayFilter='', silently failing every
+  // inBayFilter() check since no real bay code ever equals ''.
+  const [bayFilter, setBayFilter] = useState<string>(params.bay || 'all');
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
   const [pendingTab, setPendingTab] = useState<'pending' | 'empty'>('pending');
   const [pendingSearch, setPendingSearch] = useState('');

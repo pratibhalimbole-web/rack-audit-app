@@ -64,10 +64,26 @@ export function WarehouseMapScreen() {
   const { data: allAudits = [] } = useAudits();
   const [filter, setFilter] = useState<FilterKey>('All');
   const [typeFilter, setTypeFilter] = useState<TypeFilterKey>('All');
+  // 'All' means every audit of the selected type; picking a specific
+  // audit_id narrows further — only meaningful once a Task Type is picked,
+  // since "which audit" only makes sense scoped to one type at a time.
+  const [auditFilter, setAuditFilter] = useState<'All' | string>('All');
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<RackCell | null>(null);
 
   const myTasks = useMemo(() => myAudits.filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)), [myAudits]);
+  // Every one of my audits under the currently picked type — the pool the
+  // Audit sub-filter offers. Only rendered as its own section when there's
+  // more than one, since a lone audit needs no further narrowing.
+  const auditsOfType = useMemo(
+    () => (typeFilter === 'All' ? [] : myTasks.filter((a) => a.audit_type === typeFilter)),
+    [myTasks, typeFilter],
+  );
+
+  const handlePickType = (key: TypeFilterKey) => {
+    setTypeFilter(key);
+    setAuditFilter('All');
+  };
   const { map } = useAuditProgressMap(allAudits.map((a) => a.audit_id));
 
   // Pinch-to-zoom/pan on the floor, same pattern as Rack View's canvas.
@@ -179,7 +195,10 @@ export function WarehouseMapScreen() {
   // selected in the filter, rather than every overdue task standing out
   // unasked-for the moment the screen opens.
   const filteredTasks = myTasks.filter(
-    (a) => (filter === 'All' ? !isOverdue(a) : dueBucket(a) === filter) && (typeFilter === 'All' || a.audit_type === typeFilter),
+    (a) =>
+      (filter === 'All' ? !isOverdue(a) : dueBucket(a) === filter) &&
+      (typeFilter === 'All' || a.audit_type === typeFilter) &&
+      (auditFilter === 'All' || a.audit_id === auditFilter),
   );
 
   // Just three states instead of a color per due-bucket: red if any touching
@@ -309,7 +328,21 @@ export function WarehouseMapScreen() {
               {typeFilter !== 'All' ? (
                 <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
                   <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{typeFilter}</Text>
-                  <Pressable onPress={() => setTypeFilter('All')} hitSlop={6}>
+                  <Pressable
+                    onPress={() => {
+                      setTypeFilter('All');
+                      setAuditFilter('All');
+                    }}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
+                  </Pressable>
+                </View>
+              ) : null}
+              {auditFilter !== 'All' ? (
+                <View style={[styles.activeChip, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+                  <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{auditFilter}</Text>
+                  <Pressable onPress={() => setAuditFilter('All')} hitSlop={6}>
                     <Ionicons name="close" size={12} color={tokens.accentBlue.strong} />
                   </Pressable>
                 </View>
@@ -368,7 +401,7 @@ export function WarehouseMapScreen() {
             {(['All', ...TASK_TYPES] as TypeFilterKey[]).map((key) => {
               const active = typeFilter === key;
               return (
-                <Pressable key={key} onPress={() => setTypeFilter(key)} style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}>
+                <Pressable key={key} onPress={() => handlePickType(key)} style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}>
                   <Ionicons
                     name={key === 'All' ? 'apps-outline' : TASK_TYPE_ICON[key as AuditType]}
                     size={15}
@@ -381,6 +414,31 @@ export function WarehouseMapScreen() {
                 </Pressable>
               );
             })}
+
+            {/* Only surfaces once a specific Task Type is picked AND that
+                type actually has more than one of my audits under it —
+                narrowing to "which audit" is meaningless with just one. */}
+            {typeFilter !== 'All' && auditsOfType.length > 1 ? (
+              <>
+                <Text style={[styles.filterSectionLabel, { color: tokens.mutedForeground, marginTop: 8 }]}>Audit</Text>
+                {(['All', ...auditsOfType.map((a) => a.audit_id)] as const).map((key) => {
+                  const active = auditFilter === key;
+                  const audit = key === 'All' ? null : auditsOfType.find((a) => a.audit_id === key);
+                  return (
+                    <Pressable key={key} onPress={() => setAuditFilter(key)} style={[styles.filterOption, active ? { backgroundColor: tokens.muted } : null]}>
+                      <View style={styles.filterDot} />
+                      <Text
+                        style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm, flex: 1 }}
+                        numberOfLines={1}
+                      >
+                        {audit ? `${audit.audit_id} · ${audit.audit_name}` : 'All'}
+                      </Text>
+                      {active ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>

@@ -24,6 +24,27 @@ export function useAuditProgress(auditId: string | undefined): {
   return { rollup: rollup(data), lastSaved: lastSaved(data), isLoading };
 }
 
+// Batches one raw-tree query per audit id, same query key as
+// useLocationsTree so it shares cache entries — used by Reported Audits'
+// all-audits board, which needs the actual tree (for scopedIssues/
+// summaryStats) rather than the pre-derived rollup useAuditProgressMap
+// returns.
+export function useLocationsTreeMap(auditIds: string[]): { map: Record<string, AuditLocationsTree | undefined>; isLoading: boolean } {
+  const results = useQueries({
+    queries: auditIds.map((auditId) => ({
+      queryKey: ['locations', auditId],
+      queryFn: () => getLocationsTree(auditId),
+    })),
+  });
+
+  const map: Record<string, AuditLocationsTree | undefined> = {};
+  auditIds.forEach((auditId, i) => {
+    map[auditId] = results[i]?.data;
+  });
+
+  return { map, isLoading: results.some((r) => r.isLoading) };
+}
+
 export type AuditProgress = { rollup: Rollup; lastSaved: LocationEntry | null; allLocations: LocationEntry[] };
 
 // Batches one query per audit id via useQueries (rather than calling

@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
-import { scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } from '@/lib/auditLogic';
+import { mine, scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } from '@/lib/auditLogic';
 import { conditionSeverity } from '@/lib/conditionSeverity';
-import { useLocationsTree } from '@/hooks/useLocationsTree';
+import { useLocationsTreeMap } from '@/hooks/useLocationsTree';
 import { CONDITIONS, type Condition } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -13,7 +13,13 @@ import { useAudits } from '../dashboard/hooks';
 type SortDir = 'asc' | 'desc';
 type BoardView = 'issues' | 'mismatches';
 type Severity = 'red' | 'amber' | 'green';
-type FilterCategory = 'rack' | 'bay' | 'condition';
+type FilterCategory = 'rack' | 'bay' | 'condition' | 'audit';
+
+// Every card is tagged with the audit it came from — this board merges
+// issues across every audit assigned to the inspector rather than locking
+// to whichever one it was reached from, so a card can no longer be
+// identified by its own fields alone.
+type WithAudit<T> = T & { auditId: string; auditName: string };
 
 function issueLineId(f: FlaggedLine): string {
   return [f.layout, f.rack, f.bay, f.locCode, f.pallet, f.sku].map(encodeURIComponent).join('~');
@@ -23,17 +29,29 @@ function issueLineId(f: FlaggedLine): string {
 // pallet LPN, so a pallet can carry multiple independently-flagged lines
 // (see mockData.ts's P-1202). Group flagged lines by pallet so each pallet
 // gets one card listing every flagged SKU on it, instead of one card per line.
-type PalletIssueGroup = { key: string; layout: string; rack: string; bay: string; locCode: string; pallet: string; lines: FlaggedLine[] };
+// Keyed by auditId too — two different audits can legitimately reuse the
+// same pallet/location codes, and merging those into one card would be wrong.
+type PalletIssueGroup = { key: string; auditId: string; auditName: string; layout: string; rack: string; bay: string; locCode: string; pallet: string; lines: FlaggedLine[] };
 
-function groupByPallet(lines: FlaggedLine[]): PalletIssueGroup[] {
+function groupByPallet(lines: WithAudit<FlaggedLine>[]): PalletIssueGroup[] {
   const groups = new Map<string, PalletIssueGroup>();
   for (const line of lines) {
-    const key = [line.layout, line.rack, line.bay, line.locCode, line.pallet].map(encodeURIComponent).join('~');
+    const key = [line.auditId, line.layout, line.rack, line.bay, line.locCode, line.pallet].map(encodeURIComponent).join('~');
     const existing = groups.get(key);
     if (existing) {
       existing.lines.push(line);
     } else {
-      groups.set(key, { key, layout: line.layout, rack: line.rack, bay: line.bay, locCode: line.locCode, pallet: line.pallet, lines: [line] });
+      groups.set(key, {
+        key,
+        auditId: line.auditId,
+        auditName: line.auditName,
+        layout: line.layout,
+        rack: line.rack,
+        bay: line.bay,
+        locCode: line.locCode,
+        pallet: line.pallet,
+        lines: [line],
+      });
     }
   }
   return [...groups.values()];
@@ -58,8 +76,8 @@ function scopedIssueSeverity(s: ScopedIssue): Severity {
   return 'amber';
 }
 
-function scopedIssueKey(s: ScopedIssue): string {
-  return [s.layout, s.rack, s.bay, s.locCode, s.pallet].map(encodeURIComponent).join('~');
+function scopedIssueKey(s: WithAudit<ScopedIssue>): string {
+  return [s.auditId, s.layout, s.rack, s.bay, s.locCode, s.pallet].map(encodeURIComponent).join('~');
 }
 
 function locationLabel(layout: string, rack: string, bay: string, locCode: string): string {
@@ -80,7 +98,7 @@ const SEVERITY_ICON: Record<Severity, keyof typeof Ionicons.glyphMap> = {
   red: 'alert-circle-outline',
 };
 
-const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay: 'Bay Name', condition: 'Damage' };
+const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay: 'Bay Name', condition: 'Damage', audit: 'Audit' };
 
 // Ports renderProgressIssuesBoard() (rack-audit-app.html ~4094-4166) —
 // tablet-only redesign of the Progress tab: search + sort-by-qty + rack/bay/
@@ -93,10 +111,14 @@ const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay:
 // get a due-date-style header with a colored status badge.
 export function ReportedAuditsBoard() {
   const { tokens } = useTheme();
-  const { auditId } = useLocalSearchParams<{ auditId: string }>();
   const { data: audits } = useAudits();
-  const audit = audits?.find((a) => a.audit_id === auditId);
-  const { data: tree, isLoading } = useLocationsTree(auditId);
+  // Every audit assigned to the inspector, not just whichever one this
+  // screen happened to be reached from — the board merges issues across
+  // all of them into one list rather than locking to a single audit.
+  const candidates = useMemo(() => (audits ? mine(audits) : []), [audits]);
+  const candidateIds = useMemo(() => candidates.map((a) => a.audit_id), [candidates]);
+  const { map: treeMap, isLoading } = useLocationsTreeMap(candidateIds);
+  const auditNameById = useMemo(() => Object.fromEntries(candidates.map((a) => [a.audit_id, a.audit_name])), [candidates]);
 
   const [view, setView] = useState<BoardView>('issues');
   const [search, setSearch] = useState('');
@@ -108,24 +130,47 @@ export function ReportedAuditsBoard() {
   const [filterBays, setFilterBays] = useState<string[]>([]);
   const [filterConditions, setFilterConditions] = useState<Condition[]>([]);
   const [filterSeverities, setFilterSeverities] = useState<Severity[]>([]);
+  const [filterAudits, setFilterAudits] = useState<string[]>([]);
 
-  const stats = useMemo(() => summaryStats(tree), [tree]);
+  // Every audit's flagged lines and scoped issues, each tagged with which
+  // audit it came from — merged into one flat list so the rest of the
+  // board (filtering, grouping, sections) works the same as the old
+  // single-audit version, just over a bigger pool.
+  const stats = useMemo(
+    () =>
+      candidates.flatMap((a) =>
+        summaryStats(treeMap[a.audit_id]).flagged.map((f): WithAudit<FlaggedLine> => ({ ...f, auditId: a.audit_id, auditName: a.audit_name })),
+      ),
+    [candidates, treeMap],
+  );
   // Case 1 (Mismatch) / Case 2 (Matched + qty/damage issue) — reconciled
   // against EXPECTED_SKUS directly, independent of whether "Raise Issue"
   // was ever tapped, since a real SKU/qty discrepancy is worth surfacing
   // either way. Case 3 (Manual Mode) has no expected SKU to reconcile
   // against at all, so it stays sourced from summaryStats/FlaggedLine below.
-  const scoped = useMemo(() => scopedIssues(tree), [tree]);
-  const racks = useMemo(() => [...new Set([...stats.flagged.map((f) => f.rack), ...scoped.map((s) => s.rack)])].sort(), [stats, scoped]);
-  const bays = useMemo(() => [...new Set([...stats.flagged.map((f) => f.bay), ...scoped.map((s) => s.bay)])].sort(), [stats, scoped]);
+  const scoped = useMemo(
+    () =>
+      candidates.flatMap((a) => scopedIssues(treeMap[a.audit_id]).map((s): WithAudit<ScopedIssue> => ({ ...s, auditId: a.audit_id, auditName: a.audit_name }))),
+    [candidates, treeMap],
+  );
+  const racks = useMemo(() => [...new Set([...stats.map((f) => f.rack), ...scoped.map((s) => s.rack)])].sort(), [stats, scoped]);
+  const bays = useMemo(() => [...new Set([...stats.map((f) => f.bay), ...scoped.map((s) => s.bay)])].sort(), [stats, scoped]);
   const conditions = useMemo(
-    () => CONDITIONS.filter((c) => c !== 'Good' && (stats.flagged.some((f) => f.condition === c) || scoped.some((s) => s.condition === c))),
+    () => CONDITIONS.filter((c) => c !== 'Good' && (stats.some((f) => f.condition === c) || scoped.some((s) => s.condition === c))),
     [stats, scoped],
+  );
+  // Only audits that actually contributed a card — an assigned audit with
+  // nothing flagged yet would otherwise show up as a selectable filter with
+  // no possible effect.
+  const auditFilterOptions = useMemo(
+    () => candidates.filter((a) => stats.some((f) => f.auditId === a.audit_id) || scoped.some((s) => s.auditId === a.audit_id)),
+    [candidates, stats, scoped],
   );
 
   const issueGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const filtered = stats.flagged.filter((f) => {
+    const filtered = stats.filter((f) => {
+      if (filterAudits.length && !filterAudits.includes(f.auditId)) return false;
       if (filterRacks.length && !filterRacks.includes(f.rack)) return false;
       if (filterBays.length && !filterBays.includes(f.bay)) return false;
       if (filterConditions.length && !filterConditions.includes(f.condition)) return false;
@@ -135,7 +180,7 @@ export function ReportedAuditsBoard() {
     const groups = groupByPallet(filtered);
     const qty = (g: PalletIssueGroup) => g.lines.reduce((sum, l) => sum + l.qty, 0);
     return groups.slice().sort((x, y) => (sortDir === 'asc' ? qty(x) - qty(y) : qty(y) - qty(x)));
-  }, [stats, search, filterRacks, filterBays, filterConditions, filterSeverities, sortDir]);
+  }, [stats, search, filterAudits, filterRacks, filterBays, filterConditions, filterSeverities, sortDir]);
 
   // Manual Mode reports (Case 3) still come from summaryStats/FlaggedLine —
   // every Manual Mode save always carries issueRaised, so it's reliably in
@@ -144,9 +189,10 @@ export function ReportedAuditsBoard() {
   // self-contained report, so in practice this is never a mix).
   const manualIssueGroups = useMemo(() => issueGroups.filter((g) => g.lines.some((l) => l.source === 'manual')), [issueGroups]);
 
-  const filterScoped = (items: ScopedIssue[]) => {
+  const filterScoped = (items: WithAudit<ScopedIssue>[]) => {
     const q = search.trim().toLowerCase();
     return items.filter((s) => {
+      if (filterAudits.length && !filterAudits.includes(s.auditId)) return false;
       if (filterRacks.length && !filterRacks.includes(s.rack)) return false;
       if (filterBays.length && !filterBays.includes(s.bay)) return false;
       if (filterConditions.length && !filterConditions.includes(s.condition)) return false;
@@ -154,36 +200,37 @@ export function ReportedAuditsBoard() {
       return !q || [s.foundSku, s.expectedSku, s.rack, s.locCode, s.pallet].join(' ').toLowerCase().includes(q);
     });
   };
-  const sortByQty = (items: ScopedIssue[]) => items.slice().sort((x, y) => (sortDir === 'asc' ? x.foundQty - y.foundQty : y.foundQty - x.foundQty));
+  const sortByQty = (items: WithAudit<ScopedIssue>[]) => items.slice().sort((x, y) => (sortDir === 'asc' ? x.foundQty - y.foundQty : y.foundQty - x.foundQty));
 
   // Case 1 — wrong SKU scanned at an in-scope location.
   const case1Items = useMemo(
     () => sortByQty(filterScoped(scoped.filter((s) => s.kind === 'mismatch'))),
-    [scoped, search, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
+    [scoped, search, filterAudits, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
   );
   // Case 2 — right SKU, but a quantity or damage discrepancy.
   const case2Items = useMemo(
     () => sortByQty(filterScoped(scoped.filter((s) => s.kind === 'matched-issue'))),
-    [scoped, search, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
+    [scoped, search, filterAudits, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
   );
   // Toggle OFF (default) — only matched-but-off-on-qty/damage pallets.
   // Toggle ON ("Mismatch SKUs") — wrong-SKU pallets plus Manual Mode reports,
   // since both are location-level discrepancies outside a clean match.
   const viewTotal = view === 'issues' ? case2Items.length : case1Items.length + manualIssueGroups.length;
 
-  const activeFilterCount = filterRacks.length + filterBays.length + filterConditions.length + filterSeverities.length;
+  const activeFilterCount = filterAudits.length + filterRacks.length + filterBays.length + filterConditions.length + filterSeverities.length;
 
   const toggleIn = <T,>(list: T[], value: T, setList: (v: T[]) => void) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
   const clearAllFilters = () => {
+    setFilterAudits([]);
     setFilterRacks([]);
     setFilterBays([]);
     setFilterConditions([]);
     setFilterSeverities([]);
   };
 
-  if (!audit || isLoading) {
+  if (isLoading) {
     return (
       <View style={[styles.loading, { backgroundColor: tokens.muted }]}>
         <ActivityIndicator color={tokens.primary} />
@@ -193,7 +240,12 @@ export function ReportedAuditsBoard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Reported Audits" sub={`${audit.audit_id} · ${audit.scope_type} overview`} showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
+      <AppHeader
+        title="Reported Audits"
+        sub={`${candidates.length} Assigned Audit${candidates.length === 1 ? '' : 's'} · Issue overview`}
+        showBack
+        menuItems={[{ label: 'Sync Now', onPress: () => {} }]}
+      />
 
       <View style={styles.toolbar}>
         <View style={[styles.searchBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
@@ -230,20 +282,22 @@ export function ReportedAuditsBoard() {
 
               {pickerOpen ? (
                 <>
-                  <Pressable
-                    style={StyleSheet.absoluteFill}
-                    onPress={() => {
-                      setPickerOpen(false);
-                      setOpenCategory(null);
-                    }}
-                  />
                   {openCategory ? (
                     <View style={[styles.categoryPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                       <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>{CATEGORY_LABEL[openCategory]}</Text>
                       <ScrollView style={{ maxHeight: 260 }}>
-                        {(openCategory === 'rack' ? racks : openCategory === 'bay' ? bays : conditions).map((opt) => {
-                          const list = openCategory === 'rack' ? filterRacks : openCategory === 'bay' ? filterBays : filterConditions;
+                        {(openCategory === 'rack'
+                          ? racks
+                          : openCategory === 'bay'
+                            ? bays
+                            : openCategory === 'audit'
+                              ? auditFilterOptions.map((a) => a.audit_id)
+                              : conditions
+                        ).map((opt) => {
+                          const list =
+                            openCategory === 'rack' ? filterRacks : openCategory === 'bay' ? filterBays : openCategory === 'audit' ? filterAudits : filterConditions;
                           const checked = (list as string[]).includes(opt);
+                          const label = openCategory === 'audit' ? (auditNameById[opt] ?? opt) : opt;
                           return (
                             <Pressable
                               key={opt}
@@ -252,12 +306,16 @@ export function ReportedAuditsBoard() {
                                   ? toggleIn(filterRacks, opt, setFilterRacks)
                                   : openCategory === 'bay'
                                     ? toggleIn(filterBays, opt, setFilterBays)
-                                    : toggleIn(filterConditions, opt as Condition, setFilterConditions)
+                                    : openCategory === 'audit'
+                                      ? toggleIn(filterAudits, opt, setFilterAudits)
+                                      : toggleIn(filterConditions, opt as Condition, setFilterConditions)
                               }
                               style={styles.checklistRow}
                             >
                               <Checkbox checked={checked} />
-                              <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }}>{opt}</Text>
+                              <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }} numberOfLines={1}>
+                                {label}
+                              </Text>
                             </Pressable>
                           );
                         })}
@@ -280,7 +338,7 @@ export function ReportedAuditsBoard() {
                     })}
 
                     <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border, marginTop: 8 }]}>Select</Text>
-                    {(['condition', 'rack', 'bay'] as FilterCategory[]).map((cat) => (
+                    {(['audit', 'condition', 'rack', 'bay'] as FilterCategory[]).map((cat) => (
                       <Pressable key={cat} onPress={() => setOpenCategory(openCategory === cat ? null : cat)} style={styles.checklistRow}>
                         <Text style={{ color: openCategory === cat ? tokens.primary : tokens.popoverForeground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold, flex: 1 }}>
                           {CATEGORY_LABEL[cat]}
@@ -306,7 +364,6 @@ export function ReportedAuditsBoard() {
             </Pressable>
             {sortOpen ? (
               <>
-                <Pressable style={StyleSheet.absoluteFill} onPress={() => setSortOpen(false)} />
                 <View style={[styles.sortDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                   <Text style={[styles.panelTitle, { color: tokens.mutedForeground, borderBottomColor: tokens.border }]}>Sort by Qty</Text>
                   {(['desc', 'asc'] as SortDir[]).map((dir) => (
@@ -329,10 +386,31 @@ export function ReportedAuditsBoard() {
         </View>
       </View>
 
+      {/* One full-screen catcher for both the filter picker and the sort
+          dropdown — tapping anywhere outside either (the summary strip, the
+          card list, empty space) closes whichever is open. Toolbar has a
+          higher zIndex than this, so its own icons/panels stay on top and
+          interactive while it's rendered. */}
+      {pickerOpen || sortOpen ? (
+        <Pressable
+          style={[StyleSheet.absoluteFill, styles.dismissBackdrop]}
+          onPress={() => {
+            setPickerOpen(false);
+            setOpenCategory(null);
+            setSortOpen(false);
+          }}
+        />
+      ) : null}
+
       {activeFilterCount ? (
         <View style={[styles.summary, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
           <View style={styles.summaryTop}>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Total : {viewTotal}</Text>
+            <SummaryChips
+              label="Audit"
+              values={filterAudits.map((id) => auditNameById[id] ?? id)}
+              onRemove={(name) => setFilterAudits((l) => l.filter((id) => (auditNameById[id] ?? id) !== name))}
+            />
             <SummaryChips label="Severity" values={filterSeverities.map((s) => SEVERITY_BADGE[s].label)} onRemove={(label) => setFilterSeverities((l) => l.filter((s) => SEVERITY_BADGE[s].label !== label))} />
             <SummaryChips label="Damage" values={filterConditions} onRemove={(v) => setFilterConditions((l) => l.filter((c) => c !== v))} />
             <SummaryChips label="Rack" values={filterRacks} onRemove={(v) => setFilterRacks((l) => l.filter((r) => r !== v))} />
@@ -381,10 +459,9 @@ export function ReportedAuditsBoard() {
             />
             <IssueSection
               title="Manually Reported"
-              subtitle="Raised via Manual Mode, outside this audit's assigned scope"
+              subtitle="Raised via Manual Mode, outside its audit's assigned scope"
               icon="hand-left-outline"
               groups={manualIssueGroups}
-              auditId={auditId}
             />
           </>
         ) : (
@@ -490,13 +567,11 @@ function IssueSection({
   subtitle,
   icon,
   groups,
-  auditId,
 }: {
   title: string;
   subtitle: string;
   icon: keyof typeof Ionicons.glyphMap;
   groups: PalletIssueGroup[];
-  auditId: string;
 }) {
   if (!groups.length) return null;
   return (
@@ -504,7 +579,7 @@ function IssueSection({
       <SectionHead title={title} subtitle={subtitle} icon={icon} count={groups.length} />
       <View style={styles.grid}>
         {groups.map((g) => (
-          <IssueCard key={g.key} auditId={auditId} group={g} />
+          <IssueCard key={g.key} auditId={g.auditId} group={g} />
         ))}
       </View>
     </View>
@@ -525,7 +600,7 @@ function ScopedIssueSection({
   title: string;
   subtitle: string;
   icon: keyof typeof Ionicons.glyphMap;
-  items: ScopedIssue[];
+  items: WithAudit<ScopedIssue>[];
 }) {
   if (!items.length) return null;
   return (
@@ -540,7 +615,7 @@ function ScopedIssueSection({
   );
 }
 
-function ScopedIssueCard({ item }: { item: ScopedIssue }) {
+function ScopedIssueCard({ item }: { item: WithAudit<ScopedIssue> }) {
   const { tokens } = useTheme();
   const badge = SEVERITY_BADGE[scopedIssueSeverity(item)];
   return (
@@ -554,6 +629,9 @@ function ScopedIssueCard({ item }: { item: ScopedIssue }) {
         <StatusBadge label={badge.label} ragKey={badge.ragKey} />
       </View>
       <View style={styles.cardBody}>
+        <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 8 }} numberOfLines={1}>
+          {item.auditId} · {item.auditName}
+        </Text>
         <View style={styles.issueGrid}>
           <IssueField label="Rack" value={item.rack} />
           <IssueField label="Bay" value={item.bay} />
@@ -603,6 +681,9 @@ function IssueCard({ auditId, group }: { auditId: string; group: PalletIssueGrou
         <StatusBadge label={badge.label} ragKey={badge.ragKey} />
       </View>
       <View style={styles.cardBody}>
+        <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 8 }} numberOfLines={1}>
+          {group.auditId} · {group.auditName}
+        </Text>
         <View style={styles.issueGrid}>
           <IssueField label="Rack" value={group.rack} />
           <IssueField label="Bay" value={group.bay} />
@@ -661,7 +742,8 @@ function IssueField({ label, value, chip }: { label: string; value: string; chip
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, zIndex: 30 },
+  dismissBackdrop: { zIndex: 15 },
   searchBox: { flexGrow: 0, flexBasis: 220, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
   switchGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 16 },
   toolbarIcons: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
