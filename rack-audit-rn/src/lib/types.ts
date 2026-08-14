@@ -171,10 +171,11 @@ export type QrPayload = {
 // actually found — on the open floor (rack/bay/loc absent), or inside a rack
 // (rack/bay/loc present, alongside the zone it's in — already unambiguous,
 // so it's shown immediately). A floor find's `zone` is deliberately NOT
-// trusted/shown up front: the inspector must pin it on the warehouse map
-// (Quick Scan's WarehouseMapModal) before the app reveals a match/mismatch,
-// so the check reflects what they actually verified rather than the QR's
-// own claim. Zones reuse the same Layout names already used to group racks
+// trusted/shown up front: the inspector must pin it on the Pin Location
+// screen (src/features/quick-scan/PinLocationScreen.tsx) before the app
+// reveals a match/mismatch, so the check reflects what they actually
+// verified rather than the QR's own claim. Zones reuse the same Layout
+// names already used to group racks
 // (Layout A/B/C…) rather than a separate warehouse hierarchy.
 export type SkuScanCode = {
   sku: string;

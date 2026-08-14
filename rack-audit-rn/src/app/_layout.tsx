@@ -46,6 +46,7 @@ function RootNavigator() {
       <Stack.Protected guard={status === 'authed'}>
         <Stack.Screen name="(app)" />
         <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="pin-location" options={{ presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Protected guard={status !== 'authed'}>
         <Stack.Screen name="(auth)/login" />

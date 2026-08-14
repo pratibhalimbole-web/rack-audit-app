@@ -11,6 +11,7 @@ import { EvidenceBlock } from '@/components/EvidenceBlock';
 import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import { Pill } from '@/components/Pill';
 import { SkuLineCard } from '@/components/SkuLineCard';
+import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
@@ -20,7 +21,7 @@ import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase,
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
-import { buildBayDiagram } from './buildBayDiagram';
+import { buildBayDiagram, buildScanOrder, type ScanDirection } from './buildBayDiagram';
 
 // `source: 'bay-chip'` marks arriving from an Audit Details bay chip
 // specifically — the one entry point where the bay lock is meant to stay
@@ -29,8 +30,6 @@ import { buildBayDiagram } from './buildBayDiagram';
 // leaves `source` unset and keeps pending locations directly tappable
 // across bays regardless of the lock — see isLocSelectable below.
 type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string; source?: 'bay-chip' };
-
-const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Completed: 'Completed' } as const;
 
 // Pallet ID shown to the inspector — level + pallet number on that level,
 // e.g. level 5 / pallet 1 -> "P-0501" — distinct from the location's
@@ -111,6 +110,11 @@ export function RackViewScreen() {
   // closed" pattern as Audit Details' bay accordion, keyed by bay code.
   const [closedPendingBays, setClosedPendingBays] = useState<Record<string, boolean>>({});
   const [pickerField, setPickerField] = useState<'layout' | 'rack' | 'bay' | 'pallet' | null>(null);
+  // How "Scan Next SKU" walks the rack — matches how the audit is actually
+  // being physically worked (see buildScanOrder). Right/Down are the
+  // near-end starting defaults.
+  const [scanDirection, setScanDirection] = useState<ScanDirection>('right');
+  const [directionMenuOpen, setDirectionMenuOpen] = useState(false);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
@@ -358,7 +362,11 @@ export function RackViewScreen() {
   // selectable/reportable because Manual Mode opened them up. Dashed border
   // marks them as "not originally in scope" without needing a fill color.
   const isManualOnly = (locCode: string) => manualMode && !!audit.target_sku && !matchesTargetSku(locCode);
-  const scannableLocations = rackLocations.filter((l) => isLocSelectable(l.code));
+  // "Scan Next SKU" (and the Pallet dropdown's order) walks the rack in
+  // whichever direction the canvas header's direction control has set —
+  // not just array order — so it always matches how the rack is actually
+  // being worked physically.
+  const scannableLocations = buildScanOrder(scanDirection, bayDiagrams).filter((l) => isLocSelectable(l.code));
 
   // In-scope locations still waiting on a clean, confirmed match — either
   // never scanned at all, or scanned and found to mismatch (wrong SKU, or
@@ -871,10 +879,42 @@ export function RackViewScreen() {
             so the canvas highlight and the form stay visible together. */}
         <View style={skuPanelOpen ? styles.splitRow : styles.singleRow}>
         <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
-          <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+          <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
               Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
             </Text>
+            <View>
+              <Pressable
+                onPress={() => setDirectionMenuOpen((v) => !v)}
+                style={[styles.directionSettingsBtn, { borderColor: directionMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.sm }]}
+              >
+                <Ionicons name="options-outline" size={16} color={tokens.foreground} />
+              </Pressable>
+              {directionMenuOpen ? (
+                <>
+                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setDirectionMenuOpen(false)} />
+                  <View style={[styles.directionPad, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Scan Direction</Text>
+                    <View style={styles.directionPadRow}>
+                      <DirectionButton icon="chevron-up" active={scanDirection === 'up'} onPress={() => setScanDirection('up')} />
+                    </View>
+                    <View style={styles.directionPadRow}>
+                      <DirectionButton icon="chevron-back" active={scanDirection === 'left'} onPress={() => setScanDirection('left')} />
+                      <View style={styles.directionPadCenter} />
+                      <DirectionButton icon="chevron-forward" active={scanDirection === 'right'} onPress={() => setScanDirection('right')} />
+                    </View>
+                    <View style={styles.directionPadRow}>
+                      <DirectionButton icon="chevron-down" active={scanDirection === 'down'} onPress={() => setScanDirection('down')} />
+                    </View>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: 9, marginTop: 4, width: 150 }}>
+                      {scanDirection === 'left' || scanDirection === 'right'
+                        ? 'Horizontal — one level across every bay, alternating sweep direction each level.'
+                        : 'Vertical — one whole bay top-to-bottom, alternating direction each bay.'}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
+            </View>
           </View>
           <View style={styles.diagramBody}>
             <GestureDetector gesture={canvasGesture}>
@@ -1823,6 +1863,19 @@ function RackCell({
   );
 }
 
+// One quadrant of the canvas header's D-pad-style Scan Direction control.
+function DirectionButton({ icon, active, onPress }: { icon: keyof typeof Ionicons.glyphMap; active: boolean; onPress: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.directionBtn, { backgroundColor: active ? tokens.primary : tokens.muted, borderRadius: tokens.radius.sm }]}
+    >
+      <Ionicons name={icon} size={16} color={active ? tokens.primaryForeground : tokens.mutedForeground} />
+    </Pressable>
+  );
+}
+
 // A real switch (track + sliding thumb), not just a color-swapped button —
 // reads unambiguously as an on/off toggle at a glance, with the amber
 // on-state matching the caution banner it reveals below the toolbar.
@@ -1856,70 +1909,22 @@ function DetailRow({ label, value, tokens }: { label: string; value: string; tok
   );
 }
 
-function ToolbarField({ label, fixed, tag, open, onPress }: { label: string; fixed?: boolean; tag?: string; open?: boolean; onPress?: () => void }) {
-  const { tokens } = useTheme();
-  const content = (
-    <View
-      style={[
-        styles.toolbarField,
-        !fixed ? styles.toolbarFieldDropdown : null,
-        { backgroundColor: fixed ? tokens.muted : tokens.card, borderColor: open ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg },
-      ]}
-    >
-      <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }} numberOfLines={1}>
-        {label}
-      </Text>
-      {tag ? <Pill label={tag} tone={STATUS_TONE[tag as keyof typeof STATUS_TONE] ?? 'To Do'} /> : null}
-      {!fixed ? <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#667085" /> : null}
-    </View>
-  );
-  return fixed ? content : <Pressable onPress={onPress}>{content}</Pressable>;
-}
-
-// Anchored right under the field that opened it — a web-style dropdown
-// instead of BottomSheetPicker's slide-up-from-the-bottom sheet. Only used
-// here (Rack View is tablet-only); phone's Count Sheet keeps the bottom
-// sheet, per no-shared-device-behavior-changes.
-function InlineDropdown({ options, selectedValue, onSelect }: { options: SheetOption[]; selectedValue: string; onSelect: (value: string) => void }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={[styles.inlineDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-      <ScrollView style={{ maxHeight: 260 }}>
-        {options.map((o) => {
-          const selected = o.value === selectedValue;
-          return (
-            <Pressable
-              key={o.value}
-              onPress={() => onSelect(o.value)}
-              style={[styles.inlineDropdownItem, { borderBottomColor: tokens.border }, selected ? { backgroundColor: tokens.muted } : null]}
-            >
-              <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }} numberOfLines={1}>
-                {o.label}
-              </Text>
-              {selected ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  toolbarField: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, height: 36, minWidth: 70 },
-  toolbarFieldDropdown: { width: 118, justifyContent: 'space-between' },
   manualModeWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 6 },
   switchTrack: { width: 34, height: 20, borderRadius: 10 },
   switchThumb: { position: 'absolute', top: 2, left: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
   manualModeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
-  inlineDropdown: { position: 'absolute', top: 40, left: 0, width: 160, borderWidth: 1, zIndex: 30, elevation: 30 },
-  inlineDropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
   body: { flex: 1, padding: 16 },
   singleRow: { flex: 1 },
   splitRow: { flex: 1, flexDirection: 'row', gap: 16 },
   diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  directionSettingsBtn: { width: 30, height: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  directionPad: { position: 'absolute', top: 36, right: 0, width: 168, borderWidth: 1, padding: 10, alignItems: 'center', gap: 4, zIndex: 30, elevation: 30 },
+  directionPadRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  directionPadCenter: { width: 30, height: 30 },
+  directionBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   diagramBody: { flex: 1, padding: 14 },
   diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
