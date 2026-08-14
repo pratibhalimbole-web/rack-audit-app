@@ -38,6 +38,21 @@ type Params = { auditId: string; layout: string; rackId: string; bay: string; lo
 // the whole rack's bays render together on canvas, and level/slot numbers
 // repeat across bays, so the bare pallet ID alone is ambiguous once more
 // than one bay is in view.
+// Feeds the canvas header's Scan Direction badge — the currently active
+// pattern at a glance, without opening the popover.
+function scanDirectionArrowIcon(direction: ScanDirection): keyof typeof Ionicons.glyphMap {
+  switch (direction) {
+    case 'right':
+      return 'arrow-forward';
+    case 'left':
+      return 'arrow-back';
+    case 'up':
+      return 'arrow-up';
+    case 'down':
+      return 'arrow-down';
+  }
+}
+
 function palletIdFor(loc: { level?: number; slot?: number; code: string }, bayCode?: string): string {
   const base = loc.level != null && loc.slot != null ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}` : loc.code;
   return bayCode ? `${bayCode} · ${base}` : base;
@@ -873,6 +888,12 @@ export function RackViewScreen() {
         </View>
       ) : null}
 
+      {/* Full-screen outside-tap dismiss for the Scan Direction popover —
+          declared here, before the canvas subtree, so it paints underneath
+          the popover (which lives deep inside that subtree) while still
+          covering the entire screen for the tap-anywhere-to-close behavior. */}
+      {directionMenuOpen ? <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDirectionMenuOpen(false)} /> : null}
+
       <View style={styles.body}>
         {/* Canvas and the Reconciliation Form sit side by side, both full
             height, once a pallet's audit is started — not a small overlay —
@@ -883,36 +904,42 @@ export function RackViewScreen() {
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
               Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
             </Text>
-            <View>
+            <View style={styles.directionAnchor}>
+              {/* Status badge — shows the active pattern, purely informational,
+                  kept separate from the settings icon below so the two don't
+                  read as one confusing combined tap target. */}
+              <View style={[styles.directionBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.xl }]}>
+                <Ionicons
+                  name={scanDirection === 'up' || scanDirection === 'down' ? 'swap-vertical-outline' : 'swap-horizontal-outline'}
+                  size={14}
+                  color={tokens.accentBlue.strong}
+                />
+                <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                  {scanDirection === 'up' || scanDirection === 'down' ? 'Vertical' : 'Horizontal'}
+                </Text>
+                <Ionicons name={scanDirectionArrowIcon(scanDirection)} size={14} color={tokens.accentBlue.strong} />
+              </View>
+              {/* Settings icon — the actual tap target that opens the popover. */}
               <Pressable
                 onPress={() => setDirectionMenuOpen((v) => !v)}
                 style={[styles.directionSettingsBtn, { borderColor: directionMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.sm }]}
               >
                 <Ionicons name="options-outline" size={16} color={tokens.foreground} />
               </Pressable>
+              {/* No local dismiss overlay here — it would only ever cover
+                  this small anchor, not the rest of the screen. The actual
+                  outside-tap dismiss is the full-screen backdrop rendered
+                  near the root below, which sits underneath this popover in
+                  paint order (declared earlier in the tree) so the popover
+                  itself stays tappable. */}
               {directionMenuOpen ? (
-                <>
-                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setDirectionMenuOpen(false)} />
-                  <View style={[styles.directionPad, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Scan Direction</Text>
-                    <View style={styles.directionPadRow}>
-                      <DirectionButton icon="chevron-up" active={scanDirection === 'up'} onPress={() => setScanDirection('up')} />
-                    </View>
-                    <View style={styles.directionPadRow}>
-                      <DirectionButton icon="chevron-back" active={scanDirection === 'left'} onPress={() => setScanDirection('left')} />
-                      <View style={styles.directionPadCenter} />
-                      <DirectionButton icon="chevron-forward" active={scanDirection === 'right'} onPress={() => setScanDirection('right')} />
-                    </View>
-                    <View style={styles.directionPadRow}>
-                      <DirectionButton icon="chevron-down" active={scanDirection === 'down'} onPress={() => setScanDirection('down')} />
-                    </View>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: 9, marginTop: 4, width: 150 }}>
-                      {scanDirection === 'left' || scanDirection === 'right'
-                        ? 'Horizontal — one level across every bay, alternating sweep direction each level.'
-                        : 'Vertical — one whole bay top-to-bottom, alternating direction each bay.'}
-                    </Text>
-                  </View>
-                </>
+                <ScanDirectionMenu
+                  direction={scanDirection}
+                  onSelect={(d) => {
+                    setScanDirection(d);
+                    setDirectionMenuOpen(false);
+                  }}
+                />
               ) : null}
             </View>
           </View>
@@ -1864,14 +1891,96 @@ function RackCell({
 }
 
 // One quadrant of the canvas header's D-pad-style Scan Direction control.
-function DirectionButton({ icon, active, onPress }: { icon: keyof typeof Ionicons.glyphMap; active: boolean; onPress: () => void }) {
+// Mode first, direction second — a bare 4-way D-pad conflates "which
+// pattern" with "which end it starts from" into one ambiguous gesture, so
+// this splits them: a Horizontal/Vertical tab picks the real-world pattern
+// (no-MHE sweeping every bay one level at a time, vs. MHE clearing one bay
+// fully before the fork moves), then two clearly-labeled rows pick which
+// end that pattern starts from. Mounted fresh each time the popover opens
+// (see its conditional render in the canvas header above), so its tab
+// always re-derives from whatever direction is actually active right now.
+function ScanDirectionMenu({ direction, onSelect }: { direction: ScanDirection; onSelect: (d: ScanDirection) => void }) {
+  const { tokens } = useTheme();
+  const [mode, setMode] = useState<'horizontal' | 'vertical'>(direction === 'up' || direction === 'down' ? 'vertical' : 'horizontal');
+  const rows: { value: ScanDirection; icon: keyof typeof Ionicons.glyphMap; label: string; desc: string }[] =
+    mode === 'horizontal'
+      ? [
+          { value: 'right', icon: 'arrow-forward', label: 'Start Left → Right', desc: 'Bay 1 → last bay at L1, then reverse each level up' },
+          { value: 'left', icon: 'arrow-back', label: 'Start Right → Left', desc: 'Last bay → Bay 1 at L1, then reverse each level up' },
+        ]
+      : [
+          { value: 'up', icon: 'arrow-up', label: 'Start Bottom → Top', desc: 'Bay 1 goes L1 → top level, then reverse each next bay' },
+          { value: 'down', icon: 'arrow-down', label: 'Start Top → Bottom', desc: 'Bay 1 goes top level → L1, then reverse each next bay' },
+        ];
+  return (
+    <View style={[menuStyles.wrap, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Scan Direction</Text>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>How Scan Next SKU walks the rack</Text>
+
+      <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+        <ModeTab label="Horizontal" sub="No MHE" icon="swap-horizontal-outline" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
+        <ModeTab label="Vertical" sub="With MHE" icon="swap-vertical-outline" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
+      </View>
+
+      <View style={{ gap: 8, marginTop: 12 }}>
+        {rows.map((row) => {
+          const active = direction === row.value;
+          return (
+            <Pressable
+              key={row.value}
+              hitSlop={6}
+              onPress={() => onSelect(row.value)}
+              style={({ pressed }) => [
+                menuStyles.row,
+                {
+                  borderColor: active ? tokens.primary : tokens.border,
+                  backgroundColor: active ? tokens.accentBlue.soft : tokens.card,
+                  borderRadius: tokens.radius.sm,
+                  opacity: pressed ? 0.6 : 1,
+                },
+              ]}
+            >
+              <View style={[menuStyles.rowIcon, { backgroundColor: active ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}>
+                <Ionicons name={row.icon} size={15} color={active ? tokens.primaryForeground : tokens.mutedForeground} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{row.label}</Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>{row.desc}</Text>
+              </View>
+              {active ? <Ionicons name="checkmark-circle" size={18} color={tokens.primary} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function ModeTab({
+  label,
+  sub,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  sub: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  active: boolean;
+  onPress: () => void;
+}) {
   const { tokens } = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.directionBtn, { backgroundColor: active ? tokens.primary : tokens.muted, borderRadius: tokens.radius.sm }]}
+      hitSlop={6}
+      style={({ pressed }) => [menuStyles.tab, { backgroundColor: active ? tokens.card : 'transparent', borderRadius: tokens.radius.sm, opacity: pressed ? 0.6 : 1 }]}
     >
-      <Ionicons name={icon} size={16} color={active ? tokens.primaryForeground : tokens.mutedForeground} />
+      <Ionicons name={icon} size={14} color={active ? tokens.foreground : tokens.mutedForeground} />
+      <View>
+        <Text style={{ color: active ? tokens.foreground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>{label}</Text>
+        <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>{sub}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -1920,11 +2029,9 @@ const styles = StyleSheet.create({
   singleRow: { flex: 1 },
   splitRow: { flex: 1, flexDirection: 'row', gap: 16 },
   diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
-  directionSettingsBtn: { width: 30, height: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  directionPad: { position: 'absolute', top: 36, right: 0, width: 168, borderWidth: 1, padding: 10, alignItems: 'center', gap: 4, zIndex: 30, elevation: 30 },
-  directionPadRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  directionPadCenter: { width: 30, height: 30 },
-  directionBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  directionAnchor: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  directionBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12 },
+  directionSettingsBtn: { width: 36, height: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   diagramBody: { flex: 1, padding: 14 },
   diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
@@ -2005,4 +2112,12 @@ const styles = StyleSheet.create({
   pendingBayBadge: { paddingHorizontal: 10, paddingVertical: 4 },
   pendingTabRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   pendingTabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 38, borderWidth: 1, paddingHorizontal: 8 },
+});
+
+const menuStyles = StyleSheet.create({
+  wrap: { position: 'absolute', top: 36, right: 0, width: 288, borderWidth: 1, padding: 16, zIndex: 30, elevation: 30 },
+  tabs: { flexDirection: 'row', gap: 3, padding: 4, marginTop: 12 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
+  rowIcon: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
 });
