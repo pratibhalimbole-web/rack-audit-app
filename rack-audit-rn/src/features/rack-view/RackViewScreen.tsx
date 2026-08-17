@@ -924,7 +924,7 @@ export function RackViewScreen() {
               {/* Settings icon — the actual tap target that opens the centered Scan Direction modal. */}
               <Pressable
                 onPress={() => setDirectionMenuOpen((v) => !v)}
-                style={[styles.directionSettingsBtn, { borderColor: directionMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.sm }]}
+                style={[styles.directionSettingsBtn, { borderColor: directionMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.lg }]}
               >
                 <Ionicons name="options-outline" size={16} color={tokens.foreground} />
               </Pressable>
@@ -1066,7 +1066,16 @@ export function RackViewScreen() {
                 identity is its own precise detail block below, and
                 scanning happens from the dotted scan target further down,
                 not a header icon. */}
-            <View style={[styles.skuPanelHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+            {/* This Card (unlike the canvas one) isn't overflow:'hidden',
+                so the header's negative-margin bleed needs its own top
+                corner radius — otherwise it'd sit square against the
+                Card's own rounded corners instead of matching them. */}
+            <View
+              style={[
+                styles.skuPanelHead,
+                { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, borderTopLeftRadius: tokens.radius.xxl, borderTopRightRadius: tokens.radius.xxl },
+              ]}
+            >
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
                 {manualMode ? 'Manual Issue Report' : 'Reconciliation Form'}
               </Text>
@@ -1974,31 +1983,25 @@ function ScanDirectionMenu({
           <ScrollView contentContainerStyle={menuStyles.scrollBody} showsVerticalScrollIndicator={false}>
             {/* Scope — whether the picked direction below governs the whole
                 rack (bays alternate, MHE-vs-no-MHE) or is applied fresh, the
-                same way, inside each bay on its own. Same segmented-control
-                pattern as Count Sheet's Select Manually / Scan QR Code
-                toggle, for a consistent look at this exact kind of binary
-                choice everywhere it shows up in the app. */}
+                same way, inside each bay on its own. Same tab-bar look
+                Pattern used to have (icon + label + sub-label). */}
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground }]}>Scope</Text>
-            <View style={[menuStyles.segmented, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-              <Pressable onPress={() => onSelectScope('rack')} style={[menuStyles.segmentBtn, scope === 'rack' ? { backgroundColor: tokens.primary } : null]}>
-                <Text style={{ color: scope === 'rack' ? tokens.primaryForeground : tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }}>
-                  Bay-wise
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => onSelectScope('bay')} style={[menuStyles.segmentBtn, scope === 'bay' ? { backgroundColor: tokens.primary } : null]}>
-                <Text style={{ color: scope === 'bay' ? tokens.primaryForeground : tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }}>
-                  Within Each Bay
-                </Text>
-              </Pressable>
+            <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+              <ModeTab label="Bay-wise" sub="Whole Rack" icon="layers-outline" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
+              <ModeTab label="Within Bay" sub="Per Bay" icon="cube-outline" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
             </View>
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
-              {scope === 'rack' ? 'Bays alternate direction, MHE pattern.' : 'Same direction inside every bay, independently.'}
+              {scope === 'rack' ? 'Bays alternate direction each level.' : 'Same direction inside every bay, independently.'}
             </Text>
 
+            {/* Pattern — Horizontal (sweeps every bay a level at a time)
+                vs. Vertical (clears one bay before moving to the next), as
+                a plain radio choice rather than a segmented tab bar, so it
+                doesn't compete visually with the Scope tabs right above it. */}
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Pattern</Text>
-            <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
-              <ModeTab label="Horizontal" sub="No MHE" icon="swap-horizontal-outline" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
-              <ModeTab label="Vertical" sub="With MHE" icon="swap-vertical-outline" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
+            <View style={{ gap: 8 }}>
+              <PatternRadio label="Horizontal" desc="Sweeps every bay one level at a time" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
+              <PatternRadio label="Vertical" desc="Clears one bay fully before moving to the next" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
             </View>
 
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Starting Point</Text>
@@ -2068,6 +2071,28 @@ function ModeTab({
   );
 }
 
+// Plain circle-fill radio for the Pattern choice — deliberately not a
+// segmented tab bar, so it reads as a distinct choice from Scope's tabs
+// directly above it rather than blending into the same control type.
+function PatternRadio({ label, desc, active, onPress }: { label: string; desc: string; active: boolean; onPress: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      style={[menuStyles.patternRow, { borderColor: active ? tokens.primary : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg }]}
+    >
+      <View style={[menuStyles.radioOuter, { borderColor: active ? tokens.primary : tokens.border }]}>
+        {active ? <View style={[menuStyles.radioInner, { backgroundColor: tokens.primary }]} /> : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm }}>{label}</Text>
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{desc}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 // A real switch (track + sliding thumb), not just a color-swapped button —
 // reads unambiguously as an on/off toggle at a glance, with the amber
 // on-state matching the caution banner it reveals below the toolbar.
@@ -2111,7 +2136,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, padding: 16 },
   singleRow: { flex: 1 },
   splitRow: { flex: 1, flexDirection: 'row', gap: 16 },
-  diagramHeadRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  diagramHeadRow: { minHeight: 60, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   directionAnchor: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   directionBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12 },
   directionSettingsBtn: { width: 36, height: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
@@ -2147,7 +2172,7 @@ const styles = StyleSheet.create({
   // Full-bleed banded header, matching the canvas card's "Front View" head
   // row — negative margins escape the Card's own 16px padding just for
   // this row, rather than de-padding the whole panel.
-  skuPanelHead: { marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  skuPanelHead: { minHeight: 60, justifyContent: 'center', marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   locDetailsBox: { gap: 8, marginBottom: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
   detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -2198,16 +2223,17 @@ const styles = StyleSheet.create({
 });
 
 const menuStyles = StyleSheet.create({
-  wrap: { width: '100%', maxWidth: 460, maxHeight: '85%', borderWidth: 1, padding: 20 },
+  wrap: { width: '100%', maxWidth: 560, maxHeight: '85%', borderWidth: 1, padding: 22 },
   head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   headDivider: { height: StyleSheet.hairlineWidth, marginTop: 14 },
   scrollBody: { paddingTop: 16 },
   groupLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  segmented: { flexDirection: 'row', borderWidth: 1, padding: 3 },
-  segmentBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 40, borderRadius: 6 },
   tabs: { flexDirection: 'row', gap: 3, padding: 4 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
+  patternRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
+  radioOuter: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  radioInner: { width: 9, height: 9, borderRadius: 4.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 14, minHeight: 60 },
   rowIcon: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 });
