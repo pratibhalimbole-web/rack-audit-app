@@ -10,7 +10,6 @@ import { Card } from '@/components/Card';
 import { EvidenceBlock } from '@/components/EvidenceBlock';
 import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import { Pill } from '@/components/Pill';
-import { SkuLineCard } from '@/components/SkuLineCard';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -166,7 +165,7 @@ export function RackViewScreen() {
   // pallet's canvas cell, so a flagged location stays visible even after
   // the panel closes or a different pallet gets selected.
   const [flaggedLocs, setFlaggedLocs] = useState<Set<string>>(new Set());
-  const [attachmentTarget, setAttachmentTarget] = useState<'manual' | 'qty' | 'damage' | null>(null);
+  const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'damage' | null>(null);
   // Manual Mode: for reporting a real-world issue (e.g. a damaged pallet)
   // found anywhere in the physical rack, not just the audit's assigned
   // scope — every pallet becomes selectable and the panel skips scanning
@@ -189,10 +188,31 @@ export function RackViewScreen() {
   // reconcile at this location for it. Only once the right SKU is
   // confirmed does the qty/condition form appear; Matched vs. Mismatch is
   // then decided by what the inspector records there.
-  const expectedSku = expectedSkus[0] ?? null;
-  const scannedLine = scanLines[0] ?? null;
+  // Manual Mode shares this same qty/damage form (see the shared JSX
+  // block below), but there's genuinely no expected SKU/qty/condition for
+  // an out-of-scope pallet, so expectedSku always stays null there —
+  // skuMatched/misplaced fall out false automatically as a result, and the
+  // form itself skips rendering anything that depends on a comparison.
+  const expectedSku = manualMode ? null : (expectedSkus[0] ?? null);
+  const scannedLine = manualMode ? (manualScanned ? manualLine : null) : (scanLines[0] ?? null);
   const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
-  const misplaced = !!scannedLine && !skuMatched;
+  const misplaced = !!scannedLine && !skuMatched && !manualMode;
+
+  // Writes into whichever line is actually "live" right now — manualLine
+  // in Manual Mode, scanLines[0] otherwise — so the shared qty/damage/
+  // evidence handlers below don't need their own mode branch each.
+  const updateCurrentLine = (patch: Partial<CountLine> | ((line: CountLine) => Partial<CountLine>)) => {
+    if (manualMode) {
+      setManualLine((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }));
+      return;
+    }
+    setScanLines((prev) => {
+      if (!prev[0]) return prev;
+      const next = prev.slice();
+      next[0] = { ...next[0], ...(typeof patch === 'function' ? patch(next[0]) : patch) };
+      return next;
+    });
+  };
 
   // Drives the bay canvas cell colors: green once a pallet's scan resolves
   // to a clean match, amber when the right SKU was found but qty/condition
@@ -491,10 +511,15 @@ export function RackViewScreen() {
   };
 
   // Answerable the moment a location is selected, independent of whether
-  // it's been scanned yet — writes straight into scanLines[0] if a scan is
-  // already on record, so the two stay in sync no matter which happens first.
+  // it's been scanned yet — writes straight into the live line (manualLine
+  // always exists; scanLines[0] only once an actual scan is on record), so
+  // the two stay in sync no matter which happens first.
   const handleSelectPalletCondition = (good: boolean) => {
     setPalletConditionGood(good);
+    if (manualMode) {
+      setManualLine((prev) => ({ ...prev, palletConditionGood: good }));
+      return;
+    }
     if (!scanLines[0]) return;
     const next = scanLines.slice();
     next[0] = { ...next[0], palletConditionGood: good };
@@ -517,9 +542,19 @@ export function RackViewScreen() {
       // one is. Only a pallet already reported this audit (saved: true)
       // counts as "already scanned"; otherwise the scan target shows first.
       const existing = loc.pallets.find((p) => p.saved) ?? null;
-      setManualLine(existing?.lines[0] ? { ...existing.lines[0] } : { sku: '', name: '', lot: '—', qty: 1, condition: 'Good' });
+      const line: CountLine = existing?.lines[0] ? { ...existing.lines[0] } : { sku: '', name: '', lot: '—', qty: 1, condition: 'Good' };
+      setManualLine(line);
       setManualScanned(!!existing?.lines[0]);
       setManualReviewExpanded(false);
+      // Shares normal mode's qty/damage form — an already-saved report has
+      // real qty/condition values to show right away, same as normal
+      // mode's `!!base.length`; a fresh one starts unchecked ("-") until
+      // the inspector enters what they actually found.
+      setQtyChecked(!!existing?.lines[0]);
+      setDamageChecked(!!existing?.lines[0]);
+      setQtyEditing(false);
+      setDamageEditing(false);
+      setPalletConditionGood(line.palletConditionGood ?? null);
       // A previously-saved issue (this session or an earlier one) should
       // still read as raised, not reset back to a fresh unflagged state.
       if (existing?.lines[0]?.issueRaised) {
@@ -662,6 +697,12 @@ export function RackViewScreen() {
   const applyManualSkuScan = (pick: { sku: string; name: string; lot: string }) => {
     setManualLine((prev) => ({ ...prev, sku: pick.sku, name: pick.name, lot: pick.lot }));
     setManualScanned(true);
+    // A fresh identity means a fresh report — qty/damage aren't known from
+    // the scan itself here either, same as normal mode's applySkuScan.
+    setQtyChecked(false);
+    setDamageChecked(false);
+    setQtyEditing(false);
+    setDamageEditing(false);
   };
 
   const handleSkuScanned = (data: string) => {
@@ -688,56 +729,48 @@ export function RackViewScreen() {
     setSkuScanCount((c) => c + 1);
   };
 
-  const ensureLineEvidence = (line: CountLine): Evidence => line.evidence ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
-
   const handleRaiseIssue = (sku: string) => {
     setIssuesRaised((prev) => new Set(prev).add(sku));
     if (selectedLocObj) setFlaggedLocs((prev) => new Set(prev).add(selectedLocObj.code));
   };
 
-  const updateManualEvidence = (patch: Partial<Evidence>) => {
-    setManualLine((prev) => ({ ...prev, evidence: { ...ensureLineEvidence(prev), ...patch } }));
-  };
-
-  // Quantity and damage are independent findings on a matched-SKU pallet —
-  // each gets its own evidence, kept on the single scanLines[0] record (this
-  // screen's flow never has more than one line open at a time).
+  // Quantity and damage are independent findings on a pallet — each gets
+  // its own evidence, kept on whichever line is live right now (manualLine
+  // in Manual Mode, scanLines[0] otherwise — this screen's flow never has
+  // more than one line open at a time in either mode).
   const ensureFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence'): Evidence =>
-    scanLines[0]?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
+    scannedLine?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
 
   const updateFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence', patch: Partial<Evidence>) => {
-    if (!scanLines[0]) return;
-    const next = scanLines.slice();
-    next[0] = { ...next[0], [field]: { ...ensureFieldEvidence(field), ...patch } };
-    setScanLines(next);
+    if (!scannedLine) return;
+    updateCurrentLine({ [field]: { ...ensureFieldEvidence(field), ...patch } });
   };
 
+  // Manual Mode always offers this once a field's checked — reporting a
+  // problem is the whole point there, and there's no expected value to
+  // gate a mismatch on the way normal mode's version of this button is.
   const raiseFieldIssue = (kind: 'qty' | 'damage') => {
-    if (!selectedLocObj || !scanLines[0]) return;
-    const next = scanLines.slice();
-    next[0] = {
-      ...next[0],
+    if (!selectedLocObj || !scannedLine) return;
+    updateCurrentLine({
       issueRaised: true,
-      qtyIssueRaised: kind === 'qty' ? true : next[0].qtyIssueRaised,
-      damageIssueRaised: kind === 'damage' ? true : next[0].damageIssueRaised,
-    };
-    setScanLines(next);
-    handleRaiseIssue(next[0].sku);
+      qtyIssueRaised: kind === 'qty' ? true : scannedLine.qtyIssueRaised,
+      damageIssueRaised: kind === 'damage' ? true : scannedLine.damageIssueRaised,
+    });
+    handleRaiseIssue(scannedLine.sku);
   };
 
   // Commits the quantity the inspector says they actually found — parses the
   // input, updates the line, marks Quantity as checked (unlocking its
-  // Matched/Mismatched badge), and refreshes the canvas cell color.
+  // Matched/Mismatched badge in normal mode), and refreshes the canvas cell
+  // color (normal mode only — Manual Mode pallets don't drive that color).
   const handleConfirmQty = () => {
-    if (!scanLines[0] || !selectedLocObj) return;
+    if (!scannedLine || !selectedLocObj) return;
     const n = parseInt(qtyInputText, 10);
     const qty = Number.isNaN(n) ? 0 : Math.max(0, n);
-    const next = scanLines.slice();
-    next[0] = { ...next[0], qty };
-    setScanLines(next);
+    updateCurrentLine({ qty });
     setQtyChecked(true);
     setQtyEditing(false);
-    applyLocationStatus(selectedLocObj.code, next[0], expectedSkus[0] ?? null, true, damageChecked);
+    if (!manualMode) applyLocationStatus(selectedLocObj.code, { ...scannedLine, qty }, expectedSkus[0] ?? null, true, damageChecked);
   };
 
   // Same as quantity, but damage is chosen from the chip picker rather than
@@ -755,13 +788,13 @@ export function RackViewScreen() {
   // one alone doesn't describe the damage found, so Damage only becomes
   // "checked" once both are picked and confirmed.
   const handleConfirmDamage = () => {
-    if (!scanLines[0] || !selectedLocObj || !damagePhaseDraft || !damageObservationDraft) return;
-    const next = scanLines.slice();
-    next[0] = { ...next[0], condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft };
-    setScanLines(next);
+    if (!scannedLine || !selectedLocObj || !damagePhaseDraft || !damageObservationDraft) return;
+    updateCurrentLine({ condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft });
     setDamageChecked(true);
     setDamageEditing(false);
-    applyLocationStatus(selectedLocObj.code, next[0], expectedSkus[0] ?? null, qtyChecked, true);
+    if (!manualMode) {
+      applyLocationStatus(selectedLocObj.code, { ...scannedLine, condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft }, expectedSkus[0] ?? null, qtyChecked, true);
+    }
   };
 
   // Manual Mode's whole point is reporting a problem, so saving it always
@@ -1107,84 +1140,27 @@ export function RackViewScreen() {
             </View>
             <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
-            {manualMode ? (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 10 }}>
-                {manualRaised && !manualReviewExpanded ? (
-                  // Already reported — collapsed by default instead of
-                  // reopening the full form every time this pallet is
-                  // re-selected. Whole card is tappable, not just an icon.
-                  <Pressable
-                    onPress={() => setManualReviewExpanded(true)}
-                    style={[styles.manualSummaryBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
-                  >
-                    <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.green.soft, borderColor: tokens.rag.green.border, borderRadius: tokens.radius.lg }]}>
-                      <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Issue Raised</Text>
-                    </View>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{manualLine.sku}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{manualLine.name}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                      Qty {manualLine.qty} · {manualLine.condition}
-                    </Text>
-                    <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 10 }}>Tap to see details</Text>
-                  </Pressable>
-                ) : !manualScanned ? (
-                  // Selecting the location isn't the same as knowing what's
-                  // on it — Manual Mode still needs an actual scan first,
-                  // same as normal mode's target. There's no expected SKU
-                  // to check it against here; the scan just identifies it.
-                  <>
-                    <Pressable
-                      onPress={() => setScannerOpen('sku')}
-                      style={[styles.scanDottedBox, { borderColor: tokens.mutedForeground, borderRadius: tokens.radius.xl }]}
-                    >
-                      <View style={[styles.scanDottedIconWrap, { backgroundColor: tokens.primary }]}>
-                        <Ionicons name="qr-code-outline" size={26} color={tokens.primaryForeground} />
-                      </View>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
-                    </Pressable>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center' }}>
-                      Scans the SKU code on this pallet so you can report what you actually found here.
-                    </Text>
-                  </>
-                ) : (
-                  // Scanned — shows exactly what was scanned as the report's
-                  // SKU, then qty/damage/evidence are up to the inspector.
-                  // Save/Delete live in the outer footer instead (Raise
-                  // Issue there), not duplicated inside the card.
-                  <SkuLineCard
-                    line={manualLine}
-                    active
-                    conditionLabel="Damage"
-                    conditionOptions={CONDITIONS.filter((c) => c !== 'Damaged')}
-                    hideFooter
-                    onQtyChange={(qty) => setManualLine((prev) => ({ ...prev, qty }))}
-                    onConditionChange={(condition) => setManualLine((prev) => ({ ...prev, condition }))}
-                    onSave={() => {}}
-                    onDelete={() => {}}
-                    onEdit={() => {}}
-                    evidenceSlot={
-                      <EvidenceBlock
-                        evidence={ensureLineEvidence(manualLine)}
-                        onOpenNote={() => updateManualEvidence({ noteOpen: true })}
-                        onChangeNote={(note) => updateManualEvidence({ note })}
-                        onRecordAudio={() => updateManualEvidence({ audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                        onToggleAudioPlay={() => {
-                          const ev = ensureLineEvidence(manualLine);
-                          if (!ev.audio) return;
-                          updateManualEvidence({ audio: { ...ev.audio, playing: !ev.audio.playing } });
-                        }}
-                        onRemoveAudio={() => updateManualEvidence({ audio: null })}
-                        onAddImage={() => setAttachmentTarget('manual')}
-                        onRemoveImage={(i) => updateManualEvidence({ images: ensureLineEvidence(manualLine).images.filter((_, ii) => ii !== i) })}
-                        onAddVideo={() => updateManualEvidence({ videos: [...ensureLineEvidence(manualLine).videos, { durationSec: 20 }] })}
-                        onRemoveVideo={(i) => updateManualEvidence({ videos: ensureLineEvidence(manualLine).videos.filter((_, ii) => ii !== i) })}
-                      />
-                    }
-                  />
-                )}
-              </ScrollView>
-            ) : (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
+              {manualMode && manualRaised && !manualReviewExpanded ? (
+                // Already reported — collapsed by default instead of
+                // reopening the full form every time this pallet is
+                // re-selected. Whole card is tappable, not just an icon.
+                <Pressable
+                  onPress={() => setManualReviewExpanded(true)}
+                  style={[styles.manualSummaryBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
+                >
+                  <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.green.soft, borderColor: tokens.rag.green.border, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.rag.green.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Issue Raised</Text>
+                  </View>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{manualLine.sku}</Text>
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{manualLine.name}</Text>
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
+                    Qty {manualLine.qty} · {manualLine.condition}
+                  </Text>
+                  <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, marginTop: 10 }}>Tap to see details</Text>
+                </Pressable>
+              ) : (
+                <>
                 <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                   <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Pallet Condition</Text>
@@ -1237,7 +1213,9 @@ export function RackViewScreen() {
                       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
                     </Pressable>
                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center' }}>
-                      Scans the SKU code on the pallet at this location, then checks it against what's expected here.
+                      {manualMode
+                        ? 'Scans the SKU code on this pallet so you can report what you actually found here.'
+                        : "Scans the SKU code on the pallet at this location, then checks it against what's expected here."}
                     </Text>
                   </>
                 ) : null}
@@ -1254,49 +1232,53 @@ export function RackViewScreen() {
                     const raised = issuesRaised.has(scannedLine.sku);
                     return (
                       <>
-                        <View style={styles.statusPillRow}>
-                          <View style={[styles.editStatusPill, { backgroundColor: primary.rag.soft, borderColor: primary.rag.border, borderRadius: tokens.radius.lg }]}>
-                            <Text style={{ color: primary.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{primary.label}</Text>
-                          </View>
-                          {qtyMismatch ? (
-                            <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                              <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Quantity Mismatch</Text>
+                        {!manualMode ? (
+                          <>
+                            <View style={styles.statusPillRow}>
+                              <View style={[styles.editStatusPill, { backgroundColor: primary.rag.soft, borderColor: primary.rag.border, borderRadius: tokens.radius.lg }]}>
+                                <Text style={{ color: primary.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{primary.label}</Text>
+                              </View>
+                              {qtyMismatch ? (
+                                <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
+                                  <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Quantity Mismatch</Text>
+                                </View>
+                              ) : null}
+                              {conditionFlagged ? (
+                                <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
+                                  <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Damage Mismatch</Text>
+                                </View>
+                              ) : null}
                             </View>
-                          ) : null}
-                          {conditionFlagged ? (
-                            <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                              <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Damage Mismatch</Text>
+                            <View style={styles.compareRow}>
+                              <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
+                                {expectedSku ? (
+                                  <>
+                                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku.sku}</Text>
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Qty {expectedSku.qty}</Text>
+                                  </>
+                                ) : (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
+                                )}
+                              </View>
+                              <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
+                                {scannedLine ? (
+                                  <>
+                                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
+                                      Qty {qtyChecked ? scannedLine.qty : '-'} · {damageChecked ? scannedLine.condition : '-'}
+                                    </Text>
+                                  </>
+                                ) : (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
+                                )}
+                              </View>
                             </View>
-                          ) : null}
-                        </View>
-                        <View style={styles.compareRow}>
-                          <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
-                            {expectedSku ? (
-                              <>
-                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku.sku}</Text>
-                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
-                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Qty {expectedSku.qty}</Text>
-                              </>
-                            ) : (
-                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
-                            )}
-                          </View>
-                          <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
-                            {scannedLine ? (
-                              <>
-                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
-                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
-                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                  Qty {qtyChecked ? scannedLine.qty : '-'} · {damageChecked ? scannedLine.condition : '-'}
-                                </Text>
-                              </>
-                            ) : (
-                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
-                            )}
-                          </View>
-                        </View>
+                          </>
+                        ) : null}
                         {misplaced ? (
                           // Wrong SKU is known the instant the scan resolves
                           // — nothing to enter, so this raises the issue
@@ -1335,25 +1317,25 @@ export function RackViewScreen() {
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                               <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
                                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 1: Quantity</Text>
-                                {qtyChecked ? (
+                                {!manualMode && qtyChecked ? (
                                   <View
                                     style={[
                                       styles.editStatusPill,
                                       {
-                                        backgroundColor: scannedLine.qty === expectedSku.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                        borderColor: scannedLine.qty === expectedSku.qty ? tokens.rag.green.border : tokens.rag.amber.border,
+                                        backgroundColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                        borderColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.border : tokens.rag.amber.border,
                                         borderRadius: tokens.radius.lg,
                                       },
                                     ]}
                                   >
                                     <Text
                                       style={{
-                                        color: scannedLine.qty === expectedSku.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
+                                        color: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
                                         fontWeight: tokens.fontWeight.bold,
                                         fontSize: tokens.text.xs,
                                       }}
                                     >
-                                      {scannedLine.qty === expectedSku.qty ? 'Matched' : 'Mismatched'}
+                                      {scannedLine.qty === expectedSku?.qty ? 'Matched' : 'Mismatched'}
                                     </Text>
                                   </View>
                                 ) : null}
@@ -1390,7 +1372,7 @@ export function RackViewScreen() {
                                     </View>
                                   </Pressable>
                                 )}
-                                {qtyChecked && scannedLine.qty !== expectedSku.qty ? (
+                                {(manualMode ? qtyChecked : qtyChecked && scannedLine.qty !== expectedSku?.qty) ? (
                                   <Pressable
                                     disabled={!!scannedLine.qtyIssueRaised}
                                     onPress={() => raiseFieldIssue('qty')}
@@ -1581,8 +1563,9 @@ export function RackViewScreen() {
                     );
                   })()
                 ) : null}
-              </ScrollView>
-            )}
+                </>
+              )}
+            </ScrollView>
             {manualMode ? (
               // No separate "Next Pallet" button — Raise Issue already
               // both saves and auto-advances to the next pallet in the
@@ -1654,10 +1637,6 @@ export function RackViewScreen() {
         onClose={() => setAttachmentTarget(null)}
         onSave={(image) => {
           if (attachmentTarget === null) return;
-          if (attachmentTarget === 'manual') {
-            updateManualEvidence({ images: [...ensureLineEvidence(manualLine).images, image] });
-            return;
-          }
           const field = attachmentTarget === 'qty' ? 'qtyEvidence' : 'damageEvidence';
           updateFieldEvidence(field, { images: [...ensureFieldEvidence(field).images, image] });
         }}
