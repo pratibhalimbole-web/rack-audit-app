@@ -781,6 +781,21 @@ export function RackViewScreen() {
     // Collapse back to the "tap to see details" summary once saved — same
     // resting state as re-selecting this pallet later.
     setManualReviewExpanded(false);
+    // Same auto-advance handleScanNext gives normal mode — jumps to the
+    // next pallet in whatever Scan Direction/Scope order is active,
+    // instead of leaving the inspector to tap the canvas by hand for
+    // wherever's next. Manual Mode already makes every pallet in the rack
+    // selectable (isLocSelectable's `manualMode ||`), so scannableLocations
+    // here is already the full rack in that same order, not just the
+    // audit's in-scope pallets.
+    const locs = scannableLocations;
+    const idx = locs.findIndex((l) => l.code === selectedLocObj.code);
+    const next = idx !== -1 ? locs[idx + 1] : undefined;
+    if (!next) {
+      setSkuPanelOpen(false);
+      return;
+    }
+    selectLocation(next.code);
   };
 
   const handleSaveSkuPanel = async () => {
@@ -903,7 +918,7 @@ export function RackViewScreen() {
         <Card style={{ padding: 0, overflow: 'hidden', flex: skuPanelOpen ? 1.5 : 1 }}>
           <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-              Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
+              Front View — Rack {rackObj.code} — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
             </Text>
             <View style={styles.directionAnchor}>
               {/* Status badge — shows the active pattern, purely informational,
@@ -1569,11 +1584,10 @@ export function RackViewScreen() {
               </ScrollView>
             )}
             {manualMode ? (
-              // No "Next Pallet" — Manual Mode selection is inherently
-              // random (wherever the inspector physically spots a problem
-              // next), not a fixed sequence, so Raise Issue takes that
-              // slot instead. Cancel just closes; picking the next pallet
-              // is done by tapping the canvas directly.
+              // No separate "Next Pallet" button — Raise Issue already
+              // both saves and auto-advances to the next pallet in the
+              // active Scan Direction/Scope order (see handleSaveManualIssue),
+              // same as normal mode's Scan Next SKU. Cancel just closes.
               <View style={[styles.skuPanelFooter, { borderTopColor: tokens.border }]}>
                 <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
