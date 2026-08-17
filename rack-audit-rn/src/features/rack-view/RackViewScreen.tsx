@@ -892,12 +892,6 @@ export function RackViewScreen() {
         </View>
       ) : null}
 
-      {/* Full-screen outside-tap dismiss for the Scan Direction popover —
-          declared here, before the canvas subtree, so it paints underneath
-          the popover (which lives deep inside that subtree) while still
-          covering the entire screen for the tap-anywhere-to-close behavior. */}
-      {directionMenuOpen ? <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDirectionMenuOpen(false)} /> : null}
-
       <View style={styles.body}>
         {/* Canvas and the Reconciliation Form sit side by side, both full
             height, once a pallet's audit is started — not a small overlay —
@@ -927,30 +921,24 @@ export function RackViewScreen() {
                 </Text>
                 <Ionicons name={scanDirectionArrowIcon(scanDirection)} size={14} color={tokens.accentBlue.strong} />
               </View>
-              {/* Settings icon — the actual tap target that opens the popover. */}
+              {/* Settings icon — the actual tap target that opens the centered Scan Direction modal. */}
               <Pressable
                 onPress={() => setDirectionMenuOpen((v) => !v)}
                 style={[styles.directionSettingsBtn, { borderColor: directionMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.sm }]}
               >
                 <Ionicons name="options-outline" size={16} color={tokens.foreground} />
               </Pressable>
-              {/* No local dismiss overlay here — it would only ever cover
-                  this small anchor, not the rest of the screen. The actual
-                  outside-tap dismiss is the full-screen backdrop rendered
-                  near the root below, which sits underneath this popover in
-                  paint order (declared earlier in the tree) so the popover
-                  itself stays tappable. */}
-              {directionMenuOpen ? (
-                <ScanDirectionMenu
-                  direction={scanDirection}
-                  scope={scanScope}
-                  onSelectScope={setScanScope}
-                  onSelect={(d) => {
-                    setScanDirection(d);
-                    setDirectionMenuOpen(false);
-                  }}
-                />
-              ) : null}
+              <ScanDirectionMenu
+                visible={directionMenuOpen}
+                direction={scanDirection}
+                scope={scanScope}
+                onSelectScope={setScanScope}
+                onSelect={(d) => {
+                  setScanDirection(d);
+                  setDirectionMenuOpen(false);
+                }}
+                onClose={() => setDirectionMenuOpen(false)}
+              />
             </View>
           </View>
           <View style={styles.diagramBody}>
@@ -1900,28 +1888,41 @@ function RackCell({
   );
 }
 
-// One quadrant of the canvas header's D-pad-style Scan Direction control.
-// Mode first, direction second — a bare 4-way D-pad conflates "which
-// pattern" with "which end it starts from" into one ambiguous gesture, so
-// this splits them: a Horizontal/Vertical tab picks the real-world pattern
-// (no-MHE sweeping every bay one level at a time, vs. MHE clearing one bay
-// fully before the fork moves), then two clearly-labeled rows pick which
-// end that pattern starts from. Mounted fresh each time the popover opens
-// (see its conditional render in the canvas header above), so its tab
-// always re-derives from whatever direction is actually active right now.
+// The canvas header's Scan Direction control — a centered modal (matching
+// this screen's other modals, e.g. the Unresolved Locations one), not an
+// anchored popover. Mode first, direction second — a bare 4-way D-pad
+// conflates "which pattern" with "which end it starts from" into one
+// ambiguous gesture, so this splits them: a Horizontal/Vertical tab picks
+// the real-world pattern (no-MHE sweeping every bay one level at a time,
+// vs. MHE clearing one bay fully before the fork moves), then two
+// clearly-labeled rows pick which end that pattern starts from.
 function ScanDirectionMenu({
+  visible,
   direction,
   scope,
   onSelectScope,
   onSelect,
+  onClose,
 }: {
+  visible: boolean;
   direction: ScanDirection;
   scope: ScanScope;
   onSelectScope: (s: ScanScope) => void;
   onSelect: (d: ScanDirection) => void;
+  onClose: () => void;
 }) {
   const { tokens } = useTheme();
   const [mode, setMode] = useState<'horizontal' | 'vertical'>(direction === 'up' || direction === 'down' ? 'vertical' : 'horizontal');
+  // A Modal's `visible` prop hides it without unmounting it, unlike the old
+  // conditional-render popover — so this component no longer gets a fresh
+  // mount (and fresh useState initializer) every time it opens. Re-derive
+  // the tab explicitly on each open instead, so it still always reflects
+  // whatever direction is actually active right now rather than whichever
+  // tab was left selected the last time this same instance was open.
+  useEffect(() => {
+    if (visible) setMode(direction === 'up' || direction === 'down' ? 'vertical' : 'horizontal');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
   const rows: { value: ScanDirection; icon: keyof typeof Ionicons.glyphMap; label: string; desc: string }[] =
     mode === 'horizontal'
       ? [
@@ -1953,54 +1954,88 @@ function ScanDirectionMenu({
           },
         ];
   return (
-    <View style={[menuStyles.wrap, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Scan Direction</Text>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>How Scan Next SKU walks the rack</Text>
-
-      {/* Scope — whether the picked direction below governs the whole
-          rack (bays alternate, MHE-vs-no-MHE) or is applied fresh, the
-          same way, inside each bay on its own. */}
-      <View style={{ gap: 6, marginTop: 12 }}>
-        <ScopeRadio label="Bay-wise (whole rack)" desc="Bays alternate direction, MHE pattern" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
-        <ScopeRadio label="Within Each Bay" desc="Same direction inside every bay, independently" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
-      </View>
-
-      <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm, marginTop: 12 }]}>
-        <ModeTab label="Horizontal" sub="No MHE" icon="swap-horizontal-outline" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
-        <ModeTab label="Vertical" sub="With MHE" icon="swap-vertical-outline" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
-      </View>
-
-      <View style={{ gap: 8, marginTop: 12 }}>
-        {rows.map((row) => {
-          const active = direction === row.value;
-          return (
-            <Pressable
-              key={row.value}
-              hitSlop={6}
-              onPress={() => onSelect(row.value)}
-              style={({ pressed }) => [
-                menuStyles.row,
-                {
-                  borderColor: active ? tokens.primary : tokens.border,
-                  backgroundColor: active ? tokens.accentBlue.soft : tokens.card,
-                  borderRadius: tokens.radius.sm,
-                  opacity: pressed ? 0.6 : 1,
-                },
-              ]}
-            >
-              <View style={[menuStyles.rowIcon, { backgroundColor: active ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}>
-                <Ionicons name={row.icon} size={15} color={active ? tokens.primaryForeground : tokens.mutedForeground} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{row.label}</Text>
-                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>{row.desc}</Text>
-              </View>
-              {active ? <Ionicons name="checkmark-circle" size={18} color={tokens.primary} /> : null}
+    <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={onClose}>
+        <Pressable
+          style={[menuStyles.wrap, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={menuStyles.head}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>Scan Direction</Text>
+              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>How Scan Next SKU walks the rack</Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={8} style={[menuStyles.closeBtn, { backgroundColor: tokens.muted }]}>
+              <Ionicons name="close" size={20} color={tokens.foreground} />
             </Pressable>
-          );
-        })}
-      </View>
-    </View>
+          </View>
+          <View style={[menuStyles.headDivider, { backgroundColor: tokens.border }]} />
+
+          <ScrollView contentContainerStyle={menuStyles.scrollBody} showsVerticalScrollIndicator={false}>
+            {/* Scope — whether the picked direction below governs the whole
+                rack (bays alternate, MHE-vs-no-MHE) or is applied fresh, the
+                same way, inside each bay on its own. Same segmented-control
+                pattern as Count Sheet's Select Manually / Scan QR Code
+                toggle, for a consistent look at this exact kind of binary
+                choice everywhere it shows up in the app. */}
+            <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground }]}>Scope</Text>
+            <View style={[menuStyles.segmented, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+              <Pressable onPress={() => onSelectScope('rack')} style={[menuStyles.segmentBtn, scope === 'rack' ? { backgroundColor: tokens.primary } : null]}>
+                <Text style={{ color: scope === 'rack' ? tokens.primaryForeground : tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }}>
+                  Bay-wise
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => onSelectScope('bay')} style={[menuStyles.segmentBtn, scope === 'bay' ? { backgroundColor: tokens.primary } : null]}>
+                <Text style={{ color: scope === 'bay' ? tokens.primaryForeground : tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }}>
+                  Within Each Bay
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
+              {scope === 'rack' ? 'Bays alternate direction, MHE pattern.' : 'Same direction inside every bay, independently.'}
+            </Text>
+
+            <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Pattern</Text>
+            <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+              <ModeTab label="Horizontal" sub="No MHE" icon="swap-horizontal-outline" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
+              <ModeTab label="Vertical" sub="With MHE" icon="swap-vertical-outline" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
+            </View>
+
+            <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Starting Point</Text>
+            <View style={{ gap: 10 }}>
+              {rows.map((row) => {
+                const active = direction === row.value;
+                return (
+                  <Pressable
+                    key={row.value}
+                    hitSlop={6}
+                    onPress={() => onSelect(row.value)}
+                    style={({ pressed }) => [
+                      menuStyles.row,
+                      {
+                        borderColor: active ? tokens.primary : tokens.border,
+                        backgroundColor: active ? tokens.accentBlue.soft : tokens.card,
+                        borderRadius: tokens.radius.lg,
+                        opacity: pressed ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[menuStyles.rowIcon, { backgroundColor: active ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}>
+                      <Ionicons name={row.icon} size={16} color={active ? tokens.primaryForeground : tokens.mutedForeground} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{row.label}</Text>
+                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{row.desc}</Text>
+                    </View>
+                    {active ? <Ionicons name="checkmark-circle" size={20} color={tokens.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -2028,30 +2063,6 @@ function ModeTab({
       <View>
         <Text style={{ color: active ? tokens.foreground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>{label}</Text>
         <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>{sub}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-// Radio row for the Bay-wise / Within Each Bay scope choice — a plain
-// circle-fill radio (not the mode tabs' segmented-control look, and not
-// the direction rows' checkmark-card look) so it reads as its own distinct
-// choice rather than blending into either of the other two controls.
-function ScopeRadio({ label, desc, active, onPress }: { label: string; desc: string; active: boolean; onPress: () => void }) {
-  const { tokens } = useTheme();
-  return (
-    <Pressable onPress={onPress} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-      <View
-        style={[
-          menuStyles.radioOuter,
-          { borderColor: active ? tokens.primary : tokens.border },
-        ]}
-      >
-        {active ? <View style={[menuStyles.radioInner, { backgroundColor: tokens.primary }]} /> : null}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.xs }}>{label}</Text>
-        <Text style={{ color: tokens.mutedForeground, fontSize: 9, marginTop: 1 }}>{desc}</Text>
       </View>
     </Pressable>
   );
@@ -2187,11 +2198,16 @@ const styles = StyleSheet.create({
 });
 
 const menuStyles = StyleSheet.create({
-  wrap: { position: 'absolute', top: 36, right: 0, width: 288, borderWidth: 1, padding: 16, zIndex: 30, elevation: 30 },
-  tabs: { flexDirection: 'row', gap: 3, padding: 4, marginTop: 12 },
+  wrap: { width: '100%', maxWidth: 460, maxHeight: '85%', borderWidth: 1, padding: 20 },
+  head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  headDivider: { height: StyleSheet.hairlineWidth, marginTop: 14 },
+  scrollBody: { paddingTop: 16 },
+  groupLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  segmented: { flexDirection: 'row', borderWidth: 1, padding: 3 },
+  segmentBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 40, borderRadius: 6 },
+  tabs: { flexDirection: 'row', gap: 3, padding: 4 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
-  rowIcon: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
-  radioOuter: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  radioInner: { width: 8, height: 8, borderRadius: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 14, minHeight: 60 },
+  rowIcon: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 });
