@@ -21,7 +21,7 @@ import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase,
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
-import { buildBayDiagram, buildScanOrder, type ScanDirection } from './buildBayDiagram';
+import { buildBayDiagram, buildScanOrder, type ScanDirection, type ScanScope } from './buildBayDiagram';
 
 // `source: 'bay-chip'` marks arriving from an Audit Details bay chip
 // specifically — the one entry point where the bay lock is meant to stay
@@ -129,6 +129,10 @@ export function RackViewScreen() {
   // being physically worked (see buildScanOrder). Right/Down are the
   // near-end starting defaults.
   const [scanDirection, setScanDirection] = useState<ScanDirection>('right');
+  // 'rack' = today's MHE-vs-no-MHE rack-wide pattern (bays alternate);
+  // 'bay' = the same direction applied independently, unalternated, inside
+  // each bay on its own — see buildScanOrder's ScanScope param.
+  const [scanScope, setScanScope] = useState<ScanScope>('rack');
   const [directionMenuOpen, setDirectionMenuOpen] = useState(false);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
@@ -381,7 +385,7 @@ export function RackViewScreen() {
   // whichever direction the canvas header's direction control has set —
   // not just array order — so it always matches how the rack is actually
   // being worked physically.
-  const scannableLocations = buildScanOrder(scanDirection, bayDiagrams).filter((l) => isLocSelectable(l.code));
+  const scannableLocations = buildScanOrder(scanDirection, bayDiagrams, scanScope).filter((l) => isLocSelectable(l.code));
 
   // In-scope locations still waiting on a clean, confirmed match — either
   // never scanned at all, or scanned and found to mismatch (wrong SKU, or
@@ -899,7 +903,10 @@ export function RackViewScreen() {
             height, once a pallet's audit is started — not a small overlay —
             so the canvas highlight and the form stay visible together. */}
         <View style={skuPanelOpen ? styles.splitRow : styles.singleRow}>
-        <Card style={{ padding: 0, overflow: 'hidden', flex: 1 }}>
+        {/* flex: 1.5 vs. the SKU panel's flex: 1 below — a 60/40 split
+            favoring the canvas, only meaningful once splitRow is active
+            (singleRow ignores the ratio since the canvas is alone). */}
+        <Card style={{ padding: 0, overflow: 'hidden', flex: skuPanelOpen ? 1.5 : 1 }}>
           <View style={[styles.diagramHeadRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
               Front View — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
@@ -916,6 +923,7 @@ export function RackViewScreen() {
                 />
                 <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
                   {scanDirection === 'up' || scanDirection === 'down' ? 'Vertical' : 'Horizontal'}
+                  {scanScope === 'bay' ? ' · Per Bay' : ''}
                 </Text>
                 <Ionicons name={scanDirectionArrowIcon(scanDirection)} size={14} color={tokens.accentBlue.strong} />
               </View>
@@ -935,6 +943,8 @@ export function RackViewScreen() {
               {directionMenuOpen ? (
                 <ScanDirectionMenu
                   direction={scanDirection}
+                  scope={scanScope}
+                  onSelectScope={setScanScope}
                   onSelect={(d) => {
                     setScanDirection(d);
                     setDirectionMenuOpen(false);
@@ -1899,25 +1909,63 @@ function RackCell({
 // end that pattern starts from. Mounted fresh each time the popover opens
 // (see its conditional render in the canvas header above), so its tab
 // always re-derives from whatever direction is actually active right now.
-function ScanDirectionMenu({ direction, onSelect }: { direction: ScanDirection; onSelect: (d: ScanDirection) => void }) {
+function ScanDirectionMenu({
+  direction,
+  scope,
+  onSelectScope,
+  onSelect,
+}: {
+  direction: ScanDirection;
+  scope: ScanScope;
+  onSelectScope: (s: ScanScope) => void;
+  onSelect: (d: ScanDirection) => void;
+}) {
   const { tokens } = useTheme();
   const [mode, setMode] = useState<'horizontal' | 'vertical'>(direction === 'up' || direction === 'down' ? 'vertical' : 'horizontal');
   const rows: { value: ScanDirection; icon: keyof typeof Ionicons.glyphMap; label: string; desc: string }[] =
     mode === 'horizontal'
       ? [
-          { value: 'right', icon: 'arrow-forward', label: 'Start Left → Right', desc: 'Bay 1 → last bay at L1, then reverse each level up' },
-          { value: 'left', icon: 'arrow-back', label: 'Start Right → Left', desc: 'Last bay → Bay 1 at L1, then reverse each level up' },
+          {
+            value: 'right',
+            icon: 'arrow-forward',
+            label: 'Start Left → Right',
+            desc: scope === 'bay' ? 'Each bay: L1 slots left→right, then up a level, same every bay' : 'Bay 1 → last bay at L1, then reverse each level up',
+          },
+          {
+            value: 'left',
+            icon: 'arrow-back',
+            label: 'Start Right → Left',
+            desc: scope === 'bay' ? 'Each bay: L1 slots right→left, then up a level, same every bay' : 'Last bay → Bay 1 at L1, then reverse each level up',
+          },
         ]
       : [
-          { value: 'up', icon: 'arrow-up', label: 'Start Bottom → Top', desc: 'Bay 1 goes L1 → top level, then reverse each next bay' },
-          { value: 'down', icon: 'arrow-down', label: 'Start Top → Bottom', desc: 'Bay 1 goes top level → L1, then reverse each next bay' },
+          {
+            value: 'up',
+            icon: 'arrow-up',
+            label: 'Start Bottom → Top',
+            desc: scope === 'bay' ? 'Each bay cleared L1 → top level, same every bay' : 'Bay 1 goes L1 → top level, then reverse each next bay',
+          },
+          {
+            value: 'down',
+            icon: 'arrow-down',
+            label: 'Start Top → Bottom',
+            desc: scope === 'bay' ? 'Each bay cleared top level → L1, same every bay' : 'Bay 1 goes top level → L1, then reverse each next bay',
+          },
         ];
   return (
     <View style={[menuStyles.wrap, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Scan Direction</Text>
       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>How Scan Next SKU walks the rack</Text>
 
-      <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+      {/* Scope — whether the picked direction below governs the whole
+          rack (bays alternate, MHE-vs-no-MHE) or is applied fresh, the
+          same way, inside each bay on its own. */}
+      <View style={{ gap: 6, marginTop: 12 }}>
+        <ScopeRadio label="Bay-wise (whole rack)" desc="Bays alternate direction, MHE pattern" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
+        <ScopeRadio label="Within Each Bay" desc="Same direction inside every bay, independently" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
+      </View>
+
+      <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm, marginTop: 12 }]}>
         <ModeTab label="Horizontal" sub="No MHE" icon="swap-horizontal-outline" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
         <ModeTab label="Vertical" sub="With MHE" icon="swap-vertical-outline" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
       </View>
@@ -1980,6 +2028,30 @@ function ModeTab({
       <View>
         <Text style={{ color: active ? tokens.foreground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>{label}</Text>
         <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>{sub}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// Radio row for the Bay-wise / Within Each Bay scope choice — a plain
+// circle-fill radio (not the mode tabs' segmented-control look, and not
+// the direction rows' checkmark-card look) so it reads as its own distinct
+// choice rather than blending into either of the other two controls.
+function ScopeRadio({ label, desc, active, onPress }: { label: string; desc: string; active: boolean; onPress: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable onPress={onPress} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+      <View
+        style={[
+          menuStyles.radioOuter,
+          { borderColor: active ? tokens.primary : tokens.border },
+        ]}
+      >
+        {active ? <View style={[menuStyles.radioInner, { backgroundColor: tokens.primary }]} /> : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.xs }}>{label}</Text>
+        <Text style={{ color: tokens.mutedForeground, fontSize: 9, marginTop: 1 }}>{desc}</Text>
       </View>
     </Pressable>
   );
@@ -2120,4 +2192,6 @@ const menuStyles = StyleSheet.create({
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
   rowIcon: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  radioOuter: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  radioInner: { width: 8, height: 8, borderRadius: 4 },
 });

@@ -40,6 +40,14 @@ export function buildBayDiagram(bayObj: BayNode | undefined): DiagramRow[] {
 
 export type ScanDirection = 'up' | 'down' | 'left' | 'right';
 
+// 'rack' (the original/default behavior) treats the direction as a
+// rack-wide MHE-vs-no-MHE pattern that alternates bay-to-bay — see
+// buildRackwiseScanOrder. 'bay' instead treats it as a per-bay setting:
+// every bay is walked the exact same way, independently, in natural
+// left-to-right bay order, one bay fully cleared before the next — no
+// rack-wide alternation at all.
+export type ScanScope = 'rack' | 'bay';
+
 // Mirrors how a real audit actually walks a rack, MHE or not — never a
 // flat bay-after-bay list. 'left'/'right' is the horizontal case: an MHE-
 // free inspector clears one full level across every bay before moving up,
@@ -50,7 +58,7 @@ export type ScanDirection = 'up' | 'down' | 'left' | 'right';
 // bay starts at whatever level the fork is already sitting at — hence each
 // bay alternates level direction too. `right`/`down` are the "start at the
 // near end" defaults; `left`/`up` start from the far end instead.
-export function buildScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[]): LocationNode[] {
+function buildRackwiseScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[]): LocationNode[] {
   const order: LocationNode[] = [];
   if (direction === 'left' || direction === 'right') {
     const maxLevel = bayDiagrams.reduce((max, { rows }) => Math.max(max, ...rows.map((r) => r.level)), 0);
@@ -79,4 +87,40 @@ export function buildScanOrder(direction: ScanDirection, bayDiagrams: { rows: Di
     });
   }
   return order;
+}
+
+// Bays in their natural left-to-right order (bayDiagrams' own array order,
+// never reversed), each one fully walked in the exact same chosen
+// direction before moving to the next — no bay-to-bay alternation, since
+// the direction here describes how to work *inside* one bay, not a
+// rack-wide MHE pattern. 'left'/'right' controls slot order within each of
+// that bay's levels (levels still bottom(1)→top, always ascending);
+// 'up'/'down' controls level order within the bay (slots stay natural
+// left-to-right) — same per-axis meaning the rackwise mode uses, just
+// never reversed or alternated bay-to-bay.
+function buildWithinBayScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[]): LocationNode[] {
+  const order: LocationNode[] = [];
+  bayDiagrams.forEach(({ rows }) => {
+    const sortedAsc = rows.slice().sort((a, b) => a.level - b.level);
+    if (direction === 'left' || direction === 'right') {
+      sortedAsc.forEach((row) => {
+        const cells = direction === 'right' ? row.cells : row.cells.slice().reverse();
+        cells.forEach((cell) => {
+          if (cell) order.push(cell);
+        });
+      });
+    } else {
+      const levelOrder = direction === 'up' ? sortedAsc : sortedAsc.slice().reverse();
+      levelOrder.forEach((row) => {
+        row.cells.forEach((cell) => {
+          if (cell) order.push(cell);
+        });
+      });
+    }
+  });
+  return order;
+}
+
+export function buildScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[], scope: ScanScope = 'rack'): LocationNode[] {
+  return scope === 'bay' ? buildWithinBayScanOrder(direction, bayDiagrams) : buildRackwiseScanOrder(direction, bayDiagrams);
 }
