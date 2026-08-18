@@ -462,36 +462,11 @@ export function PinLocationScreen() {
         </Text>
       </View>
 
-      {/* Standalone open-floor areas — genuinely no Layout/Rack/Bay under
-          them, unlike the zone floor plan below (whose "floor" is still
-          part of a real Layout). Picking one is the whole pin — there's
-          no further grain to narrow down to, same as tapping anywhere in
-          a drawn floor area on a real map would be. */}
-      <View style={[styles.floorAreaRow, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>Floor Areas:</Text>
-        {FLOOR_AREAS.map((area) => {
-          const active = pinFloorAreaId === area.id;
-          return (
-            <Pressable
-              key={area.id}
-              onPress={() => pickFloorArea(area.id)}
-              style={[
-                styles.floorAreaChip,
-                { borderColor: active ? tokens.accentBlue.base : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.muted, borderRadius: tokens.radius.xl },
-              ]}
-            >
-              {active ? <Ionicons name="location" size={12} color={tokens.accentBlue.strong} /> : null}
-              <Text style={{ color: active ? tokens.accentBlue.strong : tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>{area.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       <View style={styles.mapWrap}>
         <Card style={{ padding: 0, overflow: 'hidden', flex: 1, borderColor: tokens.border }}>
           <View style={[styles.canvasToolbarRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
             <Ionicons name="location-outline" size={13} color={tokens.mutedForeground} />
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Tap a zone name for open floor, or a rack for an exact shelf</Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Tap a zone name for open floor, a rack for an exact shelf, or a floor area</Text>
             {target.expectedZone ? (
               <View style={styles.legendItem}>
                 <View style={[styles.expectedDot, { backgroundColor: tokens.rag.red.strong, borderColor: '#F7F8FA' }]} />
@@ -504,7 +479,54 @@ export function PinLocationScreen() {
               <View style={styles.stageCenter}>
                 <Animated.View style={floorAnimatedStyle}>
                   <View style={styles.planCanvas}>
-                    <View style={styles.zoneGroupCol}>{horizontalZones.map((zone) => renderZone(zone, false))}</View>
+                    <View style={styles.zoneGroupCol}>
+                      {horizontalZones.map((zone) => renderZone(zone, false))}
+                      {/* Standalone open-floor areas — genuinely no Layout/
+                          Rack/Bay under them, unlike the zones above (still
+                          real Layouts). Picking one is the whole pin —
+                          there's no further grain to narrow down to, same
+                          as tapping anywhere in a drawn floor area on a
+                          real map would be. Inside the same pannable
+                          canvas as the rest of the floor plan, not a
+                          separate toolbar row above it. */}
+                      <View style={styles.zone}>
+                        <View style={styles.zoneHeadRow}>
+                          <Ionicons name="ellipse-outline" size={12} color={tokens.mutedForeground} />
+                          <Text
+                            style={{
+                              color: tokens.mutedForeground,
+                              fontWeight: tokens.fontWeight.bold,
+                              fontSize: tokens.text.xxs,
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.4,
+                            }}
+                          >
+                            Floor Areas
+                          </Text>
+                        </View>
+                        <View style={styles.zoneAisle}>
+                          {FLOOR_AREAS.map((area) => {
+                            const active = pinFloorAreaId === area.id;
+                            return (
+                              <Pressable
+                                key={area.id}
+                                onPress={() => pickFloorArea(area.id)}
+                                hitSlop={4}
+                                style={[styles.floorAreaCard, { borderColor: active ? tokens.accentBlue.base : PIN_WIRE, backgroundColor: active ? tokens.accentBlue.soft : tokens.card }]}
+                              >
+                                {active ? <Ionicons name="location" size={12} color={tokens.accentBlue.strong} /> : null}
+                                <Text
+                                  numberOfLines={2}
+                                  style={{ color: active ? tokens.accentBlue.strong : tokens.slate400, fontWeight: tokens.fontWeight.medium, fontSize: 9, textAlign: 'center' }}
+                                >
+                                  {area.label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </View>
                     <View style={styles.zoneGroupRow}>{verticalZones.map((zone) => renderZone(zone, true))}</View>
                   </View>
                 </Animated.View>
@@ -560,8 +582,7 @@ export function PinLocationScreen() {
 const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   aisleToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 10, borderWidth: 1 },
-  floorAreaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  floorAreaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  floorAreaCard: { width: 66, minHeight: 44, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, gap: 2 },
   mapWrap: { flex: 1, padding: 16 },
   canvasToolbarRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
