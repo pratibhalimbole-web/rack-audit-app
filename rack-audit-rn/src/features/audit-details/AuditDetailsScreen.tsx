@@ -54,14 +54,18 @@ export function AuditDetailsScreen() {
   // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
   // > Start Task. Count Sheet's plain list view is no longer where a bay
   // chip lands on phone.
-  const onPressBay = (bay: FlatBay) => {
+  // fromChip defaults to true since every direct caller of onPressBay is an
+  // actual bay-chip tap; onPressStart below is the one caller that isn't —
+  // it opens the audit generally (via whichever bay happens to be first),
+  // not a specific bay the inspector chose, so it opts out of the lock.
+  const onPressBay = (bay: FlatBay, fromChip = true) => {
     if (isSubmitted) return;
     // source: 'bay-chip' keeps Rack View's bay lock absolute for this entry
     // point specifically — only this bay's SKUs are selectable on the
     // canvas, and other bays' expected SKUs require the Bay dropdown.
     router.push({
       pathname: '/audit/[auditId]/rack/[rackId]',
-      params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code, source: 'bay-chip' },
+      params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code, ...(fromChip ? { source: 'bay-chip' } : {}) },
     } as never);
   };
 
@@ -73,7 +77,7 @@ export function AuditDetailsScreen() {
     if (isTablet) {
       const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
       if (targetBay) {
-        onPressBay(targetBay);
+        onPressBay(targetBay, false);
         return;
       }
     }
