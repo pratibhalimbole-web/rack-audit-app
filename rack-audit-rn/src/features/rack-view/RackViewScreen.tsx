@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
@@ -75,33 +75,57 @@ export function RackViewScreen() {
   const audit = audits?.find((a) => a.audit_id === auditId);
   const { data: tree, isLoading } = useLocationsTree(auditId);
   const { saveRecord, completeLocation } = useCountSheetMutations(auditId);
-  const navigation = useNavigation();
 
   // Whether leaving right now would discard something worth keeping, and
-  // how to save it — both refs, updated fresh every render further down
-  // (after selectedLocObj/handleSaveSkuPanel/handleSaveManualIssue exist),
-  // so the listener registered once below always reads the latest state
-  // without needing those not-yet-declared values in its own dependency
-  // array (which would violate the hooks-before-any-early-return rule).
+  // how to save it — refs updated fresh every render further down (after
+  // selectedLocObj/handleSaveSkuPanel/handleSaveManualIssue exist), so
+  // confirmBack (below) and the hardware-back handler always read the
+  // latest state without needing those not-yet-declared values in their
+  // own dependency arrays (which would violate the hooks-before-any-
+  // early-return rule).
   const hasPendingRecordRef = useRef(false);
   const saveThenLeaveRef = useRef<() => Promise<void>>(async () => {});
+  const skuPanelOpenRef = useRef(false);
 
   // Intercepts EVERY way this screen can be left — the header's own back
-  // arrow, Android hardware/gesture back, and any other navigation away —
-  // not just a tap on AppHeader's back button, which only ever caught a
-  // direct press on that one icon.
-  useEffect(() => {
-    const unsub = navigation.addListener('beforeRemove', (e) => {
-      if (!hasPendingRecordRef.current) return;
-      e.preventDefault();
+  // arrow AND Android hardware/gesture back — always confirming first,
+  // not just when a pallet record is unsaved (message and follow-up
+  // action differ based on that). If the canvas+form split view is still
+  // open, this closes it back down to canvas-only FIRST (revealing the
+  // rack behind the popup) before showing the confirmation.
+  //
+  // Deliberately NOT React Navigation's `beforeRemove` event: Rack View is
+  // mounted as a hidden Tabs.Screen (see (app)/_layout.tsx's PhoneTabsLayout
+  // — "every pushed screen... is registered here as a hidden Tabs.Screen,
+  // not a real Stack push"), and a Tabs navigator never actually removes an
+  // unfocused screen from its state, only unfocuses it — so `beforeRemove`
+  // never fires here at all. router.back() + a direct BackHandler listener
+  // works regardless of navigator type.
+  const confirmBack = () => {
+    const wasPending = hasPendingRecordRef.current;
+    if (skuPanelOpenRef.current) setSkuPanelOpen(false);
+    if (wasPending) {
       confirm.ask('You have an open pallet record for this audit. Save it before going back?', async () => {
         await saveThenLeaveRef.current();
-        navigation.dispatch(e.data.action);
+        router.back();
       });
+      return;
+    }
+    confirm.ask('Save the locations you’ve scanned in this audit before going back?', () => {
+      router.back();
     });
-    return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation]);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        confirmBack();
+        return true;
+      });
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const [layoutName, setLayoutName] = useState(params.layout);
   const [rackCode, setRackCode] = useState(params.rackId);
@@ -188,21 +212,11 @@ export function RackViewScreen() {
   // reconcile at this location for it. Only once the right SKU is
   // confirmed does the qty/condition form appear; Matched vs. Mismatch is
   // then decided by what the inspector records there.
-  // Manual Mode shares this same qty/damage form (see the shared JSX
-  // block below), but there's genuinely no expected SKU/qty/condition for
-  // an out-of-scope pallet, so expectedSku always stays null there —
-  // skuMatched/misplaced fall out false automatically as a result, and the
-  // form itself skips rendering anything that depends on a comparison.
-  const expectedSku = manualMode ? null : (expectedSkus[0] ?? null);
-  const scannedLine = manualMode ? (manualScanned ? manualLine : null) : (scanLines[0] ?? null);
-  const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
-  const misplaced = !!scannedLine && !skuMatched && !manualMode;
-
   // Writes into whichever line is actually "live" right now — manualLine
   // in Manual Mode, scanLines[0] otherwise — so the shared qty/damage/
   // evidence handlers below don't need their own mode branch each.
   const updateCurrentLine = (patch: Partial<CountLine> | ((line: CountLine) => Partial<CountLine>)) => {
-    if (manualMode) {
+    if (formIsManual) {
       setManualLine((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }));
       return;
     }
@@ -357,6 +371,24 @@ export function RackViewScreen() {
   // every pallet in the physical rack becomes selectable/reportable, not
   // just the ones this audit was scoped to.
   const matchesTargetSku = (locCode: string) => !!audit.target_sku && (EXPECTED_SKUS[locCode] ?? []).some((l) => l.sku === audit.target_sku);
+
+  // The Reconciliation Form only actually behaves like Manual Mode's report
+  // (no expected SKU, Manual Issue Report header, etc.) for a pallet that's
+  // genuinely out-of-scope and only reportable because Manual Mode opened
+  // it up — same rule isManualOnly (below) uses for canvas styling. Flipping
+  // the Manual Mode toggle while an in-scope, expected-SKU pallet is still
+  // selected must NOT switch that pallet's form into manual behavior.
+  const formIsManual = manualMode && !!selectedLocObj && !!audit.target_sku && !matchesTargetSku(selectedLocObj.code);
+  // Manual Mode shares this same qty/damage form (see the shared JSX
+  // block below), but there's genuinely no expected SKU/qty/condition for
+  // an out-of-scope pallet, so expectedSku always stays null there —
+  // skuMatched/misplaced fall out false automatically as a result, and the
+  // form itself skips rendering anything that depends on a comparison.
+  const expectedSku = formIsManual ? null : (expectedSkus[0] ?? null);
+  const scannedLine = formIsManual ? (manualScanned ? manualLine : null) : (scanLines[0] ?? null);
+  const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
+  const misplaced = !!scannedLine && !skuMatched && !formIsManual;
+
   const inBayFilter = (locCode: string) => bayFilter === 'all' || bayCodeForLoc(locCode) === bayFilter;
   // Still waiting on a clean, confirmed match at this location — either
   // never scanned, or scanned and found to mismatch on qty/damage. Shared
@@ -523,7 +555,7 @@ export function RackViewScreen() {
   // the two stay in sync no matter which happens first.
   const handleSelectPalletCondition = (good: boolean) => {
     setPalletConditionGood(good);
-    if (manualMode) {
+    if (formIsManual) {
       setManualLine((prev) => ({ ...prev, palletConditionGood: good }));
       return;
     }
@@ -543,7 +575,7 @@ export function RackViewScreen() {
   // a resolved Matched/Mismatch state instead of the empty "Scan SKU" UI
   // the inspector is meant to see first.
   const startAuditFor = (loc: LocationNode) => {
-    if (manualMode) {
+    if (formIsManual) {
       // No expected-vs-scanned check, but a real scan is still required —
       // this pallet's SKU isn't known ahead of time the way an in-scope
       // one is. Only a pallet already reported this audit (saved: true)
@@ -598,11 +630,17 @@ export function RackViewScreen() {
   // simply re-tapping a different — including already-resolved — pallet on
   // the canvas while the panel is already open, so its saved details always
   // reload instead of the panel staying stuck showing the previous pallet.
+  // Deliberately does NOT depend on manualMode: flipping that toggle while
+  // the same pallet stays selected must never reload/reset it — selecting
+  // an actually different (e.g. newly-opened out-of-scope) pallet already
+  // changes selectedLoc on its own, and handleToggleManualMode already
+  // moves the selection itself when turning the toggle off requires it.
   useEffect(() => {
     if (skuPanelOpen && selectedLocObj) {
       startAuditFor(selectedLocObj);
     }
-  }, [selectedLoc, skuPanelOpen, manualMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLoc, skuPanelOpen]);
 
   const handleStartAudit = () => {
     if (!selectedLocObj) return;
@@ -715,7 +753,7 @@ export function RackViewScreen() {
   const handleSkuScanned = (data: string) => {
     const code = data.trim();
     const pick = INVENTORY_POOL.find((p) => p.sku === code) ?? { sku: code, name: 'Unlisted SKU', lot: '—' };
-    if (manualMode) {
+    if (formIsManual) {
       applyManualSkuScan(pick);
       return;
     }
@@ -723,7 +761,7 @@ export function RackViewScreen() {
   };
 
   const handleSkuSimulated = () => {
-    if (manualMode) {
+    if (formIsManual) {
       applyManualSkuScan(INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length]);
       setSkuScanCount((c) => c + 1);
       return;
@@ -777,7 +815,7 @@ export function RackViewScreen() {
     updateCurrentLine({ qty });
     setQtyChecked(true);
     setQtyEditing(false);
-    if (!manualMode) applyLocationStatus(selectedLocObj.code, { ...scannedLine, qty }, expectedSkus[0] ?? null, true, damageChecked);
+    if (!formIsManual) applyLocationStatus(selectedLocObj.code, { ...scannedLine, qty }, expectedSkus[0] ?? null, true, damageChecked);
   };
 
   // Same as quantity, but damage is chosen from the chip picker rather than
@@ -799,7 +837,7 @@ export function RackViewScreen() {
     updateCurrentLine({ condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft });
     setDamageChecked(true);
     setDamageEditing(false);
-    if (!manualMode) {
+    if (!formIsManual) {
       applyLocationStatus(selectedLocObj.code, { ...scannedLine, condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft }, expectedSkus[0] ?? null, qtyChecked, true);
     }
   };
@@ -852,9 +890,10 @@ export function RackViewScreen() {
   // (header back arrow, hardware/gesture back) asks first whenever a
   // pallet's record is open with something on it worth keeping (scanned,
   // not yet advanced past), instead of silently discarding it.
-  hasPendingRecordRef.current = skuPanelOpen && (manualMode ? manualScanned : scanLines.length > 0);
+  skuPanelOpenRef.current = skuPanelOpen;
+  hasPendingRecordRef.current = skuPanelOpen && (formIsManual ? manualScanned : scanLines.length > 0);
   saveThenLeaveRef.current = async () => {
-    if (manualMode) {
+    if (formIsManual) {
       await handleSaveManualIssue();
     } else {
       await handleSaveSkuPanel();
@@ -867,6 +906,7 @@ export function RackViewScreen() {
         title={audit.audit_name}
         sub={audit.audit_id}
         showBack
+        onBack={confirmBack}
         menuItems={[{ label: 'Sync Now', onPress: () => {} }]}
         backgroundColor="#F7F8FA"
       />
@@ -1132,7 +1172,7 @@ export function RackViewScreen() {
               ]}
             >
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-                {manualMode ? 'Manual Issue Report' : 'Reconciliation Form'}
+                {formIsManual ? 'Manual Issue Report' : 'Reconciliation Form'}
               </Text>
             </View>
 
@@ -1148,7 +1188,7 @@ export function RackViewScreen() {
             <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
-              {manualMode && manualRaised && !manualReviewExpanded ? (
+              {formIsManual && manualRaised && !manualReviewExpanded ? (
                 // Already reported — collapsed by default instead of
                 // reopening the full form every time this pallet is
                 // re-selected. Whole card is tappable, not just an icon.
@@ -1217,7 +1257,7 @@ export function RackViewScreen() {
                       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
                     </Pressable>
                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center' }}>
-                      {manualMode
+                      {formIsManual
                         ? 'Scans the SKU code on this pallet so you can report what you actually found here.'
                         : "Scans the SKU code on the pallet at this location, then checks it against what's expected here."}
                     </Text>
@@ -1236,7 +1276,7 @@ export function RackViewScreen() {
                     const raised = issuesRaised.has(scannedLine.sku);
                     return (
                       <>
-                        {!manualMode ? (
+                        {!formIsManual ? (
                           <>
                             <View style={styles.statusPillRow}>
                               <View style={[styles.editStatusPill, { backgroundColor: primary.rag.soft, borderColor: primary.rag.border, borderRadius: tokens.radius.lg }]}>
@@ -1321,7 +1361,7 @@ export function RackViewScreen() {
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                               <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
                                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 1: Quantity</Text>
-                                {!manualMode && qtyChecked ? (
+                                {!formIsManual && qtyChecked ? (
                                   <View
                                     style={[
                                       styles.editStatusPill,
@@ -1376,7 +1416,7 @@ export function RackViewScreen() {
                                     </View>
                                   </Pressable>
                                 )}
-                                {(manualMode ? qtyChecked : qtyChecked && scannedLine.qty !== expectedSku?.qty) ? (
+                                {(formIsManual ? qtyChecked : qtyChecked && scannedLine.qty !== expectedSku?.qty) ? (
                                   <Pressable
                                     disabled={!!scannedLine.qtyIssueRaised}
                                     onPress={() => raiseFieldIssue('qty')}
@@ -1570,7 +1610,7 @@ export function RackViewScreen() {
                 </>
               )}
             </ScrollView>
-            {manualMode ? (
+            {formIsManual ? (
               // No separate "Next Pallet" button — Raise Issue already
               // both saves and auto-advances to the next pallet in the
               // active Scan Direction/Scope order (see handleSaveManualIssue),

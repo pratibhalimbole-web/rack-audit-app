@@ -18,7 +18,7 @@ export function ConfirmModal({
   const { tokens } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={[styles.backdrop, { backgroundColor: tokens.scrim }]} onPress={onCancel}>
+      <Pressable style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={onCancel}>
         <Pressable style={[styles.card, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]} onPress={(e) => e.stopPropagation()}>
           <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.base, lineHeight: 20 }}>{message}</Text>
           <View style={styles.actions}>

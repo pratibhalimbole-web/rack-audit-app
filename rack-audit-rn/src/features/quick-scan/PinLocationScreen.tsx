@@ -167,6 +167,9 @@ export function PinLocationScreen() {
   const locOptions: SheetOption[] = pinLayout && pinRack && pinBay
     ? (locationsByBay.get(`${pinLayout}|${pinRack}|${pinBay}`) ?? []).map((l) => ({ value: l.code, label: palletLabel(l) }))
     : [];
+  if (pinBay) {
+    console.log('[PINDEBUG] key=', `${pinLayout}|${pinRack}|${pinBay}`, 'locOptions=', locOptions.length, 'byBayKeys=', locationsByBay.size, 'allAudits=', allAudits.length);
+  }
   const selectedLocOption = pinLoc ? (locOptions.find((o) => o.value === pinLoc) ?? null) : null;
 
   // Measures the on-screen center of the expected-zone anchor and the
