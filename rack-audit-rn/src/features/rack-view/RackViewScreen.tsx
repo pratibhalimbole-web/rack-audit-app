@@ -1931,13 +1931,13 @@ function ScanDirectionMenu({
           {
             value: 'right',
             icon: 'arrow-forward',
-            label: 'Start Left → Right',
+            label: 'Left → Right',
             desc: scope === 'bay' ? 'Each bay: L1 slots left→right, then up a level, same every bay' : 'Bay 1 → last bay at L1, then reverse each level up',
           },
           {
             value: 'left',
             icon: 'arrow-back',
-            label: 'Start Right → Left',
+            label: 'Right → Left',
             desc: scope === 'bay' ? 'Each bay: L1 slots right→left, then up a level, same every bay' : 'Last bay → Bay 1 at L1, then reverse each level up',
           },
         ]
@@ -1945,13 +1945,13 @@ function ScanDirectionMenu({
           {
             value: 'up',
             icon: 'arrow-up',
-            label: 'Start Bottom → Top',
+            label: 'Bottom → Top',
             desc: scope === 'bay' ? 'Each bay cleared L1 → top level, same every bay' : 'Bay 1 goes L1 → top level, then reverse each next bay',
           },
           {
             value: 'down',
             icon: 'arrow-down',
-            label: 'Start Top → Bottom',
+            label: 'Top → Bottom',
             desc: scope === 'bay' ? 'Each bay cleared top level → L1, same every bay' : 'Bay 1 goes top level → L1, then reverse each next bay',
           },
         ];
@@ -1976,57 +1976,36 @@ function ScanDirectionMenu({
           <ScrollView contentContainerStyle={menuStyles.scrollBody} showsVerticalScrollIndicator={false}>
             {/* Scope — whether the picked direction below governs the whole
                 rack (bays alternate, MHE-vs-no-MHE) or is applied fresh, the
-                same way, inside each bay on its own. Same tab-bar look
-                Pattern used to have (icon + label + sub-label). */}
+                same way, inside each bay on its own. No icons here — the
+                two choices read fine as plain text, and a full sentence
+                underneath spells out what each one actually does. */}
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground }]}>Scope</Text>
             <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
-              <ModeTab label="Bay-wise" sub="Whole Rack" icon="layers-outline" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
-              <ModeTab label="Within Bay" sub="Per Bay" icon="cube-outline" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
+              <ToggleTab label="Whole Rack" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
+              <ToggleTab label="Each Bay" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
             </View>
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
-              {scope === 'rack' ? 'Bays alternate direction each level.' : 'Same direction inside every bay, independently.'}
+              {scope === 'rack'
+                ? 'The direction switches from bay to bay as you move up each level.'
+                : 'Every bay is scanned the same way on its own — nothing alternates.'}
             </Text>
 
-            {/* Pattern — Horizontal (sweeps every bay a level at a time)
-                vs. Vertical (clears one bay before moving to the next), as
-                a plain radio choice rather than a segmented tab bar, so it
-                doesn't compete visually with the Scope tabs right above it. */}
+            {/* Pattern — Horizontal (sweeps every bay a level at a time) vs.
+                Vertical (clears one bay before moving to the next), stacked
+                one below the other as a plain radio choice, same as
+                Starting Point right below it. */}
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Pattern</Text>
             <View style={{ gap: 8 }}>
-              <PatternRadio label="Horizontal" desc="Sweeps every bay one level at a time" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
-              <PatternRadio label="Vertical" desc="Clears one bay fully before moving to the next" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
+              <RadioRow icon="arrow-forward" label="Horizontal" desc="Sweeps every bay one level at a time" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
+              <RadioRow icon="arrow-up" label="Vertical" desc="Clears one bay fully before moving to the next" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
             </View>
 
+            {/* Starting Point — same stacked radio rows as Pattern. */}
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Starting Point</Text>
-            <View style={{ gap: 10 }}>
-              {rows.map((row) => {
-                const active = direction === row.value;
-                return (
-                  <Pressable
-                    key={row.value}
-                    hitSlop={6}
-                    onPress={() => onSelect(row.value)}
-                    style={({ pressed }) => [
-                      menuStyles.row,
-                      {
-                        borderColor: active ? tokens.primary : tokens.border,
-                        backgroundColor: active ? tokens.accentBlue.soft : tokens.card,
-                        borderRadius: tokens.radius.lg,
-                        opacity: pressed ? 0.6 : 1,
-                      },
-                    ]}
-                  >
-                    <View style={[menuStyles.rowIcon, { backgroundColor: active ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}>
-                      <Ionicons name={row.icon} size={16} color={active ? tokens.primaryForeground : tokens.mutedForeground} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{row.label}</Text>
-                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{row.desc}</Text>
-                    </View>
-                    {active ? <Ionicons name="checkmark-circle" size={20} color={tokens.primary} /> : null}
-                  </Pressable>
-                );
-              })}
+            <View style={{ gap: 8 }}>
+              {rows.map((row) => (
+                <RadioRow key={row.value} icon={row.icon} label={row.label} desc={row.desc} active={direction === row.value} onPress={() => onSelect(row.value)} />
+              ))}
             </View>
           </ScrollView>
         </Pressable>
@@ -2035,16 +2014,18 @@ function ScanDirectionMenu({
   );
 }
 
-function ModeTab({
+// Shared borderless toggle button for Scope / Pattern / Starting Point — a
+// plain filled-background pill (no border, no radio dot), optionally with a
+// leading icon, so all three controls in this popup read as one family
+// instead of three different control types.
+function ToggleTab({
   label,
-  sub,
   icon,
   active,
   onPress,
 }: {
   label: string;
-  sub: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   active: boolean;
   onPress: () => void;
 }) {
@@ -2055,32 +2036,46 @@ function ModeTab({
       hitSlop={6}
       style={({ pressed }) => [menuStyles.tab, { backgroundColor: active ? tokens.card : 'transparent', borderRadius: tokens.radius.sm, opacity: pressed ? 0.6 : 1 }]}
     >
-      <Ionicons name={icon} size={14} color={active ? tokens.foreground : tokens.mutedForeground} />
-      <View>
-        <Text style={{ color: active ? tokens.foreground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>{label}</Text>
-        <Text style={{ color: tokens.mutedForeground, fontSize: 9 }}>{sub}</Text>
-      </View>
+      {icon ? <Ionicons name={icon} size={16} color={active ? tokens.primary : tokens.mutedForeground} /> : null}
+      <Text style={{ color: active ? tokens.foreground : tokens.mutedForeground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.xs }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-// Plain circle-fill radio for the Pattern choice — deliberately not a
-// segmented tab bar, so it reads as a distinct choice from Scope's tabs
-// directly above it rather than blending into the same control type.
-function PatternRadio({ label, desc, active, onPress }: { label: string; desc: string; active: boolean; onPress: () => void }) {
+// Plain circle-fill radio row — bordered, stacked one below the other,
+// used for both Pattern and Starting Point so they read as the same kind
+// of choice.
+function RadioRow({
+  icon,
+  label,
+  desc,
+  active,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  desc: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   const { tokens } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       hitSlop={6}
-      style={[menuStyles.patternRow, { borderColor: active ? tokens.primary : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg }]}
+      style={[menuStyles.radioRow, { borderColor: active ? tokens.primary : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg }]}
     >
-      <View style={[menuStyles.radioOuter, { borderColor: active ? tokens.primary : tokens.border }]}>
-        {active ? <View style={[menuStyles.radioInner, { backgroundColor: tokens.primary }]} /> : null}
+      <View style={[menuStyles.radioRowIcon, { backgroundColor: '#fff', borderRadius: tokens.radius.xxl }]}>
+        <Ionicons name={icon} size={16} color={tokens.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm }}>{label}</Text>
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{desc}</Text>
+      </View>
+      <View style={[menuStyles.radioOuter, { borderColor: active ? tokens.primary : tokens.border }]}>
+        {active ? <View style={[menuStyles.radioInner, { backgroundColor: tokens.primary }]} /> : null}
       </View>
     </Pressable>
   );
@@ -2223,10 +2218,9 @@ const menuStyles = StyleSheet.create({
   scrollBody: { paddingTop: 16 },
   groupLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   tabs: { flexDirection: 'row', gap: 3, padding: 4 },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
-  patternRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
+  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
+  radioRowIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   radioOuter: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   radioInner: { width: 9, height: 9, borderRadius: 4.5 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 14, minHeight: 60 },
-  rowIcon: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 });
