@@ -85,6 +85,16 @@ export const AUDITS: Audit[] = [
     scope_type: 'Layout', scope_values: ['Layout A', 'Layout B'], team_members: ['Arjun Sharma', 'Meera Kulkarni'],
     start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled', target_sku: 'SKU-1001',
   },
+  // No target_sku — every pallet in every bay of Rack T-01 stays selectable
+  // (matchesTargetSku's rule: "without a target_sku every pallet in the
+  // rack stays selectable"), so Scan Next SKU can walk every single
+  // location in every bay with nothing skipped. Built purely to exercise
+  // the Scan Direction/Scope logic (buildScanOrder) end to end.
+  {
+    audit_id: 'AUD-9001', audit_name: 'Scan Direction Test — Rack T-01', audit_type: 'Full', count_method: 'Blind (Enforced)',
+    scope_type: 'Rack', scope_values: ['Rack T-01'], team_members: ['Arjun Sharma'],
+    start_date: '2026-07-01', end_date: '2026-07-31', status: 'In Progress',
+  },
 ];
 
 // Physical rack shape for the Rack View diagram — independent of how many
@@ -249,6 +259,23 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
     layouts: [
       makeLayout('Layout A', genRacks(['A-20', 'A-21', 'A-22'], 3, 3, 1, 1)),
       makeLayout('Layout B', genRacks(['B-20', 'B-21'], 2, 2, 0, 1)),
+    ],
+  },
+  // Rack T-01 — every bay built straight from fillBayLevels with no seed
+  // locations of its own, so every one of its 4 bays comes out as a full,
+  // real multi-level rack (RACK_DIAGRAM_LEVELS levels, seeded pallets top
+  // to bottom) with nothing left "Not Started"-and-empty for Scan Next SKU
+  // to skip over — a clean end-to-end test bed for Scan Direction/Scope.
+  'AUD-9001': {
+    layouts: [
+      makeLayout('Layout T', [
+        makeRack('T-01', [
+          makeBay('B-01', fillBayLevels('T-01-B01', [])),
+          makeBay('B-02', fillBayLevels('T-01-B02', [])),
+          makeBay('B-03', fillBayLevels('T-01-B03', [])),
+          makeBay('B-04', fillBayLevels('T-01-B04', [])),
+        ]),
+      ]),
     ],
   },
 };

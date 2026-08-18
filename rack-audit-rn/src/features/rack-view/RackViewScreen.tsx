@@ -404,8 +404,12 @@ export function RackViewScreen() {
   // "Scan Next SKU" (and the Pallet dropdown's order) walks the rack in
   // whichever direction the canvas header's direction control has set —
   // not just array order — so it always matches how the rack is actually
-  // being worked physically.
-  const scannableLocations = buildScanOrder(scanDirection, bayDiagrams, scanScope).filter((l) => isLocSelectable(l.code));
+  // being worked physically. Always keeps the currently open location in
+  // the list even if it just stopped being selectable on its own (e.g.
+  // marking it Empty flips it to 'missing', which isLocPending excludes) —
+  // otherwise handleScanNext's index lookup for "this location" comes up
+  // -1 and it closes back to the canvas instead of advancing.
+  const scannableLocations = buildScanOrder(scanDirection, bayDiagrams, scanScope).filter((l) => isLocSelectable(l.code) || l.code === selectedLoc);
 
   // In-scope locations still waiting on a clean, confirmed match — either
   // never scanned at all, or scanned and found to mismatch (wrong SKU, or
@@ -494,6 +498,10 @@ export function RackViewScreen() {
   // code just isn't there, so there's nothing left to scan at this pallet.
   // Wipes any in-progress scan and marks the location 'missing' (dark gray,
   // dashed on canvas) instead of leaving it stuck gray/unresolved forever.
+  // Pallet Condition is answered independently of the scan itself (it's
+  // about the location, not the pallet's SKU/qty/damage), so it's never
+  // reset here — an inspector who answers it before realizing the location
+  // is empty shouldn't have to answer it again.
   const handleToggleNoScannerFound = (checked: boolean) => {
     setNoScannerFound(checked);
     if (!selectedLocObj) return;
@@ -503,7 +511,6 @@ export function RackViewScreen() {
       setDamageChecked(false);
       setQtyEditing(false);
       setDamageEditing(false);
-      setPalletConditionGood(null);
       setLocationStatus((prev) => ({ ...prev, [selectedLocObj.code]: 'missing' }));
     } else {
       applyLocationStatus(selectedLocObj.code, scanLines[0] ?? null, expectedSkus[0] ?? null, qtyChecked, damageChecked);
@@ -1161,12 +1168,9 @@ export function RackViewScreen() {
                 </Pressable>
               ) : (
                 <>
-                <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                  <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Pallet Condition</Text>
-                  </View>
-                  <View style={styles.fieldCardBody}>
-                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>Is the pallet condition at this location good?</Text>
+                <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderWidth: 0, borderRadius: tokens.radius.xl }]}>
+                  <View style={[styles.fieldCardBody, { paddingHorizontal: 0, paddingVertical: 0 }]}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Is the pallet condition at this location good?</Text>
                     <View style={styles.condGrid}>
                       {([
                         { label: 'Good', value: true },
@@ -1599,10 +1603,11 @@ export function RackViewScreen() {
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
                 </Pressable>
                 <Pressable
+                  disabled={noScannerFound}
                   onPress={() => handleToggleNoScannerFound(true)}
-                  style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+                  style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg, opacity: noScannerFound ? 0.5 : 1 }]}
                 >
-                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Empty</Text>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{noScannerFound ? 'Marked Empty' : 'Empty'}</Text>
                 </Pressable>
                 <Pressable
                   disabled={!scannedLine && !noScannerFound}
@@ -1980,7 +1985,7 @@ function ScanDirectionMenu({
                 two choices read fine as plain text, and a full sentence
                 underneath spells out what each one actually does. */}
             <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground }]}>Scope</Text>
-            <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+            <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
               <ToggleTab label="Whole Rack" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
               <ToggleTab label="Each Bay" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
             </View>
@@ -2108,8 +2113,10 @@ function ManualModeToggle({ value, onToggle }: { value: boolean; onToggle: () =>
 function DetailRow({ label, value, tokens }: { label: string; value: string; tokens: ReturnType<typeof useTheme>['tokens'] }) {
   return (
     <View style={styles.detailRow}>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{label}</Text>
-      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{value}</Text>
+      <Text style={{ fontSize: tokens.text.sm }}>
+        <Text style={{ color: tokens.mutedForeground }}>{label}: </Text>
+        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{value}</Text>
+      </Text>
     </View>
   );
 }
@@ -2161,9 +2168,9 @@ const styles = StyleSheet.create({
   // row — negative margins escape the Card's own 16px padding just for
   // this row, rather than de-padding the whole panel.
   skuPanelHead: { minHeight: 60, justifyContent: 'center', marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
-  locDetailsBox: { gap: 8, marginBottom: 16 },
+  locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  detailRow: { flexBasis: '45%', flexGrow: 1 },
   scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
   scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   compareRow: { flexDirection: 'row', gap: 10 },
