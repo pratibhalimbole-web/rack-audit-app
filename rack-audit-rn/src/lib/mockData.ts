@@ -17,6 +17,7 @@ import type {
   AuditLocationsTree,
   BayNode,
   Condition,
+  FloorArea,
   InventoryItem,
   Inspector,
   LayoutNode,
@@ -314,6 +315,16 @@ export const SKU_ZONE_EXPECTATIONS: SkuZoneExpectation[] = [
   { sku: 'SKU-3301', name: 'Plastic Crate Blue', expectedZone: 'Layout B' },
   { sku: 'SKU-5088', name: 'Corner Protector', expectedZone: 'Layout C' },
   { sku: 'SKU-9011', name: 'Rack Label Kit', expectedZone: 'Layout D' },
+];
+
+// Standalone open-floor storage areas — no Layout, no Rack, no Bay under
+// them at all, unlike WAREHOUSE_ZONES above (which are Layouts, each still
+// holding real racks). A pallet found here is "in this area," full stop —
+// there's no further rack/bay grain to narrow down to.
+export const FLOOR_AREAS: FloorArea[] = [
+  { id: 'staging', label: 'Staging Area' },
+  { id: 'returns', label: 'Returns Dock' },
+  { id: 'overflow', label: 'Overflow Yard' },
 ];
 
 // Pads every bay in a locations map up to a full multi-level rack (source

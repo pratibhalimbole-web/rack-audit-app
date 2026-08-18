@@ -36,6 +36,9 @@ export function InlineDropdown({ options, selectedValue, onSelect }: { options: 
   const { tokens } = useTheme();
   return (
     <View style={[styles.inlineDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+      {options.length === 0 ? (
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, padding: 12 }}>No options here</Text>
+      ) : null}
       <ScrollView style={{ maxHeight: 260 }}>
         {options.map((o) => {
           const selected = o.value === selectedValue;

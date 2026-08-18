@@ -194,3 +194,14 @@ export type SkuZoneExpectation = {
   name: string;
   expectedZone: string;
 };
+
+// A standalone open-floor storage area — genuinely no Layout, no Rack, no
+// Bay underneath it, just a marked-off region on the warehouse floor where
+// pallets sit directly (e.g. a staging lane or a returns dock). Distinct
+// from a "zone" (a Layout, which does hold Racks/Bays) and from "floor
+// find within a zone" (the open floor of an actual Layout) — this is a
+// third kind of place a SKU can turn up that has no rack structure at all.
+export type FloorArea = {
+  id: string;
+  label: string;
+};

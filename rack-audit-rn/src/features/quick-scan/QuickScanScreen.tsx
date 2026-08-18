@@ -43,6 +43,8 @@ type ScannedSku = {
   pinnedRack?: string;
   pinnedBay?: string;
   pinnedLoc?: string;
+  pinnedAisle?: boolean;
+  pinnedFloorAreaId?: string;
   issueRaised?: boolean;
   scannedAt: number; // device clock at the moment the camera scan fired
   pinnedAt?: number; // device clock at the moment the map pin was confirmed
@@ -120,6 +122,8 @@ export function QuickScanScreen() {
           pinnedRack: pinResult.rack,
           pinnedBay: pinResult.bay,
           pinnedLoc: pinResult.loc,
+          pinnedAisle: pinResult.aisle,
+          pinnedFloorAreaId: pinResult.floorAreaId,
           matched,
           issueRaised: matched === false,
           pinnedAt: Date.now(),
@@ -209,8 +213,10 @@ function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }
         {/* Every location field stays hidden — for a rack find and a floor
             find alike — until the inspector pins it themselves; the card
             never hands over what the scan itself already knew. */}
-        {item.pinnedZone ? <Field label="Pinned Zone" value={zoneLabel(item.pinnedZone)} /> : null}
+        {item.pinnedFloorAreaId ? <Field label="Pinned Floor Area" value={item.pinnedZone ?? item.pinnedFloorAreaId} /> : null}
+        {!item.pinnedFloorAreaId && item.pinnedZone ? <Field label="Pinned Zone" value={zoneLabel(item.pinnedZone)} /> : null}
         {item.pinnedRack ? <Field label="Pinned Rack" value={item.pinnedRack} /> : null}
+        {item.pinnedAisle ? <Field label="Pinned Aisle" value={`Near Rack ${item.pinnedRack}`} /> : null}
         {item.pinnedBay ? <Field label="Pinned Bay" value={item.pinnedBay} /> : null}
         {item.pinnedLoc ? <Field label="Pinned Pallet" value={item.pinnedLoc} /> : null}
       </View>
@@ -230,7 +236,13 @@ function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }
           <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, flex: 1 }}>
             Issue raised — found in{' '}
             <Text style={{ fontWeight: tokens.fontWeight.bold }}>
-              {[zoneLabel(item.pinnedZone), item.pinnedRack ? `Rack ${item.pinnedRack}` : null, item.pinnedBay ? `Bay ${item.pinnedBay}` : null].filter(Boolean).join(' · ')}
+              {[
+                zoneLabel(item.pinnedZone),
+                item.pinnedRack ? `Rack ${item.pinnedRack}` : null,
+                item.pinnedAisle ? 'Aisle' : item.pinnedBay ? `Bay ${item.pinnedBay}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Text>
           </Text>
         </View>

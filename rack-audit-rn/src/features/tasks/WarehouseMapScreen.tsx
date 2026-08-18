@@ -9,7 +9,7 @@ import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
 import { DUE_BUCKETS, dueBucket, isOverdue, uiStatus, type DueBucketKey } from '@/lib/auditLogic';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { EXPECTED_SKUS } from '@/lib/mockData';
+import { EXPECTED_SKUS, FLOOR_AREAS } from '@/lib/mockData';
 import type { Audit, AuditType } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits, useMyAudits } from '../dashboard/hooks';
@@ -70,6 +70,12 @@ export function WarehouseMapScreen() {
   const [auditFilter, setAuditFilter] = useState<'All' | string>('All');
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<RackCell | null>(null);
+  // Standalone open-floor area (no Layout/Rack under it) and rack-aisle
+  // storage (the walkway next to a rack, not one of its bays) — two more
+  // kinds of place a task-relevant pallet can sit besides a racked bay,
+  // shown as their own tap targets on the map alongside the rack grid.
+  const [selectedFloorAreaId, setSelectedFloorAreaId] = useState<string | null>(null);
+  const [selectedAisleCell, setSelectedAisleCell] = useState<RackCell | null>(null);
 
   const myTasks = useMemo(() => myAudits.filter((a) => !['Submitted', 'Reconciled', 'Closed'].includes(a.status)), [myAudits]);
   // Every one of my audits under the currently picked type — the pool the
@@ -248,41 +254,56 @@ export function WarehouseMapScreen() {
           // fill/border used passively everywhere else.
           const rackBorder = isSelected ? tokens.accentBlue.base : (rackColor ?? (assigned ? ASSIGNED_WIRE : UNASSIGNED_WIRE));
           const bayCount = rackGroup.bays.length;
+          const aisleSelected = selectedAisleCell?.layout === cell.layout && selectedAisleCell?.rack === cell.rack;
           return (
-            <Pressable
-              key={rackGroup.rack}
-              onPress={() => setSelectedCell(cell)}
-              hitSlop={4}
-              style={[
-                styles.rackCard,
-                { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card, borderWidth: isSelected ? 2.5 : 1.5 },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: assigned ? tokens.foreground : tokens.slate400,
-                  fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
-                  fontSize: 9,
-                }}
+            <View key={rackGroup.rack} style={styles.rackWithAisle}>
+              <Pressable
+                onPress={() => setSelectedCell(cell)}
+                hitSlop={4}
+                style={[
+                  styles.rackCard,
+                  { borderColor: rackBorder, backgroundColor: assigned ? '#F3F5F8' : tokens.card, borderWidth: isSelected ? 2.5 : 1.5 },
+                ]}
               >
-                Rack {rackGroup.rack}
-              </Text>
-              <View style={styles.bayRow}>
-                {rackGroup.bays.map((bayCell) => {
-                  const bayColor = statusColorFor(bayTasksTouching(bayCell, filteredTasks), bayLocs(bayCell, filteredTasks));
-                  return (
-                    <View
-                      key={bayCell.bay}
-                      style={[styles.baySeg, { backgroundColor: bayColor ?? 'transparent', borderColor: bayColor ?? (assigned ? rackBorder : UNASSIGNED_WIRE) }]}
-                    />
-                  );
-                })}
-              </View>
-              <Text style={{ color: tokens.slate400, fontSize: 7, marginTop: 1 }}>
-                {bayCount} {bayCount === 1 ? 'bay' : 'bays'}
-              </Text>
-            </Pressable>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: assigned ? tokens.foreground : tokens.slate400,
+                    fontWeight: assigned ? tokens.fontWeight.bold : tokens.fontWeight.medium,
+                    fontSize: 9,
+                  }}
+                >
+                  Rack {rackGroup.rack}
+                </Text>
+                <View style={styles.bayRow}>
+                  {rackGroup.bays.map((bayCell) => {
+                    const bayColor = statusColorFor(bayTasksTouching(bayCell, filteredTasks), bayLocs(bayCell, filteredTasks));
+                    return (
+                      <View
+                        key={bayCell.bay}
+                        style={[styles.baySeg, { backgroundColor: bayColor ?? 'transparent', borderColor: bayColor ?? (assigned ? rackBorder : UNASSIGNED_WIRE) }]}
+                      />
+                    );
+                  })}
+                </View>
+                <Text style={{ color: tokens.slate400, fontSize: 7, marginTop: 1 }}>
+                  {bayCount} {bayCount === 1 ? 'bay' : 'bays'}
+                </Text>
+              </Pressable>
+              {/* Aisle storage — the walkway right next to this rack, not
+                  one of its bays. A distinct dashed tap target, not part of
+                  the rack card itself, since a pallet sitting there was
+                  never actually racked. */}
+              <Pressable
+                onPress={() => setSelectedAisleCell(cell)}
+                hitSlop={4}
+                style={[styles.aisleStrip, { borderColor: aisleSelected ? tokens.accentBlue.base : UNASSIGNED_WIRE, borderWidth: aisleSelected ? 2 : 1 }]}
+              >
+                <Text style={{ color: tokens.slate400, fontSize: 6, transform: [{ rotate: '90deg' }] }} numberOfLines={1}>
+                  Aisle
+                </Text>
+              </Pressable>
+            </View>
           );
         })}
       </View>
@@ -359,7 +380,43 @@ export function WarehouseMapScreen() {
                 <View style={styles.stageCenter}>
                   <Animated.View style={floorAnimatedStyle}>
                     <View style={styles.planCanvas}>
-                      <View style={styles.zoneGroupCol}>{horizontalZones.map((zone) => renderZone(zone, false))}</View>
+                      <View style={styles.zoneGroupCol}>
+                        {horizontalZones.map((zone) => renderZone(zone, false))}
+                        {/* Standalone open-floor areas — no Layout/Rack under
+                            them, unlike the zones above (still real Layouts).
+                            Its own small "zone" so it reads as a third kind
+                            of place on the floor, not a rack variant. */}
+                        <View style={styles.zone}>
+                          <View style={styles.zoneHeadRow}>
+                            <Ionicons name="ellipse-outline" size={12} color={tokens.mutedForeground} />
+                            <Text
+                              style={{
+                                color: tokens.mutedForeground,
+                                fontWeight: tokens.fontWeight.bold,
+                                fontSize: tokens.text.xxs,
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.4,
+                              }}
+                            >
+                              Floor Areas
+                            </Text>
+                          </View>
+                          <View style={styles.zoneAisle}>
+                            {FLOOR_AREAS.map((area) => (
+                              <Pressable
+                                key={area.id}
+                                onPress={() => setSelectedFloorAreaId(area.id)}
+                                hitSlop={4}
+                                style={[styles.floorAreaCard, { borderColor: selectedFloorAreaId === area.id ? tokens.accentBlue.base : UNASSIGNED_WIRE }]}
+                              >
+                                <Text numberOfLines={2} style={{ color: tokens.slate400, fontWeight: tokens.fontWeight.medium, fontSize: 9, textAlign: 'center' }}>
+                                  {area.label}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
                       <View style={styles.zoneGroupRow}>{verticalZones.map((zone) => renderZone(zone, true))}</View>
                     </View>
                   </Animated.View>
@@ -579,6 +636,55 @@ export function WarehouseMapScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Floor Area and Aisle info sheets — deliberately simpler than the
+          rack sheet above: neither kind of place has task-assignment data
+          of its own in this data model (no target_sku ties to a floor area
+          or an aisle the way it does to a rack's locations), so these just
+          confirm what was tapped rather than fabricating a task list. */}
+      <Modal visible={!!selectedFloorAreaId} transparent animationType="fade" onRequestClose={() => setSelectedFloorAreaId(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setSelectedFloorAreaId(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: tokens.card, borderRadius: tokens.radius.xxl, maxWidth: 360 }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHeadRow}>
+              <View>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                  {FLOOR_AREAS.find((a) => a.id === selectedFloorAreaId)?.label}
+                </Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>Open-floor storage — no rack structure</Text>
+              </View>
+              <Pressable onPress={() => setSelectedFloorAreaId(null)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={tokens.mutedForeground} />
+              </Pressable>
+            </View>
+            <View style={[styles.sheetDivider, { backgroundColor: tokens.border }]} />
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>
+              Pallets found here come from Quick Scan's "Pin Exact Location" step, same as any floor find — this area doesn't hold a rack layout of its own.
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!selectedAisleCell} transparent animationType="fade" onRequestClose={() => setSelectedAisleCell(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setSelectedAisleCell(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: tokens.card, borderRadius: tokens.radius.xxl, maxWidth: 360 }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHeadRow}>
+              <View>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                  Aisle — Rack {selectedAisleCell?.rack}
+                </Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{selectedAisleCell?.layout}</Text>
+              </View>
+              <Pressable onPress={() => setSelectedAisleCell(null)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={tokens.mutedForeground} />
+              </Pressable>
+            </View>
+            <View style={[styles.sheetDivider, { backgroundColor: tokens.border }]} />
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>
+              The walkway next to this rack — pallets sitting here were never actually racked. Reported via Quick Scan's Pin Exact Location as an Aisle find.
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -604,7 +710,10 @@ const styles = StyleSheet.create({
   zoneHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   zoneAisle: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   zoneAisleVertical: { flexDirection: 'column', flexWrap: 'nowrap' },
+  rackWithAisle: { flexDirection: 'row', alignItems: 'stretch', gap: 2 },
   rackCard: { alignItems: 'center', width: 66, borderWidth: 1.5, borderRadius: 5, paddingVertical: 5, paddingHorizontal: 4, gap: 3 },
+  aisleStrip: { width: 10, borderStyle: 'dashed', borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
+  floorAreaCard: { width: 66, minHeight: 44, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   bayRow: { flexDirection: 'row', gap: BAY_GAP },
   baySeg: { width: BAY_SEG_W, height: BAY_SEG_H, borderWidth: 1, borderRadius: 1.5 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },

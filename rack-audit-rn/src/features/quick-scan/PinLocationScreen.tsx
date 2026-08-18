@@ -10,6 +10,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { Card } from '@/components/Card';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
+import { FLOOR_AREAS } from '@/lib/mockData';
 import { useQuickScanPinStore } from '@/store/useQuickScanPinStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -62,6 +63,16 @@ export function PinLocationScreen() {
   const [pinRack, setPinRack] = useState<string | null>(null);
   const [pinBay, setPinBay] = useState<string | null>(null);
   const [pinLoc, setPinLoc] = useState<string | null>(null);
+  // Pinned to the aisle right next to pinRack, not a specific bay — a
+  // pallet sitting in the walkway rather than racked. Mutually exclusive
+  // with pinBay/pinLoc (a pallet is either racked or in the aisle, never
+  // both), and with pinFloorAreaId below (an aisle is still "near a rack,"
+  // unlike a standalone floor area).
+  const [pinAisle, setPinAisle] = useState(false);
+  // Pinned to a standalone open-floor area (see FLOOR_AREAS) — mutually
+  // exclusive with the whole Layout/Rack/Bay/Aisle path, since a floor
+  // area has no rack structure under it at all.
+  const [pinFloorAreaId, setPinFloorAreaId] = useState<string | null>(null);
   const [openField, setOpenField] = useState<'layout' | 'rack' | 'bay' | 'loc' | null>(null);
 
   useEffect(() => {
@@ -167,9 +178,15 @@ export function PinLocationScreen() {
   const locOptions: SheetOption[] = pinLayout && pinRack && pinBay
     ? (locationsByBay.get(`${pinLayout}|${pinRack}|${pinBay}`) ?? []).map((l) => ({ value: l.code, label: palletLabel(l) }))
     : [];
-  if (pinBay) {
-    console.log('[PINDEBUG] key=', `${pinLayout}|${pinRack}|${pinBay}`, 'locOptions=', locOptions.length, 'byBayKeys=', locationsByBay.size, 'allAudits=', allAudits.length);
-  }
+  console.log(
+    '[PINDEBUG]',
+    'allAudits=', allAudits.length,
+    'zones=', zones.length,
+    'layout=', pinLayout, 'rackOptions=', rackOptions.length,
+    'rack=', pinRack, 'bayOptions=', bayOptions.length,
+    'bay=', pinBay, 'locOptions=', locOptions.length,
+    'byBayKeys=', Array.from(locationsByBay.keys()),
+  );
   const selectedLocOption = pinLoc ? (locOptions.find((o) => o.value === pinLoc) ?? null) : null;
 
   // Measures the on-screen center of the expected-zone anchor and the
@@ -208,16 +225,19 @@ export function PinLocationScreen() {
   }, [pinLayout, pinRack, pinBay, expectedKey, zones]);
 
   const pickLayout = (layout: string) => {
+    setPinFloorAreaId(null);
     setPinLayout(layout);
     setPinRack(null);
     setPinBay(null);
     setPinLoc(null);
+    setPinAisle(false);
     setOpenField(null);
   };
   const pickRack = (rack: string) => {
     setPinRack(rack);
     setPinBay(null);
     setPinLoc(null);
+    setPinAisle(false);
     setOpenField(null);
   };
   const pickBay = (bay: string) => {
@@ -229,6 +249,23 @@ export function PinLocationScreen() {
     setPinLoc(loc);
     setOpenField(null);
   };
+  // Aisle storage sits next to pinRack, not inside any of its bays — picking
+  // it clears whatever bay/pallet was chosen, the same way picking a real
+  // bay clears the pallet below it.
+  const toggleAisle = () => {
+    setPinAisle((v) => !v);
+    setPinBay(null);
+    setPinLoc(null);
+  };
+  const pickFloorArea = (id: string) => {
+    setPinFloorAreaId(id);
+    setPinLayout(null);
+    setPinRack(null);
+    setPinBay(null);
+    setPinLoc(null);
+    setPinAisle(false);
+    setOpenField(null);
+  };
 
   // Tapping a rack card on the map pins that exact rack (zone + rack, bay
   // left open — a rack find is granular enough without forcing a specific
@@ -237,24 +274,43 @@ export function PinLocationScreen() {
   // map doesn't render that grain, so a specific pallet only ever comes
   // from the dropdown.
   const pinToRack = (layout: string, rack: string) => {
+    setPinFloorAreaId(null);
     setPinLayout(layout);
     setPinRack(rack);
     setPinBay(null);
     setPinLoc(null);
+    setPinAisle(false);
   };
   const pinToZoneFloor = (layout: string) => {
+    setPinFloorAreaId(null);
     setPinLayout(layout);
     setPinRack(null);
     setPinBay(null);
     setPinLoc(null);
+    setPinAisle(false);
   };
 
   const horizontalZones = zones.filter((_, i) => i % 2 === 0);
   const verticalZones = zones.filter((_, i) => i % 2 === 1);
 
   const handleConfirm = () => {
-    if (!target || !pinLayout) return;
-    submitResult({ itemId: target.itemId, zone: pinLayout, rack: pinRack ?? undefined, bay: pinBay ?? undefined, loc: pinLoc ?? undefined });
+    if (!target) return;
+    if (pinFloorAreaId) {
+      const area = FLOOR_AREAS.find((a) => a.id === pinFloorAreaId);
+      if (!area) return;
+      submitResult({ itemId: target.itemId, zone: area.label, floorAreaId: area.id });
+      router.back();
+      return;
+    }
+    if (!pinLayout) return;
+    submitResult({
+      itemId: target.itemId,
+      zone: pinLayout,
+      rack: pinRack ?? undefined,
+      bay: pinAisle ? undefined : (pinBay ?? undefined),
+      loc: pinAisle ? undefined : (pinLoc ?? undefined),
+      aisle: pinAisle && !!pinRack ? true : undefined,
+    });
     router.back();
   };
 
@@ -363,27 +419,72 @@ export function PinLocationScreen() {
             </>
           ) : null}
         </View>
-        <View>
-          <ToolbarField label={pinBay ? `Bay ${pinBay}` : 'Any Bay'} open={openField === 'bay'} onPress={() => pinRack && setOpenField(openField === 'bay' ? null : 'bay')} />
-          {openField === 'bay' ? (
-            <>
-              <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
-              <InlineDropdown options={bayOptions} selectedValue={pinBay ?? ''} onSelect={pickBay} />
-            </>
-          ) : null}
-        </View>
-        <View>
-          <ToolbarField label={selectedLocOption ? selectedLocOption.label : 'Any Pallet'} open={openField === 'loc'} onPress={() => pinBay && setOpenField(openField === 'loc' ? null : 'loc')} />
-          {openField === 'loc' ? (
-            <>
-              <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
-              <InlineDropdown options={locOptions} selectedValue={pinLoc ?? ''} onSelect={pickLoc} />
-            </>
-          ) : null}
-        </View>
+        {/* Aisle storage — the pallet sits in the walkway next to this
+            rack, not inside any of its bays, so picking it swaps out the
+            Bay/Pallet fields entirely rather than leaving them dangling
+            with nothing meaningful to select. */}
+        {pinRack ? (
+          <Pressable
+            onPress={toggleAisle}
+            style={[
+              styles.aisleToggle,
+              { borderColor: pinAisle ? tokens.accentBlue.base : tokens.border, backgroundColor: pinAisle ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg },
+            ]}
+          >
+            <Ionicons name={pinAisle ? 'checkbox' : 'square-outline'} size={14} color={pinAisle ? tokens.accentBlue.strong : tokens.mutedForeground} />
+            <Text style={{ color: pinAisle ? tokens.accentBlue.strong : tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Aisle</Text>
+          </Pressable>
+        ) : null}
+        {!pinAisle ? (
+          <>
+            <View>
+              <ToolbarField label={pinBay ? `Bay ${pinBay}` : 'Any Bay'} open={openField === 'bay'} onPress={() => pinRack && setOpenField(openField === 'bay' ? null : 'bay')} />
+              {openField === 'bay' ? (
+                <>
+                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
+                  <InlineDropdown options={bayOptions} selectedValue={pinBay ?? ''} onSelect={pickBay} />
+                </>
+              ) : null}
+            </View>
+            <View>
+              <ToolbarField label={selectedLocOption ? selectedLocOption.label : 'Any Pallet'} open={openField === 'loc'} onPress={() => pinBay && setOpenField(openField === 'loc' ? null : 'loc')} />
+              {openField === 'loc' ? (
+                <>
+                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
+                  <InlineDropdown options={locOptions} selectedValue={pinLoc ?? ''} onSelect={pickLoc} />
+                </>
+              ) : null}
+            </View>
+          </>
+        ) : null}
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginLeft: 'auto', flexShrink: 1 }} numberOfLines={2}>
           Or tap the map directly
         </Text>
+      </View>
+
+      {/* Standalone open-floor areas — genuinely no Layout/Rack/Bay under
+          them, unlike the zone floor plan below (whose "floor" is still
+          part of a real Layout). Picking one is the whole pin — there's
+          no further grain to narrow down to, same as tapping anywhere in
+          a drawn floor area on a real map would be. */}
+      <View style={[styles.floorAreaRow, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>Floor Areas:</Text>
+        {FLOOR_AREAS.map((area) => {
+          const active = pinFloorAreaId === area.id;
+          return (
+            <Pressable
+              key={area.id}
+              onPress={() => pickFloorArea(area.id)}
+              style={[
+                styles.floorAreaChip,
+                { borderColor: active ? tokens.accentBlue.base : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.muted, borderRadius: tokens.radius.xl },
+              ]}
+            >
+              {active ? <Ionicons name="location" size={12} color={tokens.accentBlue.strong} /> : null}
+              <Text style={{ color: active ? tokens.accentBlue.strong : tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>{area.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.mapWrap}>
@@ -428,19 +529,26 @@ export function PinLocationScreen() {
         <View style={{ flex: 1 }}>
           <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Pinned Location</Text>
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
-            {pinLayout
-              ? [zoneLabel(pinLayout), pinRack ? `Rack ${pinRack}` : null, pinBay ? `Bay ${pinBay}` : null, selectedLocOption ? selectedLocOption.label : null]
-                  .filter(Boolean)
-                  .join(' · ')
-              : 'Nothing pinned yet'}
+            {pinFloorAreaId
+              ? FLOOR_AREAS.find((a) => a.id === pinFloorAreaId)?.label
+              : pinLayout
+                ? [
+                    zoneLabel(pinLayout),
+                    pinRack ? `Rack ${pinRack}` : null,
+                    pinAisle ? 'Aisle' : pinBay ? `Bay ${pinBay}` : null,
+                    !pinAisle && selectedLocOption ? selectedLocOption.label : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : 'Nothing pinned yet'}
           </Text>
         </View>
         <Pressable
-          disabled={!pinLayout}
+          disabled={!pinLayout && !pinFloorAreaId}
           onPress={handleConfirm}
-          style={[styles.confirmBtn, { backgroundColor: pinLayout ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}
+          style={[styles.confirmBtn, { backgroundColor: pinLayout || pinFloorAreaId ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}
         >
-          <Text style={{ color: pinLayout ? tokens.primaryForeground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+          <Text style={{ color: pinLayout || pinFloorAreaId ? tokens.primaryForeground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
             Confirm Pin
           </Text>
         </Pressable>
@@ -451,6 +559,9 @@ export function PinLocationScreen() {
 
 const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  aisleToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 10, borderWidth: 1 },
+  floorAreaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  floorAreaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
   mapWrap: { flex: 1, padding: 16 },
   canvasToolbarRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
