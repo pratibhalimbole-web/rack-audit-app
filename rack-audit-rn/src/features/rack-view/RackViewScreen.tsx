@@ -15,7 +15,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, type ExpectedSkuLine } from '@/lib/mockData';
+import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, RACK_DIAGRAM_SLOTS_PER_LEVEL, type ExpectedSkuLine } from '@/lib/mockData';
 import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase, type CountLine, type Evidence, type LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -29,6 +29,14 @@ import { buildBayDiagram, buildScanOrder, type ScanDirection, type ScanScope } f
 // leaves `source` unset and keeps pending locations directly tappable
 // across bays regardless of the lock — see isLocSelectable below.
 type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string; source?: 'bay-chip' };
+
+// Matches styles.cell's width and styles.diagramCells' gap below — a full
+// (3-slot) row's total width, used to stretch a shorter level's real cells
+// (see the diagram row render) so they occupy the same span instead of
+// leaving room for a slot that beam was never built with.
+const DIAGRAM_CELL_WIDTH = 38;
+const DIAGRAM_CELL_GAP = 8;
+const FULL_DIAGRAM_ROW_WIDTH = RACK_DIAGRAM_SLOTS_PER_LEVEL * DIAGRAM_CELL_WIDTH + (RACK_DIAGRAM_SLOTS_PER_LEVEL - 1) * DIAGRAM_CELL_GAP;
 
 // Pallet ID shown to the inspector — level + pallet number on that level,
 // e.g. level 5 / pallet 1 -> "P-0501" — distinct from the location's
@@ -1012,7 +1020,7 @@ export function RackViewScreen() {
                 />
                 <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
                   {scanDirection === 'up' || scanDirection === 'down' ? 'Vertical' : 'Horizontal'}
-                  {scanScope === 'bay' ? ' · Per Bay' : ''}
+                  {scanScope === 'bay' ? ' · Each Bay' : ' · Whole Rack'}
                 </Text>
                 <Ionicons name={scanDirectionArrowIcon(scanDirection)} size={14} color={tokens.accentBlue.strong} />
               </View>
@@ -1055,8 +1063,21 @@ export function RackViewScreen() {
                                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, width: 22 }}>L{row.level}</Text>
                                 ) : null}
                                 <View style={styles.diagramCells}>
-                                  {row.cells.map((cell, i) => {
-                                    if (!cell) return <View key={i} style={[styles.cell, styles.cellEmpty, { borderColor: tokens.border }]} />;
+                                  {/* A level with fewer than the full slot
+                                      count (e.g. 2 pallets on an even level
+                                      vs. 3 on an odd one) is a real, deliberate
+                                      shape of that beam — not a gap waiting to
+                                      be filled — so its cells stretch to
+                                      occupy the whole row width instead of
+                                      leaving a small faded stub cell where the
+                                      missing slot would've been. */}
+                                  {(() => {
+                                    const realCells = row.cells.filter((c): c is NonNullable<typeof c> => !!c);
+                                    const cellWidth =
+                                      realCells.length > 0 && realCells.length < RACK_DIAGRAM_SLOTS_PER_LEVEL
+                                        ? (FULL_DIAGRAM_ROW_WIDTH - (realCells.length - 1) * DIAGRAM_CELL_GAP) / realCells.length
+                                        : undefined;
+                                    return realCells.map((cell) => {
                                     // Canvas <-> dropdown selection is the
                                     // same `selectedLoc` value both ways, so
                                     // tapping a cell here updates the
@@ -1120,10 +1141,12 @@ export function RackViewScreen() {
                                         blinking={selected}
                                         dimmed={dimmed}
                                         flagged={flaggedLocs.has(cell.code)}
+                                        width={cellWidth}
                                         onPress={() => selectLocation(cell.code)}
                                       />
                                     );
-                                  })}
+                                    });
+                                  })()}
                                 </View>
                               </View>
                             ))}
@@ -1890,6 +1913,7 @@ function RackCell({
   blinking,
   dimmed,
   flagged,
+  width,
   onPress,
 }: {
   bg: string;
@@ -1900,6 +1924,7 @@ function RackCell({
   blinking: boolean;
   dimmed: boolean;
   flagged: boolean;
+  width?: number;
   onPress: () => void;
 }) {
   const opacity = useSharedValue(dimmed ? 0.45 : 1);
@@ -1926,6 +1951,7 @@ function RackCell({
             borderWidth: selected ? 2 : 1,
             borderStyle: dashed ? 'dashed' : 'solid',
             borderRadius: dashed ? 0 : 4,
+            ...(width != null ? { width } : null),
           },
           animatedStyle,
         ]}
@@ -2198,7 +2224,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
     elevation: 4,
   },
-  cellEmpty: { borderStyle: 'dashed', opacity: 0.4 },
   outlineBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   primaryBtn: { flex: 1, flexDirection: 'row', height: 44, alignItems: 'center', justifyContent: 'center', gap: 6 },
   footerRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
