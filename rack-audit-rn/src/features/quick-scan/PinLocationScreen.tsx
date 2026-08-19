@@ -419,48 +419,57 @@ export function PinLocationScreen() {
             </>
           ) : null}
         </View>
+        {!pinAisle ? (
+          <View>
+            <ToolbarField label={pinBay ? `Bay ${pinBay}` : 'Any Bay'} open={openField === 'bay'} onPress={() => pinRack && setOpenField(openField === 'bay' ? null : 'bay')} />
+            {openField === 'bay' ? (
+              <>
+                <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
+                <InlineDropdown options={bayOptions} selectedValue={pinBay ?? ''} onSelect={pickBay} />
+              </>
+            ) : null}
+          </View>
+        ) : null}
         {/* Aisle storage — the pallet sits in the walkway next to this
-            rack, not inside any of its bays, so picking it swaps out the
+            rack, not inside any of its bays, so checking it swaps out the
             Bay/Pallet fields entirely rather than leaving them dangling
-            with nothing meaningful to select. */}
+            with nothing meaningful to select. A plain checkbox (no chip
+            border/background) sitting right of the Bay dropdown, not a
+            separate bordered button competing with the toolbar's own
+            dropdown chips. */}
         {pinRack ? (
-          <Pressable
-            onPress={toggleAisle}
-            style={[
-              styles.aisleToggle,
-              { borderColor: pinAisle ? tokens.accentBlue.base : tokens.border, backgroundColor: pinAisle ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg },
-            ]}
-          >
-            <Ionicons name={pinAisle ? 'checkbox' : 'square-outline'} size={14} color={pinAisle ? tokens.accentBlue.strong : tokens.mutedForeground} />
+          <Pressable onPress={toggleAisle} hitSlop={6} style={styles.aisleCheckbox}>
+            <Ionicons name={pinAisle ? 'checkbox' : 'square-outline'} size={16} color={pinAisle ? tokens.accentBlue.strong : tokens.mutedForeground} />
             <Text style={{ color: pinAisle ? tokens.accentBlue.strong : tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Aisle</Text>
           </Pressable>
         ) : null}
         {!pinAisle ? (
-          <>
-            <View>
-              <ToolbarField label={pinBay ? `Bay ${pinBay}` : 'Any Bay'} open={openField === 'bay'} onPress={() => pinRack && setOpenField(openField === 'bay' ? null : 'bay')} />
-              {openField === 'bay' ? (
-                <>
-                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
-                  <InlineDropdown options={bayOptions} selectedValue={pinBay ?? ''} onSelect={pickBay} />
-                </>
-              ) : null}
-            </View>
-            <View>
-              <ToolbarField label={selectedLocOption ? selectedLocOption.label : 'Any Pallet'} open={openField === 'loc'} onPress={() => pinBay && setOpenField(openField === 'loc' ? null : 'loc')} />
-              {openField === 'loc' ? (
-                <>
-                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
-                  <InlineDropdown options={locOptions} selectedValue={pinLoc ?? ''} onSelect={pickLoc} />
-                </>
-              ) : null}
-            </View>
-          </>
+          <View>
+            <ToolbarField label={selectedLocOption ? selectedLocOption.label : 'Any Pallet'} open={openField === 'loc'} onPress={() => pinBay && setOpenField(openField === 'loc' ? null : 'loc')} />
+            {openField === 'loc' ? (
+              <>
+                <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenField(null)} />
+                <InlineDropdown options={locOptions} selectedValue={pinLoc ?? ''} onSelect={pickLoc} />
+              </>
+            ) : null}
+          </View>
         ) : null}
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginLeft: 'auto', flexShrink: 1 }} numberOfLines={2}>
           Or tap the map directly
         </Text>
       </View>
+
+      {/* Plain-language explanation of what checking Aisle actually means —
+          only relevant once a rack's picked, since that's when the
+          checkbox itself first appears. */}
+      {pinRack ? (
+        <View style={[styles.aisleHintRow, { backgroundColor: tokens.muted, borderBottomColor: tokens.border }]}>
+          <Ionicons name="information-circle-outline" size={13} color={tokens.mutedForeground} />
+          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, flex: 1 }}>
+            Aisle means the pallet is sitting in the walkway beside Rack {pinRack}, not inside one of its bays.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.mapWrap}>
         <Card style={{ padding: 0, overflow: 'hidden', flex: 1, borderColor: tokens.border }}>
@@ -581,7 +590,8 @@ export function PinLocationScreen() {
 
 const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  aisleToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 10, borderWidth: 1 },
+  aisleCheckbox: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 4 },
+  aisleHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   floorAreaCard: { width: 66, minHeight: 44, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, gap: 2 },
   mapWrap: { flex: 1, padding: 16 },
   canvasToolbarRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },

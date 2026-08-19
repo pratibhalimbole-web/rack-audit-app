@@ -166,7 +166,12 @@ export function RackViewScreen() {
   const [scanScope, setScanScope] = useState<ScanScope>('rack');
   const [directionMenuOpen, setDirectionMenuOpen] = useState(false);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
-  const [skuPanelOpen, setSkuPanelOpen] = useState(false);
+  // A specific `loc` param (Resume Audit's "pick up exactly where I left
+  // off", Count Sheet's Scan Next) means the inspector is being sent
+  // straight back to a pallet they were already working — canvas+form
+  // should already be open, not just that pallet highlighted on the
+  // canvas requiring an extra tap to reopen the form.
+  const [skuPanelOpen, setSkuPanelOpen] = useState(!!params.loc);
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
   const [scanPallet, setScanPallet] = useState<string | null>(null);
   const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
@@ -300,6 +305,7 @@ export function RackViewScreen() {
     setRackCode(params.rackId);
     setBayFilter(params.bay || 'all');
     setSelectedLoc(params.loc ?? null);
+    setSkuPanelOpen(!!params.loc);
     scale.value = 1;
     savedScale.value = 1;
     translateX.value = 0;
@@ -423,6 +429,21 @@ export function RackViewScreen() {
     manualMode ||
     (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode))) ||
     (params.source !== 'bay-chip' && isLocPending(locCode));
+
+  // Picking a bay from the toolbar dropdown also jumps the canvas selection
+  // straight to whatever's still unresolved in it — the first pending
+  // (unscanned/mismatched) location in bay order — rather than leaving the
+  // previous bay's pallet highlighted, or nothing at all. Falls back to
+  // that bay's first location (its bottom-most, per fillBayLevels' build
+  // order) if every one of its pallets is already resolved.
+  const pickBayFilter = (bay: string) => {
+    setBayFilter(bay);
+    setPickerField(null);
+    if (bay === 'all') return;
+    const bayLocs = rackLocations.filter((loc) => bayCodeForLoc(loc.code) === bay);
+    const next = bayLocs.find((loc) => isLocPending(loc.code)) ?? bayLocs[0];
+    if (next) setSelectedLoc(next.code);
+  };
   // Canvas highlight color: with a target_sku, only the matching pallets are
   // highlighted dark; without one, any pallet that has an assigned SKU is
   // (as before). Unaffected by Manual Mode — the expected-SKU pallets keep
@@ -947,14 +968,7 @@ export function RackViewScreen() {
           {pickerField === 'bay' ? (
             <>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
-              <InlineDropdown
-                options={bayOptions}
-                selectedValue={bayFilter}
-                onSelect={(v) => {
-                  setBayFilter(v);
-                  setPickerField(null);
-                }}
-              />
+              <InlineDropdown options={bayOptions} selectedValue={bayFilter} onSelect={pickBayFilter} />
             </>
           ) : null}
         </View>
