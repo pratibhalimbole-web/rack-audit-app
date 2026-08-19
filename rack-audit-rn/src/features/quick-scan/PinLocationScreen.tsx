@@ -26,8 +26,12 @@ const BAY_SEG_H = 14;
 const BAY_GAP = 1.5;
 const PIN_WIRE = '#DCE1E7';
 
+// A rack-holding zone's real name IS "Layout X" — no longer relabeled to
+// "Zone X" for display, since "Zone" is now reserved for the separate,
+// rack-less floor-area concept (see FLOOR_AREAS) so the two don't get
+// confused for one another.
 function zoneLabel(zone: string): string {
-  return zone.replace('Layout', 'Zone');
+  return zone;
 }
 
 // Level + slot on that level, e.g. level 5 / slot 1 -> "P-0501" — same
@@ -460,9 +464,10 @@ export function PinLocationScreen() {
       </View>
 
       {/* Plain-language explanation of what checking Aisle actually means —
-          only relevant once a rack's picked, since that's when the
-          checkbox itself first appears. */}
-      {pinRack ? (
+          only shown once it's actually checked, not just because the
+          checkbox is on screen (that would read as explaining a choice
+          the inspector hasn't made yet). */}
+      {pinAisle ? (
         <View style={[styles.aisleHintRow, { backgroundColor: tokens.muted, borderBottomColor: tokens.border }]}>
           <Ionicons name="information-circle-outline" size={13} color={tokens.mutedForeground} />
           <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, flex: 1 }}>
@@ -589,7 +594,7 @@ export function PinLocationScreen() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   aisleCheckbox: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 4 },
   aisleHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   floorAreaCard: { width: 66, minHeight: 44, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, gap: 2 },

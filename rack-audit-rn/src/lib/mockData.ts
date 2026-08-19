@@ -52,6 +52,7 @@ export const INVENTORY_POOL: InventoryItem[] = [
   { sku: 'SKU-4411', name: 'Washer Pack Steel', lot: 'L-2341' },
   { sku: 'SKU-4412', name: 'Rubber Gasket Set', lot: 'L-2342' },
   { sku: 'SKU-1001', name: 'iPhone 15 Box', lot: 'L-1090' },
+  { sku: 'SKU-1002', name: 'iPhone 15 Charger', lot: 'L-1091' },
 ];
 
 export const AUDITS: Audit[] = [
@@ -85,6 +86,18 @@ export const AUDITS: Audit[] = [
     audit_id: 'AUD-0240', audit_name: 'Full Count — Layouts A & B', audit_type: 'Full', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout A', 'Layout B'], team_members: ['Arjun Sharma', 'Meera Kulkarni'],
     start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled', target_sku: 'SKU-1001',
+  },
+  // 'Zone' scope — coarser than 'Layout': Audit Details shows zone chips
+  // instead of drilling to bays, and Resume Audit opens the whole-warehouse
+  // zone map instead of a specific rack in Rack View.
+  {
+    // 'Zone' scope_values reference FLOOR_AREAS labels, not Layout names —
+    // these zones have no racks/bays under them at all, so this audit
+    // never drills below the zone itself (see isZoneScope in
+    // AuditDetailsScreen and ZoneAuditMapScreen).
+    audit_id: 'AUD-0241', audit_name: 'Zone Sweep — Zone A & Staging', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
+    scope_type: 'Zone', scope_values: ['Zone A', 'Staging Area'], team_members: ['Arjun Sharma'],
+    start_date: '2026-07-10', end_date: '2026-07-20', status: 'Scheduled',
   },
 ];
 
@@ -252,6 +265,9 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
       makeLayout('Layout B', genRacks(['B-20', 'B-21'], 2, 2, 0, 1)),
     ],
   },
+  // No racks/bays at all — AUD-0241 is Zone-scoped against rack-less
+  // FLOOR_AREAS zones, so there's no location tree underneath it.
+  'AUD-0241': { layouts: [] },
 };
 
 // AUD-0231's curated pallet + AUD-0225's real counted history (source lines
@@ -322,10 +338,39 @@ export const SKU_ZONE_EXPECTATIONS: SkuZoneExpectation[] = [
 // holding real racks). A pallet found here is "in this area," full stop —
 // there's no further rack/bay grain to narrow down to.
 export const FLOOR_AREAS: FloorArea[] = [
+  { id: 'zone-a', label: 'Zone A' },
+  { id: 'zone-b', label: 'Zone B' },
+  { id: 'zone-c', label: 'Zone C' },
   { id: 'staging', label: 'Staging Area' },
-  { id: 'returns', label: 'Returns Dock' },
-  { id: 'overflow', label: 'Overflow Yard' },
 ];
+
+export type ZoneExpectedSku = { sku: string; name: string; expectedCount: number };
+
+// The admin app's Create Audit form's per-zone pick list — what SKUs
+// (and how many of each) are actually supposed to be found in a given
+// zone, set up ahead of the audit. Zone Scan checks two things against
+// this: (1) a scanned SKU that isn't on ITS zone's list at all is a
+// location mismatch — it belongs somewhere else, same identity/name or
+// not; (2) a SKU that IS expected here is only "complete" once it's been
+// scanned expectedCount times — the number of pallets/scans found, not
+// their combined quantity, matches or falls short of the pick list.
+export const ZONE_EXPECTED_SKUS: Record<string, ZoneExpectedSku[]> = {
+  'Zone A': [
+    { sku: 'SKU-1001', name: 'iPhone 15 Box', expectedCount: 10 },
+    { sku: 'SKU-1002', name: 'iPhone 15 Charger', expectedCount: 6 },
+  ],
+  'Zone B': [{ sku: 'SKU-3301', name: 'Plastic Crate Blue', expectedCount: 8 }],
+  'Staging Area': [{ sku: 'SKU-9011', name: 'Rack Label Kit', expectedCount: 5 }],
+};
+
+// Reverse lookup — which zone (if any) a given SKU is supposed to be
+// found in, regardless of which zone it actually turned up in.
+export function expectedZoneForSku(sku: string): string | null {
+  for (const [zone, lines] of Object.entries(ZONE_EXPECTED_SKUS)) {
+    if (lines.some((l) => l.sku === sku)) return zone;
+  }
+  return null;
+}
 
 // Pads every bay in a locations map up to a full multi-level rack (source
 // fillAllBaysToFullLevels, line 1315) — takes a map parameter rather than

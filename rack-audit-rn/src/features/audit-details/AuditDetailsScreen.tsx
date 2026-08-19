@@ -46,6 +46,10 @@ export function AuditDetailsScreen() {
   const isFullyCounted = r.locTotal > 0 && r.locTotal === r.locDone;
   const showCompletedState = isSubmitted || isFullyCounted;
   const startLabel = showCompletedState ? 'View Audit Summary' : audit.status === 'In Progress' ? 'Resume Audit' : 'Start Audit';
+  // Coarser than every other scope_type — this audit is only ever worked
+  // at the whole-zone grain, never drilled down to a specific bay, so the
+  // usual bay-chip grid and Rack View entry point don't apply here at all.
+  const isZoneScope = audit.scope_type === 'Zone';
 
   const toggleSection = (key: string) => setClosedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const isOpen = (key: string) => !closedSections[key];
@@ -72,6 +76,10 @@ export function AuditDetailsScreen() {
   const onPressStart = () => {
     if (showCompletedState) {
       router.push({ pathname: '/audit/[auditId]/summary', params: { auditId: audit.audit_id } } as never);
+      return;
+    }
+    if (isZoneScope) {
+      router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never);
       return;
     }
     if (isTablet) {
@@ -101,6 +109,31 @@ export function AuditDetailsScreen() {
         {bay.code}
       </Text>
     </Pressable>
+  );
+
+  // Zone chips — one per zone this audit is scoped to. These zones are the
+  // rack-less FLOOR_AREAS kind (see PinLocationScreen/WarehouseMapScreen),
+  // not Layouts — there's no rack/bay breakdown or per-location rollup to
+  // show under them at all, just the zone itself.
+  const renderZonePill = (zoneName: string) => (
+    <Pressable
+      key={zoneName}
+      disabled={isSubmitted}
+      onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never)}
+      style={[styles.zonePill, { backgroundColor: tokens.muted, borderColor: tokens.border }]}
+    >
+      <Ionicons name="ellipse-outline" size={16} color={tokens.accentBlue.base} />
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zoneName}</Text>
+    </Pressable>
+  );
+  const zoneBody = (
+    <View style={styles.bayGrid}>
+      {audit.scope_values.length ? (
+        audit.scope_values.map(renderZonePill)
+      ) : (
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
+      )}
+    </View>
   );
 
   const bayBody =
@@ -226,7 +259,7 @@ export function AuditDetailsScreen() {
               </View>
             </View>
           </View>
-          {bayBody}
+          {isZoneScope ? zoneBody : bayBody}
         </Card>
 
         <Pressable
@@ -272,6 +305,7 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
   bayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   bayPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
+  zonePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   accSection: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 14 },
   accSubSection: { marginTop: 10, marginLeft: 4 },
   accHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },

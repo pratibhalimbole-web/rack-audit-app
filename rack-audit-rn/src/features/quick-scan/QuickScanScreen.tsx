@@ -10,8 +10,12 @@ import { useQuickScanPinStore } from '@/store/useQuickScanPinStore';
 import type { SkuScanCode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 
+// A rack-holding zone's real name IS "Layout X" — no longer relabeled to
+// "Zone X" for display, since "Zone" is now reserved for the separate,
+// rack-less floor-area concept (see FLOOR_AREAS) so the two don't get
+// confused for one another.
 function zoneLabel(zone: string): string {
-  return zone.replace('Layout', 'Zone');
+  return zone;
 }
 
 // A real scan is timestamped the moment the device's camera fires it —

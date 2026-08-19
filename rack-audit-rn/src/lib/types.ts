@@ -18,7 +18,14 @@ export type Audit = {
   audit_name: string;
   audit_type: AuditType;
   count_method: string;
-  scope_type: 'Layout' | 'Rack' | 'Bay';
+  // 'Zone' is coarser than 'Layout': a Layout-scoped audit still drills
+  // down to individual bays (Audit Details' bay-chip grid, Rack View), but
+  // a Zone-scoped audit only ever works at the whole-zone grain — Audit
+  // Details shows zone chips instead of bay chips, and Resume Audit opens
+  // the whole-warehouse zone map (every zone in the warehouse, this
+  // audit's scope_values highlighted, the rest grayed out) rather than a
+  // specific rack in Rack View.
+  scope_type: 'Layout' | 'Rack' | 'Bay' | 'Zone';
   scope_values: string[];
   team_members: string[];
   start_date: string; // ISO date
