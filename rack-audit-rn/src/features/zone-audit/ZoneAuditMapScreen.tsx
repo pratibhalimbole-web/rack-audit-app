@@ -196,124 +196,149 @@ export function ZoneAuditMapScreen() {
   // scan history, and a cramped sheet doesn't give that room to breathe.
   // Back arrow just returns to the canvas+form, same list state intact.
   if (listModalOpen && selectedZone) {
+    const pickList = ZONE_EXPECTED_SKUS[selectedZone.label] ?? [];
+    const pickListRows = pickList.map((expected) => {
+      // Distinct labels only — re-scanning the same physical pallet's QR
+      // any number of times still counts as one.
+      const found = new Set(zoneScans.filter((l) => l.sku === expected.sku).map((l) => l.label)).size;
+      return { ...expected, found, complete: found >= expected.expectedCount };
+    });
+    const skusComplete = pickListRows.filter((r) => r.complete).length;
+
+    // Every distinct SKU found here that ISN'T on this zone's pick list —
+    // whether it's expected somewhere else (Location Mismatch), has no
+    // expectation on record anywhere, or isn't even in the inventory
+    // catalog at all (Unlisted SKU).
+    const expectedCodes = new Set(pickList.map((e) => e.sku));
+    const otherMap = new Map<string, { sku: string; name: string; labels: Set<string> }>();
+    zoneScans.forEach((l) => {
+      if (expectedCodes.has(l.sku)) return;
+      if (!otherMap.has(l.sku)) otherMap.set(l.sku, { sku: l.sku, name: l.name, labels: new Set() });
+      otherMap.get(l.sku)!.labels.add(l.label);
+    });
+    const others = Array.from(otherMap.values());
+    const mismatchCount = others.filter((o) => !!expectedZoneForSku(o.sku)).length;
+
     return (
       <View style={{ flex: 1, backgroundColor: tokens.muted }}>
         <AppHeader title={`Scanned in ${selectedZone.label}`} sub={`${zoneScans.length} scan${zoneScans.length === 1 ? '' : 's'}`} showBack onBack={() => setListModalOpen(false)} />
         <ScrollView contentContainerStyle={styles.listPageBody}>
-          {/* Pick list progress — how many scans of each expected SKU have
-              actually landed in this zone so far (by scan count, not
-              summed quantity), against the admin app's per-zone expected
-              count. */}
-          {(ZONE_EXPECTED_SKUS[selectedZone.label]?.length ?? 0) > 0 ? (
-            <View style={{ gap: 8 }}>
-              <Text style={styles.sheetSectionLabel}>Pick List Progress</Text>
-              {ZONE_EXPECTED_SKUS[selectedZone.label].map((expected) => {
-                // Distinct labels only — re-scanning the same physical
-                // pallet's QR any number of times still counts as one.
-                const found = new Set(zoneScans.filter((l) => l.sku === expected.sku).map((l) => l.label)).size;
-                const complete = found >= expected.expectedCount;
-                return (
-                  <View key={expected.sku} style={[styles.scanRow, { borderColor: tokens.border }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{expected.sku}</Text>
-                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{expected.name}</Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.editStatusPill,
-                        { backgroundColor: complete ? tokens.rag.green.soft : tokens.rag.amber.soft, borderColor: complete ? tokens.rag.green.border : tokens.rag.amber.border, borderRadius: tokens.radius.lg },
-                      ]}
-                    >
-                      <Text style={{ color: complete ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                        {found}/{expected.expectedCount} found
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
+          {/* Overall snapshot — how far along the pick list is, and
+              whether anything unexpected turned up, before scrolling into
+              the per-SKU detail below. */}
+          {pickList.length ? (
+            <View style={styles.summaryHeadRow}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                {skusComplete} of {pickList.length} SKUs Complete
+              </Text>
+              {mismatchCount ? <StatusBadge label={`${mismatchCount} Mismatch${mismatchCount === 1 ? '' : 'es'}`} ragKey="red" /> : null}
             </View>
           ) : null}
 
-          {/* Every distinct SKU found here that ISN'T on this zone's pick
-              list — whether it's expected somewhere else (Location
-              Mismatch), has no expectation on record anywhere, or isn't
-              even in the inventory catalog at all (Unlisted SKU). Shown
-              with its own sku/name/count, same as the pick list above,
-              instead of only surfacing in the flat scan log below. */}
-          {(() => {
-            const expectedCodes = new Set((ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).map((e) => e.sku));
-            const otherMap = new Map<string, { sku: string; name: string; labels: Set<string> }>();
-            zoneScans.forEach((l) => {
-              if (expectedCodes.has(l.sku)) return;
-              if (!otherMap.has(l.sku)) otherMap.set(l.sku, { sku: l.sku, name: l.name, labels: new Set() });
-              otherMap.get(l.sku)!.labels.add(l.label);
-            });
-            const others = Array.from(otherMap.values());
-            if (!others.length) return null;
-            return (
-              <View style={{ gap: 8 }}>
-                <Text style={styles.sheetSectionLabel}>Other SKUs Found (Not on Pick List)</Text>
+          {/* Pick list progress — just how many scans of each expected SKU
+              have actually landed in this zone so far (not the expected
+              count itself, that's only relevant to the admin app's pick
+              list). Simple hug-content chips, not full-width cards — this
+              is a quick tally, not detail worth a whole card each. */}
+          {pickListRows.length ? (
+            <View style={{ gap: 8 }}>
+              <Text style={styles.sheetSectionLabel}>Pick List Progress</Text>
+              <View style={styles.chipRow}>
+                {pickListRows.map((row) => (
+                  <View
+                    key={row.sku}
+                    style={[
+                      styles.pickChip,
+                      { borderColor: row.complete ? tokens.rag.green.border : tokens.rag.amber.border, backgroundColor: row.complete ? tokens.rag.green.soft : tokens.rag.amber.soft },
+                    ]}
+                  >
+                    <Text style={{ color: row.complete ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>
+                      {row.sku}
+                    </Text>
+                    <Text style={{ color: row.complete ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.sm }}>
+                      {String(row.found).padStart(2, '0')}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {others.length ? (
+            <View style={{ gap: 8 }}>
+              <Text style={styles.sheetSectionLabel}>Other SKUs Found (Not on Pick List)</Text>
+              <View style={styles.cardGrid}>
                 {others.map((o) => {
                   const homeZone = expectedZoneForSku(o.sku);
                   const isUnlisted = !INVENTORY_POOL.some((p) => p.sku === o.sku);
                   const tag = homeZone ? `Belongs in ${homeZone}` : isUnlisted ? 'Unlisted SKU' : 'No Expectation on Record';
                   return (
-                    <View key={o.sku} style={[styles.scanRow, { borderColor: homeZone ? tokens.rag.red.border : tokens.border }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{o.sku}</Text>
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{o.name}</Text>
-                        <Text
-                          style={{
-                            color: homeZone ? tokens.rag.red.strong : tokens.mutedForeground,
-                            fontSize: tokens.text.xxs,
-                            fontWeight: tokens.fontWeight.bold,
-                            marginTop: 2,
-                          }}
-                        >
-                          {tag}
-                        </Text>
+                    <View key={o.sku} style={[styles.miniCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                      <View style={[styles.miniHeadRow, { backgroundColor: '#EEF3FF', borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg }]}>
+                        <View style={styles.miniHeadLeft}>
+                          <Ionicons name={homeZone ? 'swap-horizontal-outline' : 'help-circle-outline'} size={12} color={tokens.primary} />
+                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }} numberOfLines={1}>{o.sku}</Text>
+                        </View>
+                        <StatusBadge label={homeZone ? 'Mismatch' : isUnlisted ? 'Unlisted' : 'No Record'} ragKey={homeZone ? 'red' : 'amber'} compact />
                       </View>
-                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{o.labels.size} found</Text>
+                      <View style={styles.miniBody}>
+                        <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 6 }} numberOfLines={1}>
+                          {o.name}
+                        </Text>
+                        <View style={styles.miniGrid}>
+                          <MiniField label="Found" value={String(o.labels.size)} />
+                          <MiniField label="Status" value={tag} />
+                        </View>
+                      </View>
                     </View>
                   );
                 })}
               </View>
-            );
-          })()}
+            </View>
+          ) : null}
 
           <View style={{ gap: 8 }}>
             <Text style={styles.sheetSectionLabel}>All Scans</Text>
             {zoneScans.length ? (
-              zoneScans.map((line, i) => {
-                const lineExpectedZone = expectedZoneForSku(line.sku);
-                const lineMismatch = !!lineExpectedZone && lineExpectedZone !== selectedZone.label;
-                // Same physical pallet's QR scanned again — a repeat of an
-                // earlier entry with the same label, not a new box found.
-                const isDuplicate = zoneScans.findIndex((l) => l.label === line.label) !== i;
-                return (
-                  <View key={i} style={[styles.scanRow, { borderColor: lineMismatch ? tokens.rag.red.border : tokens.border }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
-                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>
-                        {line.name} · Label: {line.label}
-                      </Text>
-                      {lineMismatch ? (
-                        <Text style={{ color: tokens.rag.red.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold, marginTop: 2 }}>
-                          Location Mismatch — belongs in {lineExpectedZone}
+              <View style={styles.cardGrid}>
+                {zoneScans.map((line, i) => {
+                  const lineExpectedZone = expectedZoneForSku(line.sku);
+                  const lineMismatch = !!lineExpectedZone && lineExpectedZone !== selectedZone.label;
+                  // Same physical pallet's QR scanned again — a repeat of an
+                  // earlier entry with the same label, not a new box found.
+                  const isDuplicate = zoneScans.findIndex((l) => l.label === line.label) !== i;
+                  const badge = lineMismatch
+                    ? { label: 'Mismatch', ragKey: 'red' as const }
+                    : isDuplicate
+                      ? { label: 'Duplicate', ragKey: 'amber' as const }
+                      : { label: 'Matched', ragKey: 'green' as const };
+                  return (
+                    <View key={i} style={[styles.miniCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                      <View style={[styles.miniHeadRow, { backgroundColor: '#EEF3FF', borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg }]}>
+                        <View style={styles.miniHeadLeft}>
+                          <Ionicons name="pricetag-outline" size={12} color={tokens.primary} />
+                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }} numberOfLines={1}>{line.label}</Text>
+                        </View>
+                        <StatusBadge label={badge.label} ragKey={badge.ragKey} compact />
+                      </View>
+                      <View style={styles.miniBody}>
+                        <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 6 }} numberOfLines={1}>
+                          {line.sku} · {line.name}
                         </Text>
-                      ) : null}
-                      {isDuplicate ? (
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontStyle: 'italic', marginTop: 2 }}>
-                          Duplicate scan — same pallet already counted
-                        </Text>
-                      ) : null}
+                        <View style={styles.miniGrid}>
+                          <MiniField label="Qty" value={String(line.qty)} />
+                          <MiniField label="Condition" value={line.condition} />
+                        </View>
+                        {lineMismatch ? (
+                          <View style={[styles.miniLocationRow, { borderTopColor: tokens.border }]}>
+                            <MiniField label="Location" value={`Belongs in ${lineExpectedZone}`} tone={tokens.rag.red.strong} />
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>
-                      Qty {line.qty} · {line.condition}
-                    </Text>
-                  </View>
-                );
-              })
+                  );
+                })}
+              </View>
             ) : (
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>Nothing scanned here yet.</Text>
             )}
@@ -594,6 +619,38 @@ export function ZoneAuditMapScreen() {
   );
 }
 
+// Same card language as Reported Audits' issue cards (src/features/
+// progress/ReportedAuditsBoard.tsx) — a banded head with a rounded
+// Green/Amber/Red status chip, not the progress-bar style tried earlier.
+function StatusBadge({ label, ragKey, compact }: { label: string; ragKey: 'green' | 'amber' | 'red'; compact?: boolean }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={[styles.statusBadge, compact && styles.statusBadgeCompact, { backgroundColor: tokens.rag[ragKey].soft, borderRadius: tokens.radius.xl }]}>
+      <Text style={{ color: tokens.rag[ragKey].strong, fontSize: compact ? tokens.text.xxs : tokens.text.xs, fontWeight: tokens.fontWeight.bold }} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+function IssueField({ label, value }: { label: string; value: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.issueField}>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{label}</Text>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{value}</Text>
+    </View>
+  );
+}
+
+function MiniField({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.miniField}>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }} numberOfLines={1}>{label}</Text>
+      <Text style={{ color: tone ?? tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -634,7 +691,29 @@ const styles = StyleSheet.create({
   formFooter: { flexDirection: 'row', gap: 10, padding: 14, borderTopWidth: StyleSheet.hairlineWidth },
   outlineBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   primaryBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
-  listPageBody: { padding: 16, gap: 16, paddingBottom: 40 },
+  listPageBody: { padding: 16, gap: 20, paddingBottom: 40 },
   sheetSectionLabel: { fontSize: 11, fontWeight: '700', color: '#8A94A3', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 },
-  scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 10, padding: 12 },
+  summaryHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 5 },
+  statusBadgeCompact: { paddingHorizontal: 6, paddingVertical: 3 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pickChip: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 6 },
+  issueCard: { borderWidth: 1, overflow: 'hidden' },
+  issueHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingHorizontal: 14, paddingVertical: 12 },
+  issueHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  cardBody: { padding: 14 },
+  issueGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  issueField: { gap: 2 },
+  locationRow: { borderTopWidth: 1, paddingTop: 10, marginTop: 10 },
+  // Compact multi-per-row grid — the earlier issueCard was full-width and
+  // single-column stacked, which read as "too big" against a reference
+  // maintenance-app design of small cards packed several to a row.
+  cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  miniCard: { flexGrow: 1, flexBasis: 150, maxWidth: '48%', borderWidth: 1, overflow: 'hidden' },
+  miniHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
+  miniHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  miniBody: { padding: 8 },
+  miniGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  miniField: { gap: 1, flexShrink: 1, minWidth: 60 },
+  miniLocationRow: { borderTopWidth: 1, borderTopColor: 'transparent', paddingTop: 6, marginTop: 6 },
 });
