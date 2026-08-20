@@ -300,7 +300,13 @@ export function QuickScanScreen() {
   // next to the Reconciliation Form overlay, instead of navigating to Pin
   // Exact Location's separate full page — a scan is "armed" for pinning
   // for as long as it's the pending item and still unresolved.
-  const floorPinActive = mode === 'floor' && !!pendingItem && pendingItem.origin === 'floor' && !pendingItem.pinnedAt;
+  // floorPinContext covers the whole time this scan's form is open (so the
+  // dropped-pin marker and the amber "Warehouse Floor" framing stay
+  // visible as confirmation even after resolving, the way a real map pin
+  // doesn't vanish the instant you drop it); floorPinActive is the
+  // narrower "still needs a tap" state that gates interactivity/highlights.
+  const floorPinContext = mode === 'floor' && !!pendingItem && pendingItem.origin === 'floor';
+  const floorPinActive = floorPinContext && !pendingItem!.pinnedAt;
   const [floorTapPoint, setFloorTapPoint] = useState<{ x: number; y: number } | null>(null);
 
   const pinFloorToZoneArea = (zoneId: string) => {
@@ -770,8 +776,8 @@ export function QuickScanScreen() {
                         ))}
                       </View>
                     ) : (
-                      <View style={floorPinActive ? [styles.warehouseFloor, { borderColor: tokens.rag.amber.strong }] : undefined}>
-                        {floorPinActive ? (
+                      <View style={floorPinContext ? [styles.warehouseFloor, { borderColor: tokens.rag.amber.strong }] : undefined}>
+                        {floorPinContext ? (
                           <View style={[styles.warehouseFloorLabel, { backgroundColor: tokens.card }]}>
                             <Ionicons name="business-outline" size={11} color={tokens.rag.amber.strong} />
                             <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4 }}>
@@ -861,7 +867,7 @@ export function QuickScanScreen() {
                           })}
                         </View>
 
-                        {floorPinActive && floorTapPoint ? (
+                        {floorPinContext && floorTapPoint ? (
                           <View pointerEvents="none" style={[styles.freeformPinWrap, { left: floorTapPoint.x - 14, top: floorTapPoint.y - 28 }]}>
                             <Ionicons name="location" size={28} color={tokens.rag.red.strong} />
                           </View>
