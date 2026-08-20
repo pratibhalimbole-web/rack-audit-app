@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
@@ -296,7 +296,57 @@ export function QuickScanScreen() {
     .onEnd(() => {
       savedScale.value = scale.value;
     });
-  const canvasGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+  // Floor mode's pin step happens inline on this same canvas now, right
+  // next to the Reconciliation Form overlay, instead of navigating to Pin
+  // Exact Location's separate full page — a scan is "armed" for pinning
+  // for as long as it's the pending item and still unresolved.
+  const floorPinActive = mode === 'floor' && !!pendingItem && pendingItem.origin === 'floor' && !pendingItem.pinnedAt;
+  const [floorTapPoint, setFloorTapPoint] = useState<{ x: number; y: number } | null>(null);
+
+  const pinFloorToZoneArea = (zoneId: string) => {
+    const area = FLOOR_AREAS.find((z) => z.id === zoneId);
+    if (!area) return;
+    setFloorTapPoint(null);
+    setPendingItem((prev) => {
+      if (!prev) return prev;
+      const matched = prev.expectedZone ? prev.expectedZone === area.label : null;
+      return { ...prev, pinnedZone: area.label, pinnedFloorAreaId: area.id, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, issueRaised: matched === false, pinnedAt: Date.now() };
+    });
+  };
+  const pinFloorToLayoutFloor = (layout: string) => {
+    setFloorTapPoint(null);
+    setPendingItem((prev) => {
+      if (!prev) return prev;
+      const matched = prev.expectedZone ? prev.expectedZone === layout : null;
+      return { ...prev, pinnedZone: layout, pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, issueRaised: matched === false, pinnedAt: Date.now() };
+    });
+  };
+  const pinFloorToRack = (layout: string, rack: string) => {
+    setFloorTapPoint(null);
+    setPendingItem((prev) => {
+      if (!prev) return prev;
+      const matched = prev.expectedZone ? prev.expectedZone === layout : null;
+      return { ...prev, pinnedZone: layout, pinnedRack: rack, pinnedFloorAreaId: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, issueRaised: matched === false, pinnedAt: Date.now() };
+    });
+  };
+  // Tapping the open floor itself — not a specific zone, rack, or floor
+  // area — same Google Maps "drop a pin exactly where you tapped" as Pin
+  // Exact Location's own freeform tap.
+  const pinFloorFreeform = (x: number, y: number) => {
+    setFloorTapPoint({ x, y });
+    setPendingItem((prev) =>
+      prev ? { ...prev, pinnedZone: 'Open Floor', pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched: null, issueRaised: false, pinnedAt: Date.now() } : prev,
+    );
+  };
+  const floorTapGesture = Gesture.Tap()
+    .enabled(floorPinActive)
+    .onEnd((e) => {
+      const contentX = (e.x - translateX.value) / scale.value;
+      const contentY = (e.y - translateY.value) / scale.value;
+      runOnJS(pinFloorFreeform)(contentX, contentY);
+    });
+
+  const canvasGesture = Gesture.Simultaneous(panGesture, pinchGesture, floorTapGesture);
   const canvasAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
@@ -624,9 +674,9 @@ export function QuickScanScreen() {
       <View style={pendingItem ? styles.splitRow : styles.singleRow}>
       <View style={[styles.canvasWrap, { flex: pendingItem ? 1.4 : 1 }]}>
         <Card style={{ flex: 1, padding: 0, overflow: 'hidden', borderColor: tokens.border }}>
-          <View style={[styles.canvasToolbarRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-            <Ionicons name="location-outline" size={13} color={tokens.mutedForeground} />
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, flex: 1 }}>
+          <View style={[styles.canvasToolbarRow, { backgroundColor: floorPinActive ? tokens.rag.amber.soft : '#F7F8FA', borderBottomColor: tokens.border }]}>
+            <Ionicons name={floorPinActive ? 'location' : 'location-outline'} size={13} color={floorPinActive ? tokens.rag.amber.strong : tokens.mutedForeground} />
+            <Text style={{ color: floorPinActive ? tokens.rag.amber.strong : tokens.mutedForeground, fontWeight: floorPinActive ? tokens.fontWeight.bold : tokens.fontWeight.normal, fontSize: tokens.text.xxs, flex: 1 }}>
               {mode === 'zone'
                 ? activeZoneObj
                   ? `Scanning into ${activeZoneObj.label}`
@@ -635,7 +685,11 @@ export function QuickScanScreen() {
                   ? activeRack
                     ? `Front View — ${zoneLabel(activeLayout!)} · Rack ${activeRack}`
                     : 'Tap a rack to open its Front View'
-                  : 'Reference only — scan, then Pin Exact Location per SKU'}
+                  : floorPinActive
+                    ? 'Pin Exact Location — tap a zone, rack, or the open floor'
+                    : pendingItem?.origin === 'floor' && pendingItem.pinnedAt
+                      ? `Pinned — ${zoneLabel(pendingItem.pinnedZone ?? 'Open Floor')}${pendingItem.pinnedRack ? ` · Rack ${pendingItem.pinnedRack}` : ''}`
+                      : 'Reference only — scan a SKU to pin its location here'}
             </Text>
           </View>
 
@@ -716,15 +770,23 @@ export function QuickScanScreen() {
                         ))}
                       </View>
                     ) : (
-                      <>
+                      <View style={floorPinActive ? [styles.warehouseFloor, { borderColor: tokens.rag.amber.strong }] : undefined}>
+                        {floorPinActive ? (
+                          <View style={[styles.warehouseFloorLabel, { backgroundColor: tokens.card }]}>
+                            <Ionicons name="business-outline" size={11} color={tokens.rag.amber.strong} />
+                            <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                              Warehouse Floor
+                            </Text>
+                          </View>
+                        ) : null}
                         <View style={styles.zoneRow}>
                           {FLOOR_AREAS.map((zone) => {
-                            const selected = mode === 'zone' && activeFloorAreaId === zone.id;
+                            const selected = (mode === 'zone' && activeFloorAreaId === zone.id) || (floorPinActive && pendingItem?.pinnedFloorAreaId === zone.id);
                             return (
                               <Pressable
                                 key={zone.id}
-                                disabled={mode !== 'zone'}
-                                onPress={() => pickZone(zone.id)}
+                                disabled={mode !== 'zone' && !floorPinActive}
+                                onPress={() => (mode === 'zone' ? pickZone(zone.id) : pinFloorToZoneArea(zone.id))}
                                 style={[
                                   styles.zoneCard,
                                   { borderColor: selected ? '#1D4ED8' : tokens.border, borderWidth: selected ? 2.5 : 1.5, backgroundColor: selected ? '#BFDBFE' : tokens.card },
@@ -737,31 +799,74 @@ export function QuickScanScreen() {
                         </View>
 
                         {/* Racked part of the warehouse, for spatial context
-                            only — grayed out and non-interactive in both Zone
-                            and Floor mode, same treatment as Zone Audit's own
-                            canvas (src/features/zone-audit/ZoneAuditMapScreen.tsx). */}
+                            only in Zone mode — grayed and non-interactive,
+                            same treatment as Zone Audit's own canvas
+                            (src/features/zone-audit/ZoneAuditMapScreen.tsx).
+                            In Floor-pin mode this same reference becomes a
+                            real tap target — a zone header pins the open
+                            floor within that Layout, a rack card pins that
+                            exact rack — same as Pin Exact Location's canvas
+                            (src/features/quick-scan/PinLocationScreen.tsx). */}
                         <View style={[styles.layoutGroupRow, { marginTop: 20 }]}>
-                          {layoutZones.map((ly) => (
-                            <View key={ly.layout} style={styles.layoutBlock}>
-                              <Text style={{ color: tokens.slate400, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 4 }}>{zoneLabel(ly.layout)}</Text>
-                              <View style={styles.rackRow}>
-                                {ly.racks.map((rackGroup) => (
-                                  <View key={rackGroup.rack} style={[styles.rackCardDisabled, { borderColor: tokens.border, backgroundColor: tokens.muted }]}>
-                                    <Text numberOfLines={1} style={{ color: tokens.slate400, fontWeight: tokens.fontWeight.medium, fontSize: 8 }}>
-                                      Rack {rackGroup.rack}
+                          {layoutZones.map((ly) => {
+                            const layoutSelected = floorPinActive && pendingItem?.pinnedZone === ly.layout && !pendingItem?.pinnedRack;
+                            return (
+                              <View key={ly.layout} style={styles.layoutBlock}>
+                                {floorPinActive ? (
+                                  <Pressable onPress={() => pinFloorToLayoutFloor(ly.layout)} hitSlop={4}>
+                                    <Text style={{ color: layoutSelected ? '#1D4ED8' : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginBottom: 4 }}>
+                                      {zoneLabel(ly.layout)} {layoutSelected ? '· Pinned' : ''}
                                     </Text>
-                                    <View style={styles.bayRow}>
-                                      {rackGroup.bays.map((bayCell) => (
-                                        <View key={bayCell.bay} style={[styles.baySeg, { borderColor: tokens.border }]} />
-                                      ))}
-                                    </View>
-                                  </View>
-                                ))}
+                                  </Pressable>
+                                ) : (
+                                  <Text style={{ color: tokens.slate400, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 4 }}>{zoneLabel(ly.layout)}</Text>
+                                )}
+                                <View style={styles.rackRow}>
+                                  {ly.racks.map((rackGroup) => {
+                                    const rackSelected = floorPinActive && pendingItem?.pinnedZone === ly.layout && pendingItem?.pinnedRack === rackGroup.rack;
+                                    return floorPinActive ? (
+                                      <Pressable
+                                        key={rackGroup.rack}
+                                        onPress={() => pinFloorToRack(ly.layout, rackGroup.rack)}
+                                        style={[
+                                          styles.rackCardDisabled,
+                                          { borderColor: rackSelected ? '#1D4ED8' : tokens.border, backgroundColor: rackSelected ? '#BFDBFE' : tokens.card, borderWidth: rackSelected ? 2 : 1 },
+                                        ]}
+                                      >
+                                        <Text numberOfLines={1} style={{ color: rackSelected ? '#1D4ED8' : tokens.foreground, fontWeight: tokens.fontWeight.medium, fontSize: 8 }}>
+                                          Rack {rackGroup.rack}
+                                        </Text>
+                                        <View style={styles.bayRow}>
+                                          {rackGroup.bays.map((bayCell) => (
+                                            <View key={bayCell.bay} style={[styles.baySeg, { borderColor: rackSelected ? '#1D4ED8' : tokens.border }]} />
+                                          ))}
+                                        </View>
+                                      </Pressable>
+                                    ) : (
+                                      <View key={rackGroup.rack} style={[styles.rackCardDisabled, { borderColor: tokens.border, backgroundColor: tokens.muted }]}>
+                                        <Text numberOfLines={1} style={{ color: tokens.slate400, fontWeight: tokens.fontWeight.medium, fontSize: 8 }}>
+                                          Rack {rackGroup.rack}
+                                        </Text>
+                                        <View style={styles.bayRow}>
+                                          {rackGroup.bays.map((bayCell) => (
+                                            <View key={bayCell.bay} style={[styles.baySeg, { borderColor: tokens.border }]} />
+                                          ))}
+                                        </View>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
                               </View>
-                            </View>
-                          ))}
+                            );
+                          })}
                         </View>
-                      </>
+
+                        {floorPinActive && floorTapPoint ? (
+                          <View pointerEvents="none" style={[styles.freeformPinWrap, { left: floorTapPoint.x - 14, top: floorTapPoint.y - 28 }]}>
+                            <Ionicons name="location" size={28} color={tokens.rag.red.strong} />
+                          </View>
+                        ) : null}
+                      </View>
                     )}
                   </View>
                 </Animated.View>
@@ -1164,6 +1269,13 @@ const styles = StyleSheet.create({
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   planCanvas: { padding: 10 },
+  // Same "Warehouse Floor" bordered boundary + dropped-pin marker as Pin
+  // Exact Location's own canvas (src/features/quick-scan/
+  // PinLocationScreen.tsx) — shown here only while a Floor-mode scan is
+  // actively being pinned.
+  warehouseFloor: { position: 'relative', borderWidth: 2, borderStyle: 'dashed', borderRadius: 16, padding: 10, paddingTop: 28 },
+  warehouseFloorLabel: { position: 'absolute', top: 8, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  freeformPinWrap: { position: 'absolute' },
   zoneRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   zoneCard: { minWidth: 90, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 12 },
   layoutGroupRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
