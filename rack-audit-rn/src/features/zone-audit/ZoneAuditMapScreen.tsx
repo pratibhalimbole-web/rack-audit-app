@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
@@ -11,6 +11,7 @@ import { EvidenceBlock } from '@/components/EvidenceBlock';
 import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
 import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
 import { CONDITIONS, type Condition, type Evidence } from '@/lib/types';
@@ -71,6 +72,47 @@ export function ZoneAuditMapScreen() {
   const [skuScanCount, setSkuScanCount] = useState(0);
   const [duplicateLabel, setDuplicateLabel] = useState<string | null>(null);
   const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'condition' | null>(null);
+
+  // Same confirm-before-leaving pattern as Rack View's Reconciliation Form
+  // (src/features/rack-view/RackViewScreen.tsx) — refs updated fresh every
+  // render further down (after handleSaveAndScanNext exists), so confirmBack
+  // and the hardware-back handler always read the latest state without
+  // needing those not-yet-declared values in their own dependency arrays.
+  const confirm = useConfirmDialog();
+  const hasPendingRecordRef = useRef(false);
+  const saveThenLeaveRef = useRef<() => Promise<void>>(async () => {});
+  const skuPanelOpenRef = useRef(false);
+
+  // Intercepts every way this screen can be left — the header's own back
+  // arrow AND Android hardware/gesture back — not React Navigation's
+  // `beforeRemove` (this screen is a hidden Tabs.Screen, which never fires
+  // it — see PhoneTabsLayout.tsx), so router.back() + a direct BackHandler
+  // listener is used instead, same as Rack View.
+  const confirmBack = () => {
+    const wasPending = hasPendingRecordRef.current;
+    if (skuPanelOpenRef.current) setSkuPanelOpen(false);
+    if (wasPending) {
+      confirm.ask('You have an open scan for this zone. Save it before going back?', async () => {
+        await saveThenLeaveRef.current();
+        router.back();
+      });
+      return;
+    }
+    confirm.ask('Save the SKUs you’ve scanned in this audit before going back?', () => {
+      router.back();
+    });
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        confirmBack();
+        return true;
+      });
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   // Same pinch-zoom-pan floor plan as Quick Scan's Pin Exact Location
   // (src/features/quick-scan/PinLocationScreen.tsx) — this canvas is that
@@ -421,9 +463,19 @@ export function ZoneAuditMapScreen() {
     );
   }
 
+  // Kept in sync every render so leaving this screen any way (header back
+  // arrow, hardware/gesture back, or the form's own Cancel) asks first
+  // whenever a scan is open with something on it worth keeping, instead of
+  // silently discarding it.
+  skuPanelOpenRef.current = skuPanelOpen;
+  hasPendingRecordRef.current = skuPanelOpen && !!currentLine;
+  saveThenLeaveRef.current = async () => {
+    handleSaveAndScanNext();
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Zone Scan" sub={`${audit.audit_id} · ${audit.audit_name}`} showBack />
+      <AppHeader title="Zone Scan" sub={`${audit.audit_id} · ${audit.audit_name}`} showBack onBack={confirmBack} />
 
       <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border, justifyContent: 'space-between' }]}>
         <View>
@@ -578,8 +630,17 @@ export function ZoneAuditMapScreen() {
           </Card>
 
           {skuPanelOpen && selectedZone ? (
-            <Card style={styles.formCard}>
-              <View style={[styles.formHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
+            // Same skuPanel structure as Rack View's Reconciliation Form —
+            // Card keeps its default padding, the header bleeds out to the
+            // edges via negative margins instead of the Card being
+            // overflow-hidden with its own padding stripped out.
+            <Card style={styles.skuPanel}>
+              <View
+                style={[
+                  styles.skuPanelHead,
+                  { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, borderTopLeftRadius: tokens.radius.xxl, borderTopRightRadius: tokens.radius.xxl },
+                ]}
+              >
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Reconciliation Form</Text>
                 <Pressable onPress={() => setListView('zone')} hitSlop={8} style={[styles.listIconBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Scanned List</Text>
@@ -594,17 +655,20 @@ export function ZoneAuditMapScreen() {
                 </Pressable>
               </View>
 
-              {/* The zone name used to live in the header ("Zone Scan — Zone
-                  A"); now that the form has one fixed title, it's a field
-                  inside the form body instead, visible whether or not a
-                  box is currently being scanned. */}
-              <View style={[styles.locationFieldRow, { borderBottomColor: tokens.border }]}>
-                <Ionicons name="location-outline" size={14} color={tokens.mutedForeground} />
-                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Location</Text>
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{selectedZone.label}</Text>
+              {/* Same "Selected Location Details" block as Rack View —
+                  inline Label: Value rows, just one field here since a
+                  zone (unlike a rack pallet) has no bay/pallet identity of
+                  its own. Lives outside the ScrollView, same as Rack View,
+                  so it stays visible whether or not a box is being scanned. */}
+              <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginBottom: 8 }}>
+                Selected Location Details
+              </Text>
+              <View style={styles.locDetailsBox}>
+                <DetailRow label="Zone" value={selectedZone.label} tokens={tokens} />
               </View>
+              <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, gap: 10 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
                 {!currentLine ? (
                   <>
                     <Pressable
@@ -622,43 +686,44 @@ export function ZoneAuditMapScreen() {
                   </>
                 ) : (
                   <>
-                    <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                      <View style={styles.fieldCardBody}>
-                        <View style={styles.statusPillRow}>
-                          <View
-                            style={[
-                              styles.editStatusPill,
-                              {
-                                backgroundColor: currentMismatch ? tokens.rag.red.soft : tokens.rag.green.soft,
-                                borderColor: currentMismatch ? tokens.rag.red.border : tokens.rag.green.border,
-                                borderRadius: tokens.radius.lg,
-                              },
-                            ]}
-                          >
-                            <Text style={{ color: currentMismatch ? tokens.rag.red.strong : tokens.rag.green.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                              {currentMismatch ? 'Location Mismatch' : currentExpectedZone ? 'Matched' : 'No Expectation on Record'}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{currentLine.sku}</Text>
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{currentLine.name}</Text>
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>Label: {currentLine.label}</Text>
-                        <View style={styles.compareRow}>
-                          <View style={[styles.compareCol, { backgroundColor: tokens.muted, borderColor: tokens.border }]}>
-                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
-                              Expected Zone
-                            </Text>
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>
-                              {currentExpectedZone ?? 'Not on record'}
-                            </Text>
-                          </View>
-                          <View style={[styles.compareCol, { backgroundColor: tokens.muted, borderColor: tokens.border }]}>
-                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
-                              Location
-                            </Text>
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{selectedZone.label}</Text>
-                          </View>
-                        </View>
+                    {/* Flat content, not wrapped in its own bordered card —
+                        same as Rack View, where the status pill row and
+                        Expected/Scanned compare row sit directly in the
+                        form, and the compareCol boxes alone give it
+                        structure. */}
+                    <View style={styles.statusPillRow}>
+                      <View
+                        style={[
+                          styles.editStatusPill,
+                          {
+                            backgroundColor: currentMismatch ? tokens.rag.red.soft : tokens.rag.green.soft,
+                            borderColor: currentMismatch ? tokens.rag.red.border : tokens.rag.green.border,
+                            borderRadius: tokens.radius.lg,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: currentMismatch ? tokens.rag.red.strong : tokens.rag.green.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                          {currentMismatch ? 'Location Mismatch' : currentExpectedZone ? 'Matched' : 'No Expectation on Record'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{currentLine.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{currentLine.name}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>Label: {currentLine.label}</Text>
+                    <View style={styles.compareRow}>
+                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
+                          Expected Zone
+                        </Text>
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>
+                          {currentExpectedZone ?? 'Not on record'}
+                        </Text>
+                      </View>
+                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
+                          Location
+                        </Text>
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{selectedZone.label}</Text>
                       </View>
                     </View>
 
@@ -838,9 +903,19 @@ export function ZoneAuditMapScreen() {
                 )}
               </ScrollView>
 
-              <View style={[styles.formFooter, { borderTopColor: tokens.border }]}>
+              <View style={[styles.skuPanelFooter, { borderTopColor: tokens.border }]}>
                 <Pressable
                   onPress={() => {
+                    // Same ask-before-discarding as the header/hardware
+                    // back — Cancel used to just wipe an in-progress scan
+                    // silently.
+                    if (currentLine) {
+                      confirm.ask('You have an open scan for this zone. Save it before closing?', () => {
+                        handleSaveAndScanNext();
+                        setSkuPanelOpen(false);
+                      });
+                      return;
+                    }
                     setSkuPanelOpen(false);
                     setCurrentLine(null);
                   }}
@@ -912,6 +987,8 @@ export function ZoneAuditMapScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {confirm.element}
     </View>
   );
 }
@@ -948,6 +1025,20 @@ function MiniField({ label, value, tone }: { label: string; value: string; tone?
   );
 }
 
+// Same inline "Label: Value" row as Rack View's DetailRow (src/features/
+// rack-view/RackViewScreen.tsx) — kept identical for visual consistency
+// between the two screens' Reconciliation Forms.
+function DetailRow({ label, value, tokens }: { label: string; value: string; tokens: ReturnType<typeof useTheme>['tokens'] }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={{ fontSize: tokens.text.sm }}>
+        <Text style={{ color: tokens.mutedForeground }}>{label}: </Text>
+        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{value}</Text>
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   dupBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
@@ -974,27 +1065,33 @@ const styles = StyleSheet.create({
   bayRow: { flexDirection: 'row', gap: 1.5 },
   baySeg: { width: 8, height: 12, borderWidth: 1, borderRadius: 1.5 },
   scanCountBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  formCard: { flex: 1, padding: 0, overflow: 'hidden' },
-  formHead: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  // Same skuPanel/skuPanelHead/locDetailsBox/divider/skuPanelFooter
+  // structure as Rack View's Reconciliation Form (src/features/rack-view/
+  // RackViewScreen.tsx) — Card keeps its default 16px padding, the header
+  // bleeds to the edges via negative margins.
+  skuPanel: { flex: 1 },
+  skuPanelHead: { minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   listIconBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 10, borderWidth: 1 },
   listCountDot: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  scanDottedBox: { minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
+  locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
+  detailRow: { minWidth: '40%' },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
+  scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
   scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  fieldCard: { borderWidth: 1, overflow: 'hidden', borderRadius: 12 },
+  fieldCard: { borderWidth: 1, overflow: 'hidden' },
   fieldCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  fieldCardBody: { padding: 14, gap: 6 },
+  fieldCardBody: { padding: 14, gap: 10 },
   raiseIssueBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 12 },
-  locationFieldRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  statusPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  statusPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   editStatusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 },
-  compareRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  compareCol: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10 },
+  compareRow: { flexDirection: 'row', gap: 10 },
+  compareCol: { flex: 1, borderWidth: 1, padding: 12 },
   qtyInput: { height: 40, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
   condGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   condChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
   radioDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   radioDotFill: { width: 7, height: 7, borderRadius: 3.5 },
-  formFooter: { flexDirection: 'row', gap: 10, padding: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   outlineBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   primaryBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
   listPageBody: { padding: 16, gap: 20, paddingBottom: 40 },

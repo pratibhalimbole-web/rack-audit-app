@@ -77,6 +77,11 @@ export function PinLocationScreen() {
   // exclusive with the whole Layout/Rack/Bay/Aisle path, since a floor
   // area has no rack structure under it at all.
   const [pinFloorAreaId, setPinFloorAreaId] = useState<string | null>(null);
+  // Google Maps' own "drop a pin anywhere" — tapping the open warehouse
+  // floor itself (not a specific zone, rack, or floor area) drops a pin at
+  // that exact tapped point, same as tapping empty space on a real map
+  // rather than only being able to select a labeled landmark.
+  const [pinFreeform, setPinFreeform] = useState<{ x: number; y: number } | null>(null);
   const [openField, setOpenField] = useState<'layout' | 'rack' | 'bay' | 'loc' | null>(null);
 
   useEffect(() => {
@@ -229,6 +234,7 @@ export function PinLocationScreen() {
   }, [pinLayout, pinRack, pinBay, expectedKey, zones]);
 
   const pickLayout = (layout: string) => {
+    setPinFreeform(null);
     setPinFloorAreaId(null);
     setPinLayout(layout);
     setPinRack(null);
@@ -262,6 +268,7 @@ export function PinLocationScreen() {
     setPinLoc(null);
   };
   const pickFloorArea = (id: string) => {
+    setPinFreeform(null);
     setPinFloorAreaId(id);
     setPinLayout(null);
     setPinRack(null);
@@ -278,6 +285,7 @@ export function PinLocationScreen() {
   // map doesn't render that grain, so a specific pallet only ever comes
   // from the dropdown.
   const pinToRack = (layout: string, rack: string) => {
+    setPinFreeform(null);
     setPinFloorAreaId(null);
     setPinLayout(layout);
     setPinRack(rack);
@@ -286,6 +294,7 @@ export function PinLocationScreen() {
     setPinAisle(false);
   };
   const pinToZoneFloor = (layout: string) => {
+    setPinFreeform(null);
     setPinFloorAreaId(null);
     setPinLayout(layout);
     setPinRack(null);
@@ -293,12 +302,49 @@ export function PinLocationScreen() {
     setPinLoc(null);
     setPinAisle(false);
   };
+  // Tapping the open warehouse floor itself — not any specific zone, rack,
+  // or floor area — same "drop a pin exactly where you tapped" behavior as
+  // Google Maps' long-press-to-drop-a-pin. Clears every other pick so the
+  // dropped pin is unambiguously the current selection.
+  const pinToFreeform = (x: number, y: number) => {
+    setPinFreeform({ x, y });
+    setPinFloorAreaId(null);
+    setPinLayout(null);
+    setPinRack(null);
+    setPinBay(null);
+    setPinLoc(null);
+    setPinAisle(false);
+    setOpenField(null);
+  };
+
+  // A real gesture-handler Tap, not a plain RN Pressable — a Pressable
+  // wrapping the whole zone/rack/floor-area tree fought with the pan/pinch
+  // gesture already active on this same canvas (RNGH's native responder
+  // vs. RN's own touch system don't reliably coexist when nested that
+  // deeply), which silently broke every tap on the canvas, not just the
+  // freeform one. Composed as its own gesture in the same GestureDetector
+  // instead, so it negotiates with pan/pinch the way RNGH expects.
+  // e.x/e.y are relative to the untransformed stage, not the panned/zoomed
+  // content underneath — converting through the same scale/translate the
+  // canvas itself uses is what makes the dropped pin land under the
+  // finger instead of drifting off once you've panned or pinched.
+  const tapGesture = Gesture.Tap().onEnd((e) => {
+    const contentX = (e.x - translateX.value) / scale.value;
+    const contentY = (e.y - translateY.value) / scale.value;
+    runOnJS(pinToFreeform)(contentX, contentY);
+  });
+  const floorGestureWithTap = Gesture.Simultaneous(floorGesture, tapGesture);
 
   const horizontalZones = zones.filter((_, i) => i % 2 === 0);
   const verticalZones = zones.filter((_, i) => i % 2 === 1);
 
   const handleConfirm = () => {
     if (!target) return;
+    if (pinFreeform) {
+      submitResult({ itemId: target.itemId, zone: 'Open Floor' });
+      router.back();
+      return;
+    }
     if (pinFloorAreaId) {
       const area = FLOOR_AREAS.find((a) => a.id === pinFloorAreaId);
       if (!area) return;
@@ -480,7 +526,7 @@ export function PinLocationScreen() {
         <Card style={{ padding: 0, overflow: 'hidden', flex: 1, borderColor: tokens.border }}>
           <View style={[styles.canvasToolbarRow, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
             <Ionicons name="location-outline" size={13} color={tokens.mutedForeground} />
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Tap a zone name for open floor, a rack for an exact shelf, or a floor area</Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Tap a zone, rack, or floor area — or the open floor itself to drop a pin exactly there</Text>
             {target.expectedZone ? (
               <View style={styles.legendItem}>
                 <View style={[styles.expectedDot, { backgroundColor: tokens.rag.red.strong, borderColor: '#F7F8FA' }]} />
@@ -489,10 +535,24 @@ export function PinLocationScreen() {
             ) : null}
           </View>
           <View style={styles.stage} ref={stageRef}>
-            <GestureDetector gesture={floorGesture}>
+            <GestureDetector gesture={floorGestureWithTap}>
               <View style={styles.stageCenter}>
                 <Animated.View style={floorAnimatedStyle}>
-                  <View style={styles.planCanvas}>
+                  {/* The warehouse floor itself, bordered like a real map's
+                      drawn boundary — tapping anywhere inside it that isn't
+                      a specific zone/rack/floor-area chip drops a pin right
+                      where you tapped, same as tapping empty space on
+                      Google Maps rather than only being able to pick a
+                      labeled landmark. Zone/rack/floor-area Pressables
+                      inside still win the touch first, so this only fires
+                      on genuinely empty floor. */}
+                  <View style={[styles.planCanvas, styles.warehouseFloor, { borderColor: pinFreeform ? tokens.accentBlue.base : tokens.mutedForeground }]}>
+                    <View style={[styles.warehouseFloorLabel, { backgroundColor: tokens.muted }]}>
+                      <Ionicons name="business-outline" size={11} color={tokens.mutedForeground} />
+                      <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                        Warehouse Floor
+                      </Text>
+                    </View>
                     <View style={styles.zoneGroupCol}>
                       {horizontalZones.map((zone) => renderZone(zone, false))}
                       {/* Standalone open-floor areas — genuinely no Layout/
@@ -542,6 +602,15 @@ export function PinLocationScreen() {
                       </View>
                     </View>
                     <View style={styles.zoneGroupRow}>{verticalZones.map((zone) => renderZone(zone, true))}</View>
+
+                    {/* The dropped pin itself — anchored at the exact
+                        tapped point, same marker language (teardrop +
+                        white outline) as a real map pin. */}
+                    {pinFreeform ? (
+                      <View pointerEvents="none" style={[styles.freeformPinWrap, { left: pinFreeform.x - 14, top: pinFreeform.y - 28 }]}>
+                        <Ionicons name="location" size={28} color={tokens.rag.red.strong} />
+                      </View>
+                    ) : null}
                   </View>
                 </Animated.View>
               </View>
@@ -565,26 +634,28 @@ export function PinLocationScreen() {
         <View style={{ flex: 1 }}>
           <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>Pinned Location</Text>
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
-            {pinFloorAreaId
-              ? FLOOR_AREAS.find((a) => a.id === pinFloorAreaId)?.label
-              : pinLayout
-                ? [
-                    zoneLabel(pinLayout),
-                    pinRack ? `Rack ${pinRack}` : null,
-                    pinAisle ? 'Aisle' : pinBay ? `Bay ${pinBay}` : null,
-                    !pinAisle && selectedLocOption ? selectedLocOption.label : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : 'Nothing pinned yet'}
+            {pinFreeform
+              ? 'Open Floor (dropped pin)'
+              : pinFloorAreaId
+                ? FLOOR_AREAS.find((a) => a.id === pinFloorAreaId)?.label
+                : pinLayout
+                  ? [
+                      zoneLabel(pinLayout),
+                      pinRack ? `Rack ${pinRack}` : null,
+                      pinAisle ? 'Aisle' : pinBay ? `Bay ${pinBay}` : null,
+                      !pinAisle && selectedLocOption ? selectedLocOption.label : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'Nothing pinned yet'}
           </Text>
         </View>
         <Pressable
-          disabled={!pinLayout && !pinFloorAreaId}
+          disabled={!pinLayout && !pinFloorAreaId && !pinFreeform}
           onPress={handleConfirm}
-          style={[styles.confirmBtn, { backgroundColor: pinLayout || pinFloorAreaId ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}
+          style={[styles.confirmBtn, { backgroundColor: pinLayout || pinFloorAreaId || pinFreeform ? tokens.primary : tokens.muted, borderRadius: tokens.radius.xxl }]}
         >
-          <Text style={{ color: pinLayout || pinFloorAreaId ? tokens.primaryForeground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+          <Text style={{ color: pinLayout || pinFloorAreaId || pinFreeform ? tokens.primaryForeground : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
             Confirm Pin
           </Text>
         </Pressable>
@@ -605,6 +676,9 @@ const styles = StyleSheet.create({
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   planCanvas: { flexDirection: 'row', alignItems: 'flex-start', gap: 40, padding: 10 },
+  warehouseFloor: { position: 'relative', borderWidth: 2, borderStyle: 'dashed', borderRadius: 16, paddingTop: 28 },
+  warehouseFloorLabel: { position: 'absolute', top: 8, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  freeformPinWrap: { position: 'absolute' },
   zoneGroupCol: { flexDirection: 'column', gap: 24 },
   zoneGroupRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 24 },
   zone: { gap: 6 },
