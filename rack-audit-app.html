@@ -1031,8 +1031,8 @@
         <button id="btn-theme-dark" onclick="setTheme('dark')">Dark</button>
       </div>
       <div class="segmented" role="group" aria-label="Device preview">
-        <button id="btn-phone" class="active" onclick="setDevice('phone')">Phone</button>
-        <button id="btn-tablet" onclick="setDevice('tablet')">Tablet</button>
+        <button id="btn-phone" onclick="setDevice('phone')">Phone</button>
+        <button id="btn-tablet" class="active" onclick="setDevice('tablet')">Tablet</button>
       </div>
       <div class="segmented" role="group" aria-label="Data preview">
         <button id="btn-preview-normal" class="active" onclick="setPreviewMode('normal')">Normal</button>
@@ -1045,7 +1045,7 @@
   </div>
 
   <div class="stage">
-    <div id="device" class="device phone">
+    <div id="device" class="device tablet">
       <div class="device-inner">
         <div id="rail-slot"></div>
         <div id="screen" class="screen"></div>
@@ -1620,7 +1620,7 @@ function currentOngoing(){ return mine().find(a => a.status === 'In Progress' &&
 
 /* ================= STATE ================= */
 let STATE = {
-  device: 'phone', stack: ['login'], params: {}, previewMode: 'normal',
+  device: 'tablet', stack: ['login'], params: {}, previewMode: 'normal',
   tasksSearch: '', scan: null, menuOpen: false,
   issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false, issuesSortAnchor: null,
   issuesFilterOpen: false, issuesFilterAnchor: null,
