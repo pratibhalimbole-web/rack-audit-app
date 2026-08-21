@@ -1024,16 +1024,17 @@
     <div class="toolbar">
       <!-- Compares three points in the app's history rather than a live in-page
            toggle — Version 1 (rack-audit-app-v1.html) is a frozen snapshot from
-           before the Rack View diagram existed, Version 2 (rack-audit-app-v2.html)
-           is a frozen snapshot from before the Zone Audit Map preview / 3-mode
-           Quick Scan rework, Version 3 is this file. Since these are genuinely
-           different app code (not a state flag), switching is a real page
-           navigation, same pattern as any other cross-file link here, not a
-           setX()-style STATE toggle like the other segmented controls. -->
+           before the Rack View diagram existed, Version 2 (this file) is a
+           frozen snapshot from before the Zone Audit Map preview / 3-mode
+           Quick Scan rework, Version 3 (rack-audit-app.html) is the live file.
+           Since these are genuinely different app code (not a state flag),
+           switching is a real page navigation, same pattern as any other
+           cross-file link here, not a setX()-style STATE toggle like the
+           other segmented controls. -->
       <div class="segmented" role="group" aria-label="Version preview">
         <button id="btn-version-1" onclick="location.href='rack-audit-app-v1.html'">Version 1</button>
-        <button id="btn-version-2" onclick="location.href='rack-audit-app-v2.html'">Version 2</button>
-        <button id="btn-version-3" class="active" onclick="location.href='rack-audit-app.html'">Version 3</button>
+        <button id="btn-version-2" class="active" onclick="location.href='rack-audit-app-v2.html'">Version 2</button>
+        <button id="btn-version-3" onclick="location.href='rack-audit-app.html'">Version 3</button>
       </div>
       <div class="segmented" role="group" aria-label="Theme preview">
         <button id="btn-theme-light" class="active" onclick="setTheme('light')">Light</button>
