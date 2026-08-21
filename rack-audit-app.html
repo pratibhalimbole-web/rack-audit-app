@@ -496,6 +496,12 @@
   .bay-pill.done{background:var(--rag-green-soft); color:var(--rag-green-strong); border-color:var(--rag-green-border);}
   .bay-pill.pending{background:var(--muted); color:var(--muted-foreground); border-color:var(--border);}
 
+  /* Zone Audit Map (preview) — floor-area picker cards. */
+  .za-zone-row{display:flex; flex-wrap:wrap; gap:10px;}
+  .za-zone-card{min-width:100px; flex:1 1 100px; text-align:center; padding:14px 10px; border-radius:var(--radius-xl); border:1.5px solid var(--border); background:var(--card); color:var(--foreground); font-weight:700; font-size:var(--text-sm); cursor:pointer; transition:border-color .12s ease, background .12s ease;}
+  .za-zone-card.selected{border-color:var(--accent-blue-strong); border-width:2.5px; background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
+  .device.tablet .za-zone-card{flex:0 1 160px;}
+
   .acc-section{border-bottom:1px solid var(--border); padding:14px 0;}
   .acc-section:last-child{border-bottom:none; padding-bottom:0;}
   .acc-header{display:flex; align-items:center; gap:10px; cursor:pointer; width:100%; background:none; border:none; text-align:left; padding:0; font-family:var(--font-body);}
@@ -1133,6 +1139,31 @@ const INVENTORY_POOL = [
   { sku:'SKU-5088', name:'Corner Protector', lot:'L-2319' },
   { sku:'SKU-1180', name:'Fastener Pack M10', lot:'L-2322' },
 ];
+// Standalone open-floor storage areas for the Zone Audit Map — no Layout, no
+// Rack, no Bay under them, just a marked-off zone a pallet can be found in.
+// Distinct from LOCATIONS' Layout A/B/C/E (which do hold real racks/bays).
+const FLOOR_AREAS = [
+  { id:'zone-a', label:'Zone A' },
+  { id:'zone-b', label:'Zone B' },
+  { id:'zone-c', label:'Zone C' },
+  { id:'staging', label:'Staging Area' },
+];
+// What's actually supposed to be found in each zone — Zone Audit checks a
+// scanned SKU against its OWN zone's list; a SKU that isn't on it at all is
+// a location mismatch, same identity/name or not.
+const ZONE_EXPECTED_SKUS = {
+  'Zone A': [ { sku:'SKU-1042', name:'Steel Bracket 90', expectedCount:10 }, { sku:'SKU-2218', name:'Pallet Support Pin', expectedCount:6 } ],
+  'Zone B': [ { sku:'SKU-3301', name:'Plastic Crate Blue', expectedCount:8 } ],
+  'Staging Area': [ { sku:'SKU-9011', name:'Rack Label Kit', expectedCount:5 } ],
+};
+// Reverse lookup — which zone (if any) a given SKU is supposed to be found
+// in, regardless of which zone it actually turned up in.
+function expectedZoneForSku(sku){
+  for (const zone in ZONE_EXPECTED_SKUS) {
+    if (ZONE_EXPECTED_SKUS[zone].some(l => l.sku === sku)) return zone;
+  }
+  return null;
+}
 const CONDITIONS = ['Good','Damaged','Broken','Wet','Open Package','Other'];
 // Same "Good" = unflagged split summaryStats() already uses for the Audit
 // Summary's flagged-items list — Damaged/Broken read as an outright defect
@@ -1627,6 +1658,12 @@ let STATE = {
   issuesFilterValues: { rack: [], bay: [], condition: [] },
   imageAttachmentModal: null,
   quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
+  // Zone Audit Map (preview) — a floor-area pick + scan-and-reconcile flow,
+  // independent of the audit-scoped Rack View machinery (findRackIn/
+  // STATE.params) since it isn't tied to a specific rack/bay/loc, only a
+  // named zone. items is the saved scan history; pendingItem is the
+  // in-progress Reconciliation Form (cleared on Save or Cancel).
+  zoneAudit: { floorAreaId:null, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
   auditDetailsClosed: {},
@@ -4266,8 +4303,192 @@ function renderQuickScan(){
 
   return `
     ${headerBlock({ title:'Quick Scan', sub:'Jump to any assigned location', showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-    <div class="body-pad">${body}</div>
+    <div class="body-pad">
+      ${body}
+      <button class="btn outline small" style="width:100%; margin-top:14px;" onclick="openZoneAudit()">${ICON.wh} Zone Audit Map (Preview)</button>
+    </div>
     ${renderTabBar('scan')}
+  `;
+}
+
+/* ================= ZONE AUDIT MAP (preview) ================= */
+function openZoneAudit(){
+  STATE.zoneAudit = { floorAreaId:null, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false };
+  push('zoneAudit', {});
+}
+function pickZoneArea(id){
+  STATE.zoneAudit.floorAreaId = id;
+  render();
+}
+function zoneAuditScan(){
+  if (!STATE.zoneAudit.floorAreaId) return;
+  if (!IS_REAL_MOBILE) return zoneAuditScanSimulated();
+  openCameraScan('Point at a SKU code', (text) => applyZoneAuditSku(text.trim()));
+}
+// Desktop/web preview has no camera — cycles through the inventory pool,
+// same fallback pattern quickScanSimulated uses.
+function zoneAuditScanSimulated(){
+  const za = STATE.zoneAudit;
+  const item = INVENTORY_POOL[za.scanCount % INVENTORY_POOL.length];
+  za.scanCount++;
+  applyZoneAuditSku(item.sku);
+}
+function applyZoneAuditSku(sku){
+  const za = STATE.zoneAudit;
+  const zone = FLOOR_AREAS.find(z => z.id === za.floorAreaId);
+  if (!zone) return;
+  const inv = INVENTORY_POOL.find(p => p.sku === sku);
+  const expectedZone = expectedZoneForSku(sku);
+  const matched = expectedZone ? expectedZone === zone.label : null;
+  za.pendingItem = {
+    id: 's' + Date.now() + Math.random().toString(36).slice(2,6),
+    sku, name: inv ? inv.name : sku,
+    pinnedZone: zone.label, expectedZone, matched,
+    qty: 1, condition: 'Good', evidence: { note:'', noteOpen:false, images:[] },
+    scannedAt: Date.now(),
+  };
+  za.qtyText = '1';
+  render();
+}
+function zoneAuditSetQty(v){
+  const n = parseInt(v, 10);
+  STATE.zoneAudit.qtyText = v;
+  if (STATE.zoneAudit.pendingItem) STATE.zoneAudit.pendingItem.qty = Number.isNaN(n) ? 1 : Math.max(1, n);
+  render();
+}
+function zoneAuditSetCondition(c){
+  if (STATE.zoneAudit.pendingItem) STATE.zoneAudit.pendingItem.condition = c;
+  render();
+}
+function zoneAuditToggleNote(){
+  const it = STATE.zoneAudit.pendingItem;
+  if (!it) return;
+  it.evidence.noteOpen = !it.evidence.noteOpen;
+  render();
+}
+function zoneAuditSetNote(v){
+  const it = STATE.zoneAudit.pendingItem;
+  if (it) it.evidence.note = v;
+}
+function zoneAuditAddPhoto(){
+  const it = STATE.zoneAudit.pendingItem;
+  if (!it) return;
+  it.evidence.images.push({});
+  toast('Photo attached');
+  render();
+}
+function zoneAuditSave(){
+  const za = STATE.zoneAudit;
+  if (!za.pendingItem) return;
+  za.items.unshift(za.pendingItem);
+  za.pendingItem = null;
+  za.qtyText = '1';
+  toast('Record saved');
+  render();
+}
+function zoneAuditCancel(){
+  STATE.zoneAudit.pendingItem = null;
+  render();
+}
+function zoneAuditToggleList(){
+  STATE.zoneAudit.listOpen = !STATE.zoneAudit.listOpen;
+  render();
+}
+function zoneAuditItemCard(item){
+  const tone = item.matched === null ? 'info' : item.matched ? 'ok' : 'warn';
+  const label = item.matched === null ? 'No Expectation on Record' : item.matched ? 'Zone Matched' : 'Location Mismatch';
+  return `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="card-title-row" style="margin-bottom:8px;">
+        <span class="pill ${tone==='ok'?'s-completed':tone==='warn'?'s-overdue':'s-scheduled'}">${label}</span>
+      </div>
+      <div style="font-weight:700; color:var(--foreground);">${item.sku}</div>
+      <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:8px;">${item.name}</div>
+      <div class="kv-list">
+        <div class="kv-row"><span class="l">Zone</span><span class="v">${item.pinnedZone}</span></div>
+        ${item.expectedZone ? `<div class="kv-row"><span class="l">Expected Zone</span><span class="v">${item.expectedZone}</span></div>` : ''}
+        <div class="kv-row"><span class="l">Qty</span><span class="v">${item.qty}</span></div>
+        <div class="kv-row" style="border-bottom:none;"><span class="l">Condition</span>${severityPillHtml(item.condition)}</div>
+      </div>
+    </div>
+  `;
+}
+function renderZoneAuditForm(){
+  const it = STATE.zoneAudit.pendingItem;
+  if (!it) return '';
+  return `
+    <div class="card" style="border-color:var(--accent-blue-border); background:var(--accent-blue-soft);">
+      <div class="card-title-row" style="margin-bottom:10px;">
+        <h2>Reconciliation Form</h2>
+        <button class="card-icon-btn" onclick="zoneAuditCancel()" aria-label="Close">${ICON.close}</button>
+      </div>
+      <div style="font-weight:700; color:var(--foreground);">${it.sku}</div>
+      <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:10px;">${it.name} · Zone: ${it.pinnedZone}</div>
+      <div class="sku-section">
+        <span class="sec-label">Quantity <span style="color:var(--rag-red-strong);">*</span></span>
+        <div class="qty-stepper-row">
+          <input class="qty-input" type="number" inputmode="numeric" min="1" value="${it.qty}" onfocus="this.select()" onchange="zoneAuditSetQty(this.value)">
+        </div>
+      </div>
+      <div class="sku-section">
+        <span class="sec-label">Condition <span style="color:var(--rag-red-strong);">*</span></span>
+        <div class="cond-radio-grid">${CONDITIONS.map(c => `
+          <label class="cond-radio">
+            <input type="radio" name="za-cond" ${it.condition===c?'checked':''} onchange="zoneAuditSetCondition('${c}')">
+            <span>${c}</span>
+          </label>
+        `).join('')}</div>
+      </div>
+      <div class="rv-evidence">
+        <div class="rv-evidence-row">
+          <span class="rv-evidence-label">Write a note for this record</span>
+          <div class="rv-evidence-btns">
+            <button type="button" class="card-icon-btn" title="Add note" onclick="zoneAuditToggleNote()">${ICON.pencil}</button>
+            <button type="button" class="card-icon-btn" title="Add photo" onclick="zoneAuditAddPhoto()">${ICON.camera}</button>
+          </div>
+        </div>
+        ${it.evidence.noteOpen ? `<textarea class="rv-evidence-note" placeholder="Add a note..." onchange="zoneAuditSetNote(this.value)">${it.evidence.note}</textarea>` : ''}
+        ${it.evidence.images.length ? `<div class="rv-evidence-group"><div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(it.evidence.images.length).padStart(2,'0')}</span></div></div>` : ''}
+      </div>
+      <div class="sku-card-footer" style="margin-top:14px;">
+        <button type="button" class="btn outline small" style="flex:1;" onclick="zoneAuditCancel()">Cancel</button>
+        <button type="button" class="btn primary small" style="flex:1;" onclick="zoneAuditSave()">Save &amp; Scan Next</button>
+      </div>
+    </div>
+  `;
+}
+function renderZoneAudit(){
+  const za = STATE.zoneAudit;
+
+  if (za.listOpen) {
+    return `
+      ${headerBlock({ title:'Scanned Records', sub:`${za.items.length} record${za.items.length===1?'':'s'}`, showBack:true })}
+      <div class="body-pad">
+        ${za.items.length ? za.items.map(zoneAuditItemCard).join('') : `<div class="empty-state"><div>Scanned records will appear here.</div></div>`}
+      </div>
+    `;
+  }
+
+  const zone = FLOOR_AREAS.find(z => z.id === za.floorAreaId);
+  return `
+    ${headerBlock({ title:'Zone Audit Map', sub:'Tap a zone, then scan a SKU', showBack:true, menuItems:[{label:'Scanned Records', action:'zoneAuditToggleList()'}] })}
+    <div class="body-pad">
+      <div class="za-zone-row">
+        ${FLOOR_AREAS.map(z => `
+          <button type="button" class="za-zone-card ${za.floorAreaId===z.id?'selected':''}" onclick="pickZoneArea('${z.id}')">${z.label}</button>
+        `).join('')}
+      </div>
+      ${za.pendingItem ? renderZoneAuditForm() : `
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; margin-top:24px;">
+          <div class="scan-block">
+            <div class="glyph-circle">${ICON.camera}</div>
+            <button class="btn small primary" ${zone?'':'disabled'} onclick="zoneAuditScan()">Scan SKU</button>
+          </div>
+          <div class="banner info" style="margin-top:14px;"><span class="dot"></span> ${zone ? `Scanning into ${zone.label}.` : 'Tap a zone above to enable scanning.'}</div>
+        </div>
+      `}
+      ${za.items.length && !za.pendingItem ? `<button class="btn outline small" style="width:100%; margin-top:16px;" onclick="zoneAuditToggleList()">View ${za.items.length} Scanned Record${za.items.length===1?'':'s'}</button>` : ''}
+    </div>
   `;
 }
 
@@ -4702,7 +4923,7 @@ function render(){
   if (screen === 'login') {
     document.getElementById('screen').innerHTML = wrap(renderLogin());
   } else {
-    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails, settings: renderSettings };
+    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails, settings: renderSettings, zoneAudit: renderZoneAudit };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
   if (screenEl) screenEl.scrollTop = prevScrollTop;
