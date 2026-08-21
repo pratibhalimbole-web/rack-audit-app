@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { AppHeader } from '@/components/AppHeader';
@@ -107,6 +107,10 @@ type ScannedSku = {
   conditionIssueRaised?: boolean;
   qtyEvidence?: Evidence;
   conditionEvidence?: Evidence;
+  // Only set for a freeform "tap the open floor" pin — the exact
+  // content-space point the inspector tapped, so View Location can drop the
+  // same marker back down later instead of only showing text fields.
+  pinnedPoint?: { x: number; y: number };
 };
 
 // A QR found in a rack encodes JSON {sku,...}; a Zone/Rack-mode scan (where
@@ -151,7 +155,6 @@ export function QuickScanScreen() {
   const idRef = useRef(0);
   const skuCycleRef = useRef(0);
   const nextId = () => `s${idRef.current++}`;
-  const openPin = useQuickScanPinStore((s) => s.openPin);
   const pinResult = useQuickScanPinStore((s) => s.result);
   const clearPin = useQuickScanPinStore((s) => s.clear);
 
@@ -173,6 +176,11 @@ export function QuickScanScreen() {
   const [pendingItem, setPendingItem] = useState<ScannedSku | null>(null);
   const [qtyText, setQtyText] = useState('1');
   const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'condition' | null>(null);
+  // A Floor-mode item's own read-only recap of where it got pinned — same
+  // floor-areas + layout/rack reference grid the live canvas shows, just
+  // static, with that one item's pin highlighted/marked instead of the
+  // in-progress pendingItem's.
+  const [viewLocationItem, setViewLocationItem] = useState<ScannedSku | null>(null);
 
   const ensureFieldEvidence = (field: 'qtyEvidence' | 'conditionEvidence'): Evidence =>
     pendingItem?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
@@ -341,7 +349,9 @@ export function QuickScanScreen() {
   const pinFloorFreeform = (x: number, y: number) => {
     setFloorTapPoint({ x, y });
     setPendingItem((prev) =>
-      prev ? { ...prev, pinnedZone: 'Open Floor', pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched: null, issueRaised: false, pinnedAt: Date.now() } : prev,
+      prev
+        ? { ...prev, pinnedZone: 'Open Floor', pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched: null, issueRaised: false, pinnedAt: Date.now(), pinnedPoint: { x, y } }
+        : prev,
     );
   };
   const floorTapGesture = Gesture.Tap()
@@ -483,19 +493,6 @@ export function QuickScanScreen() {
     setQtyText('1');
   };
 
-  // "Pin Exact Location" (Floor mode only) opens a full screen (dropdowns +
-  // a 3D-style warehouse map), not a popup — the picked location comes
-  // back through useQuickScanPinStore rather than a callback, since
-  // router.push() has no return-value mechanism of its own.
-  const handlePin = (item: ScannedSku) => {
-    const scannedZoneCounts: Record<string, number> = {};
-    items.forEach((it) => {
-      if (it.pinnedZone) scannedZoneCounts[it.pinnedZone] = (scannedZoneCounts[it.pinnedZone] ?? 0) + 1;
-    });
-    openPin({ itemId: item.id, skuLabel: `${item.sku} · ${item.name}`, expectedZone: item.expectedZone, scannedZoneCounts });
-    router.push('/pin-location');
-  };
-
   useEffect(() => {
     if (!pinResult) return;
     setItems((prev) =>
@@ -547,7 +544,7 @@ export function QuickScanScreen() {
                     </View>
                   </View>
                   {group.rows.map((item) => (
-                    <ScannedSkuCard key={item.id} item={item} onPin={() => handlePin(item)} />
+                    <ScannedSkuCard key={item.id} item={item} onViewLocation={() => setViewLocationItem(item)} />
                   ))}
                 </View>
               ) : null,
@@ -559,6 +556,10 @@ export function QuickScanScreen() {
             </View>
           )}
         </ScrollView>
+
+        {viewLocationItem ? (
+          <LocationViewModal item={viewLocationItem} layoutZones={layoutZones} onClose={() => setViewLocationItem(null)} />
+        ) : null}
       </View>
     );
   }
@@ -776,11 +777,25 @@ export function QuickScanScreen() {
                         ))}
                       </View>
                     ) : (
-                      <View style={floorPinContext ? [styles.warehouseFloor, { borderColor: tokens.rag.amber.strong }] : undefined}>
-                        {floorPinContext ? (
+                      <View
+                        style={
+                          mode === 'floor'
+                            ? [styles.warehouseFloor, { borderColor: floorPinContext ? tokens.rag.amber.strong : tokens.border, backgroundColor: '#F1F2F4' }]
+                            : undefined
+                        }
+                      >
+                        {mode === 'floor' ? (
                           <View style={[styles.warehouseFloorLabel, { backgroundColor: tokens.card }]}>
-                            <Ionicons name="business-outline" size={11} color={tokens.rag.amber.strong} />
-                            <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                            <Ionicons name="business-outline" size={11} color={floorPinContext ? tokens.rag.amber.strong : tokens.mutedForeground} />
+                            <Text
+                              style={{
+                                color: floorPinContext ? tokens.rag.amber.strong : tokens.mutedForeground,
+                                fontWeight: tokens.fontWeight.bold,
+                                fontSize: 9,
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.4,
+                              }}
+                            >
                               Warehouse Floor
                             </Text>
                           </View>
@@ -788,6 +803,12 @@ export function QuickScanScreen() {
                         <View style={styles.zoneRow}>
                           {FLOOR_AREAS.map((zone) => {
                             const selected = (mode === 'zone' && activeFloorAreaId === zone.id) || (floorPinActive && pendingItem?.pinnedFloorAreaId === zone.id);
+                            // In Floor mode these are reference-only until a
+                            // scan is actively being pinned — grayed out the
+                            // same way Rack View's inactive rack cards are,
+                            // instead of reading as equally "live" as Zone
+                            // mode's own always-tappable cards.
+                            const grayed = mode === 'floor' && !floorPinActive && !selected;
                             return (
                               <Pressable
                                 key={zone.id}
@@ -795,10 +816,16 @@ export function QuickScanScreen() {
                                 onPress={() => (mode === 'zone' ? pickZone(zone.id) : pinFloorToZoneArea(zone.id))}
                                 style={[
                                   styles.zoneCard,
-                                  { borderColor: selected ? '#1D4ED8' : tokens.border, borderWidth: selected ? 2.5 : 1.5, backgroundColor: selected ? '#BFDBFE' : tokens.card },
+                                  {
+                                    borderColor: selected ? '#1D4ED8' : tokens.border,
+                                    borderWidth: selected ? 2.5 : 1.5,
+                                    backgroundColor: selected ? '#BFDBFE' : grayed ? tokens.muted : tokens.card,
+                                  },
                                 ]}
                               >
-                                <Text style={{ color: selected ? '#1D4ED8' : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zone.label}</Text>
+                                <Text style={{ color: selected ? '#1D4ED8' : grayed ? tokens.slate400 : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+                                  {zone.label}
+                                </Text>
                               </Pressable>
                             );
                           })}
@@ -1161,7 +1188,7 @@ export function QuickScanScreen() {
   );
 }
 
-function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }) {
+function ScannedSkuCard({ item, onViewLocation }: { item: ScannedSku; onViewLocation?: () => void }) {
   const { tokens } = useTheme();
   const hasExpectation = item.expectedZone !== null;
   const resolved = item.matched !== null;
@@ -1196,14 +1223,16 @@ function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }
         {item.pinnedLoc ? <Field label="Pinned Pallet" value={item.pinnedLoc} /> : null}
       </View>
 
-      {/* Only a Floor-mode find ever needs this — Zone/Rack finds already
-          resolved their location the instant they were scanned. */}
-      {!item.pinnedAt ? (
-        <Pressable onPress={onPin} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg, marginTop: 10 }]}>
+      {/* Only a Floor-mode find ever has a manually-dropped pin worth
+          recapping visually — Zone/Rack finds' location was already the
+          canvas selection at scan time. */}
+      {item.origin === 'floor' && item.pinnedAt && onViewLocation ? (
+        <Pressable onPress={onViewLocation} style={[styles.outlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg, marginTop: 10 }]}>
           <Ionicons name="location-outline" size={16} color={tokens.foreground} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Pin Exact Location</Text>
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>View Location</Text>
         </Pressable>
       ) : null}
+
       {item.issueRaised && item.pinnedZone ? (
         <View style={[styles.pinnedBanner, { borderColor: tokens.border, marginTop: 10 }]}>
           <Ionicons name="alert-circle" size={16} color={tokens.rag.amber.strong} />
@@ -1221,6 +1250,103 @@ function ScannedSkuCard({ item, onPin }: { item: ScannedSku; onPin: () => void }
   );
 }
 
+// Read-only recap of exactly where a Floor-mode item's pin landed — the
+// same floor-areas + layout/rack reference grid the live canvas shows
+// (non-interactive here), with that one item's pin either highlighted (a
+// named zone/rack) or marked (a freeform open-floor tap), instead of only
+// the text fields already on the card.
+function LocationViewModal({ item, layoutZones, onClose }: { item: ScannedSku; layoutZones: LayoutGroup[]; onClose: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.locModalBackdrop}>
+        <View style={[styles.locModalCard, { backgroundColor: tokens.card, borderRadius: tokens.radius.xxl }]}>
+          <View style={[styles.locModalHead, { borderBottomColor: tokens.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Pinned Location</Text>
+              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }} numberOfLines={1}>
+                {item.sku} · {item.name}
+              </Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={22} color={tokens.mutedForeground} />
+            </Pressable>
+          </View>
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 14 }}>
+            <View style={[styles.warehouseFloor, { borderColor: tokens.rag.amber.strong }]}>
+              <View style={[styles.warehouseFloorLabel, { backgroundColor: tokens.card }]}>
+                <Ionicons name="business-outline" size={11} color={tokens.rag.amber.strong} />
+                <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  Warehouse Floor
+                </Text>
+              </View>
+
+              <View style={styles.zoneRow}>
+                {FLOOR_AREAS.map((zone) => {
+                  const selected = item.pinnedFloorAreaId === zone.id;
+                  return (
+                    <View
+                      key={zone.id}
+                      style={[
+                        styles.zoneCard,
+                        { borderColor: selected ? '#1D4ED8' : tokens.border, borderWidth: selected ? 2.5 : 1.5, backgroundColor: selected ? '#BFDBFE' : tokens.card },
+                      ]}
+                    >
+                      <Text style={{ color: selected ? '#1D4ED8' : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zone.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={[styles.layoutGroupRow, { marginTop: 20 }]}>
+                {layoutZones.map((ly) => {
+                  const layoutSelected = !item.pinnedFloorAreaId && !item.pinnedPoint && item.pinnedZone === ly.layout && !item.pinnedRack;
+                  return (
+                    <View key={ly.layout} style={styles.layoutBlock}>
+                      <Text style={{ color: layoutSelected ? '#1D4ED8' : tokens.slate400, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, marginBottom: 4 }}>
+                        {zoneLabel(ly.layout)} {layoutSelected ? '· Pinned' : ''}
+                      </Text>
+                      <View style={styles.rackRow}>
+                        {ly.racks.map((rackGroup) => {
+                          const rackSelected = item.pinnedZone === ly.layout && item.pinnedRack === rackGroup.rack;
+                          return (
+                            <View
+                              key={rackGroup.rack}
+                              style={[
+                                styles.rackCardDisabled,
+                                { borderColor: rackSelected ? '#1D4ED8' : tokens.border, backgroundColor: rackSelected ? '#BFDBFE' : tokens.muted, borderWidth: rackSelected ? 2 : 1 },
+                              ]}
+                            >
+                              <Text numberOfLines={1} style={{ color: rackSelected ? '#1D4ED8' : tokens.slate400, fontWeight: tokens.fontWeight.medium, fontSize: 8 }}>
+                                Rack {rackGroup.rack}
+                              </Text>
+                              <View style={styles.bayRow}>
+                                {rackGroup.bays.map((bayCell) => (
+                                  <View key={bayCell.bay} style={[styles.baySeg, { borderColor: rackSelected ? '#1D4ED8' : tokens.border }]} />
+                                ))}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {item.pinnedPoint ? (
+                <View pointerEvents="none" style={[styles.freeformPinWrap, { left: item.pinnedPoint.x - 14, top: item.pinnedPoint.y - 28 }]}>
+                  <Ionicons name="location" size={28} color={tokens.rag.red.strong} />
+                </View>
+              ) : null}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
   const { tokens } = useTheme();
   return (
@@ -1234,6 +1360,9 @@ function Field({ label, value, full }: { label: string; value: string; full?: bo
 }
 
 const styles = StyleSheet.create({
+  locModalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  locModalCard: { width: '100%', maxWidth: 520, overflow: 'hidden' },
+  locModalHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   modeRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   // Canvas <-> Reconciliation Form split — same layout Rack View and Zone
