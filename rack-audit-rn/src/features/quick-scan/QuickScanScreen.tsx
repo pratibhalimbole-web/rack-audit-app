@@ -73,6 +73,20 @@ function FrontViewCell({ selected, bg, border, onPress }: { selected: boolean; b
   );
 }
 
+// A persistent pulsing badge on the scan icon button — same idea as the
+// scan-ready popup, but this one doesn't auto-dismiss, so a user who
+// closed or missed the popup still has a standing "ready to scan" cue.
+function ReadyDot() {
+  const { tokens } = useTheme();
+  const opacity = useSharedValue(1);
+  useEffect(() => {
+    opacity.value = withRepeat(withSequence(withTiming(0.25, { duration: 500 }), withTiming(1, { duration: 500 })), -1, true);
+    return () => cancelAnimation(opacity);
+  }, []);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={[styles.readyDot, { backgroundColor: tokens.rag.green.strong }, animatedStyle]} />;
+}
+
 // Which of the three ways this SKU's location was captured — drives the
 // card's "Zone Find"/"Rack Find"/"Floor Find" label, which section it
 // lands in on the Scanned SKUs list, and (for Zone/Rack) whether the
@@ -400,7 +414,60 @@ export function QuickScanScreen() {
   };
 
   const activeZoneObj = activeFloorAreaId ? FLOOR_AREAS.find((z) => z.id === activeFloorAreaId) : null;
-  const canScan = !pendingItem && (mode === 'floor' || (mode === 'zone' && !!activeZoneObj) || (mode === 'rack' && !!activeRack));
+  // Rack mode only counts as "ready" once the full Layout → Rack → Bay →
+  // Pallet drill-down is done — picking just the rack isn't enough to scan
+  // into a specific pallet slot.
+  const rackSelectionComplete = !!activeLayout && !!activeRack && !!activeBay && !!activeLoc;
+  const canScan = !pendingItem && (mode === 'floor' || (mode === 'zone' && !!activeZoneObj) || (mode === 'rack' && rackSelectionComplete));
+
+  // Identifies the exact completed selection for each mode — Zone needs a
+  // zone picked (dropdown or canvas tap, both funnel through pickZone),
+  // Rack needs a rack picked (same, through pickRack), Floor is "complete"
+  // the moment it's chosen since it has no location to pre-pick. Watching
+  // THIS (not canScan) for the scan-ready popup means finishing a scan and
+  // hitting Save & Scan Next — which also flips canScan back to true —
+  // does NOT re-fire the popup, since the underlying selection didn't
+  // change; only an actual new zone/rack/floor pick does.
+  const selectionKey =
+    mode === 'zone'
+      ? activeFloorAreaId
+        ? `zone:${activeFloorAreaId}`
+        : null
+      : mode === 'rack'
+        ? rackSelectionComplete
+          ? `rack:${activeLayout}:${activeRack}:${activeBay}:${activeLoc}`
+          : null
+        : 'floor';
+  const [scanPrompt, setScanPrompt] = useState<string | null>(null);
+  const prevSelectionKeyRef = useRef<string | null>(null);
+  const promptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (selectionKey && selectionKey !== prevSelectionKeyRef.current && !pendingItem) {
+      const label = mode === 'zone' ? activeZoneObj?.label : mode === 'rack' ? `Rack ${activeRack} · Bay ${activeBay} · ${activeLoc}` : 'Floor mode';
+      setScanPrompt(`${label} selected`);
+      if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
+      promptTimerRef.current = setTimeout(() => setScanPrompt(null), 4000);
+    }
+    prevSelectionKeyRef.current = selectionKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey]);
+  useEffect(() => () => {
+    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
+  }, []);
+
+  // Brief confirmation after every Save & Scan Next, timed with the reset
+  // back to the default (nothing-selected) page.
+  const [savedPrompt, setSavedPrompt] = useState<string | null>(null);
+  const savedPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (savedPromptTimerRef.current) clearTimeout(savedPromptTimerRef.current);
+  }, []);
+
+  const openScannerFromPrompt = () => {
+    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
+    setScanPrompt(null);
+    setScannerOpen(true);
+  };
 
   const applySkuCode = (code: Partial<SkuScanCode>) => {
     setScannerOpen(false);
@@ -487,6 +554,21 @@ export function QuickScanScreen() {
     setItems((prev) => [{ ...pendingItem, qty }, ...prev]);
     setPendingItem(null);
     setQtyText('1');
+    // Back to the untouched default page after every save — Mode reset to
+    // Zone, nothing picked in any mode — instead of leaving the previous
+    // selection standing, so the next scan is a deliberate fresh choice
+    // rather than accidentally landing in whatever was last active.
+    setMode('zone');
+    setActiveFloorAreaId(null);
+    setActiveLayout(null);
+    setActiveRack(null);
+    setActiveBay(null);
+    setActiveLoc(null);
+    setOpenField(null);
+    setFloorTapPoint(null);
+    setSavedPrompt('Record saved');
+    if (savedPromptTimerRef.current) clearTimeout(savedPromptTimerRef.current);
+    savedPromptTimerRef.current = setTimeout(() => setSavedPrompt(null), 1800);
   };
   const handleCancelPending = () => {
     setPendingItem(null);
@@ -659,6 +741,7 @@ export function QuickScanScreen() {
             style={[styles.cornerIconBtn, { borderColor: tokens.border, borderRadius: 8, opacity: canScan ? 1 : 0.5 }]}
           >
             <Ionicons name="qr-code-outline" size={18} color={tokens.foreground} />
+            {canScan ? <ReadyDot /> : null}
           </Pressable>
           <Pressable onPress={() => setListOpen(true)} hitSlop={8} style={[styles.cornerIconBtn, { borderColor: tokens.border, borderRadius: 8 }]}>
             <View style={{ position: 'relative' }}>
@@ -1166,6 +1249,37 @@ export function QuickScanScreen() {
       ) : null}
       </View>
 
+      {savedPrompt ? (
+        <View style={styles.savedToastWrap} pointerEvents="none">
+          <View style={[styles.savedToast, { backgroundColor: tokens.rag.green.strong }]}>
+            <Ionicons name="checkmark-circle" size={16} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.bold }}>{savedPrompt}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {scanPrompt ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setScanPrompt(null)}>
+          <View style={styles.scanPromptBackdrop}>
+            <View style={[styles.scanPromptCard, { backgroundColor: tokens.card, borderRadius: tokens.radius.xxl }]}>
+              <View style={[styles.scanPromptIconWrap, { backgroundColor: tokens.rag.green.soft }]}>
+                <Ionicons name="checkmark-circle" size={28} color={tokens.rag.green.strong} />
+              </View>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base, textAlign: 'center' }}>{scanPrompt}</Text>
+              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 4 }}>You can scan now</Text>
+              <View style={styles.scanPromptActions}>
+                <Pressable onPress={() => setScanPrompt(null)} style={[styles.outlineBtn, { flex: 1, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Not Now</Text>
+                </Pressable>
+                <Pressable onPress={openScannerFromPrompt} style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Now</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+
       <BarcodeScannerModal
         visible={scannerOpen}
         title="Scan SKU"
@@ -1360,6 +1474,12 @@ function Field({ label, value, full }: { label: string; value: string; full?: bo
 }
 
 const styles = StyleSheet.create({
+  savedToastWrap: { position: 'absolute', top: 10, left: 0, right: 0, zIndex: 50, elevation: 50, alignItems: 'center' },
+  savedToast: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  scanPromptBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  scanPromptCard: { width: '100%', maxWidth: 340, alignItems: 'center', padding: 22, gap: 4 },
+  scanPromptIconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  scanPromptActions: { flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' },
   locModalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   locModalCard: { width: '100%', maxWidth: 520, overflow: 'hidden' },
   locModalHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -1399,7 +1519,7 @@ const styles = StyleSheet.create({
   radioDotFill: { width: 7, height: 7, borderRadius: 3.5 },
   qtyInput: { height: 40, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
   primaryBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
-  canvasWrap: { flex: 1, padding: 16 },
+  canvasWrap: { flex: 1, padding: 16, position: 'relative' },
   canvasToolbarRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   stage: { flex: 1, overflow: 'hidden' },
   stageCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -1431,7 +1551,8 @@ const styles = StyleSheet.create({
   diagramRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   diagramCells: { flexDirection: 'row', gap: 8 },
   diagramCellEmpty: { width: 38, height: 26, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed' },
-  cornerIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  cornerIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1, position: 'relative' },
+  readyDot: { position: 'absolute', top: -3, right: -3, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: '#fff' },
   listCountDot: { position: 'absolute', top: -6, right: -8, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   listPageBody: { padding: 16, gap: 22, paddingBottom: 40 },
   groupHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
