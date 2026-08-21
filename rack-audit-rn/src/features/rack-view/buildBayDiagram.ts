@@ -38,89 +38,87 @@ export function buildBayDiagram(bayObj: BayNode | undefined): DiagramRow[] {
   return rows;
 }
 
-export type ScanDirection = 'up' | 'down' | 'left' | 'right';
+// Which side of a level's 3 slots to start from.
+export type ScanFrom = 'left' | 'right';
+// 'first' = raster — every level restarts from `from` (Left-First-Up/Down).
+// 'last' = snake — each new level continues from whichever slot the
+// previous level ended on, instead of resetting (Left-Last-Up/Down).
+export type ScanPattern = 'first' | 'last';
+// Level progression within a bay: bottom(1)→top, or top→bottom(1).
+export type ScanVertical = 'up' | 'down';
+// 'bay' ("Bay's Level") — confined to whichever single bay the current
+// selection is in: level by level within that one bay only (Bay 1 → L1,
+// L2, L3…), never advancing into another bay on its own. 'rack' ("Bay
+// wise") — level-major across the WHOLE rack instead: clear a level across
+// every bay (Bay 1, Bay 2, Bay 3… all at L1) before moving to the next
+// level, same as a real inspector/MHE working one elevation at a time
+// instead of one bay at a time.
+export type ScanScope = 'bay' | 'rack';
 
-// 'rack' (the original/default behavior) treats the direction as a
-// rack-wide MHE-vs-no-MHE pattern that alternates bay-to-bay — see
-// buildRackwiseScanOrder. 'bay' instead treats it as a per-bay setting:
-// every bay is walked the exact same way, independently, in natural
-// left-to-right bay order, one bay fully cleared before the next — no
-// rack-wide alternation at all.
-export type ScanScope = 'rack' | 'bay';
+export type ScanSettings = { from: ScanFrom; pattern: ScanPattern; vertical: ScanVertical; scope: ScanScope };
 
-// Mirrors how a real audit actually walks a rack, MHE or not — never a
-// flat bay-after-bay list. 'left'/'right' is the horizontal case: an MHE-
-// free inspector clears one full level across every bay before moving up,
-// alternating sweep direction each level (bay1→bay4, then bay4→bay1) so
-// they're never walking back past bays they just finished. 'up'/'down' is
-// the vertical case: an MHE inspector clears one whole bay top-to-bottom
-// (or bottom-to-top) without lowering the fork between bays, so the next
-// bay starts at whatever level the fork is already sitting at — hence each
-// bay alternates level direction too. `right`/`down` are the "start at the
-// near end" defaults; `left`/`up` start from the far end instead.
-function buildRackwiseScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[]): LocationNode[] {
+// Walks one bay's levels in `vertical` order; within each level, slots run
+// from `from` outward. Under the 'last' pattern the starting side flips
+// after every level (a true boustrophedon/snake), so e.g. From Left +
+// Left-Last-Up on a bay whose L1 ends at the rightmost slot continues
+// L2 starting from that same rightmost slot, working back to the left —
+// never resetting to the left edge mid-bay.
+function buildOneBayOrder(from: ScanFrom, pattern: ScanPattern, vertical: ScanVertical, rows: DiagramRow[]): { order: LocationNode[]; endSide: ScanFrom } {
+  const sorted = rows.slice().sort((a, b) => (vertical === 'up' ? a.level - b.level : b.level - a.level));
   const order: LocationNode[] = [];
-  if (direction === 'left' || direction === 'right') {
-    const maxLevel = bayDiagrams.reduce((max, { rows }) => Math.max(max, ...rows.map((r) => r.level)), 0);
-    let forward = direction === 'right';
-    for (let level = 1; level <= maxLevel; level++) {
-      const bayOrder = forward ? bayDiagrams : bayDiagrams.slice().reverse();
-      bayOrder.forEach(({ rows }) => {
-        const row = rows.find((r) => r.level === level);
-        row?.cells.forEach((cell) => {
-          if (cell) order.push(cell);
-        });
-      });
-      forward = !forward;
-    }
-  } else {
-    let ascending = direction === 'up';
-    bayDiagrams.forEach(({ rows }) => {
-      const sortedAsc = rows.slice().sort((a, b) => a.level - b.level);
-      const levelOrder = ascending ? sortedAsc : sortedAsc.slice().reverse();
-      levelOrder.forEach((row) => {
-        row.cells.forEach((cell) => {
-          if (cell) order.push(cell);
-        });
-      });
-      ascending = !ascending;
+  let side = from;
+  sorted.forEach((row) => {
+    const cells = side === 'left' ? row.cells : row.cells.slice().reverse();
+    cells.forEach((cell) => {
+      if (cell) order.push(cell);
     });
-  }
-  return order;
+    if (pattern === 'last') side = side === 'left' ? 'right' : 'left';
+  });
+  return { order, endSide: side };
 }
 
-// Bays in their natural left-to-right order (bayDiagrams' own array order,
-// never reversed), each one fully walked in the exact same chosen
-// direction before moving to the next — no bay-to-bay alternation, since
-// the direction here describes how to work *inside* one bay, not a
-// rack-wide MHE pattern. 'left'/'right' controls slot order within each of
-// that bay's levels (levels still bottom(1)→top, always ascending);
-// 'up'/'down' controls level order within the bay (slots stay natural
-// left-to-right) — same per-axis meaning the rackwise mode uses, just
-// never reversed or alternated bay-to-bay.
-function buildWithinBayScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[]): LocationNode[] {
+// `currentBayCode` only matters for scope 'bay' — it's the bay the order
+// gets confined to (whichever bay the current selection is in). Ignored
+// for scope 'rack', which always spans every bay.
+export function buildScanOrder(
+  settings: ScanSettings,
+  bayDiagrams: { bay: { code: string }; rows: DiagramRow[] }[],
+  currentBayCode?: string,
+): LocationNode[] {
+  if (settings.scope === 'bay') {
+    const current = currentBayCode ? bayDiagrams.find((b) => b.bay.code === currentBayCode) : bayDiagrams[0];
+    if (!current) return [];
+    return buildOneBayOrder(settings.from, settings.pattern, settings.vertical, current.rows).order;
+  }
+
+  // 'rack' ("Bay wise") — level is the outer loop, bays are the inner
+  // loop: every bay's row at this level gets pushed (in bay-array order,
+  // or reversed under 'last'), then the level advances. Under 'last' both
+  // the bay-sweep direction and the within-bay starting side flip after
+  // each level, so the whole rack reads as one continuous snake instead of
+  // resetting to the top-left corner every level.
+  const maxLevel = bayDiagrams.reduce((max, { rows }) => Math.max(max, ...rows.map((r) => r.level)), 0);
+  const levels: number[] = [];
+  for (let l = 1; l <= maxLevel; l++) levels.push(l);
+  const orderedLevels = settings.vertical === 'up' ? levels : levels.slice().reverse();
+
   const order: LocationNode[] = [];
-  bayDiagrams.forEach(({ rows }) => {
-    const sortedAsc = rows.slice().sort((a, b) => a.level - b.level);
-    if (direction === 'left' || direction === 'right') {
-      sortedAsc.forEach((row) => {
-        const cells = direction === 'right' ? row.cells : row.cells.slice().reverse();
-        cells.forEach((cell) => {
-          if (cell) order.push(cell);
-        });
+  let side = settings.from;
+  let bayForward = true;
+  orderedLevels.forEach((level) => {
+    const bays = bayForward ? bayDiagrams : bayDiagrams.slice().reverse();
+    bays.forEach(({ rows }) => {
+      const row = rows.find((r) => r.level === level);
+      if (!row) return;
+      const cells = side === 'left' ? row.cells : row.cells.slice().reverse();
+      cells.forEach((cell) => {
+        if (cell) order.push(cell);
       });
-    } else {
-      const levelOrder = direction === 'up' ? sortedAsc : sortedAsc.slice().reverse();
-      levelOrder.forEach((row) => {
-        row.cells.forEach((cell) => {
-          if (cell) order.push(cell);
-        });
-      });
+    });
+    if (settings.pattern === 'last') {
+      side = side === 'left' ? 'right' : 'left';
+      bayForward = !bayForward;
     }
   });
   return order;
-}
-
-export function buildScanOrder(direction: ScanDirection, bayDiagrams: { rows: DiagramRow[] }[], scope: ScanScope = 'rack'): LocationNode[] {
-  return scope === 'bay' ? buildWithinBayScanOrder(direction, bayDiagrams) : buildRackwiseScanOrder(direction, bayDiagrams);
 }

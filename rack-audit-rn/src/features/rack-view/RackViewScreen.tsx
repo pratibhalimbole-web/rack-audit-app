@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import { AppHeader } from '@/components/AppHeader';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Card } from '@/components/Card';
@@ -20,7 +21,7 @@ import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase,
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
-import { buildBayDiagram, buildScanOrder, type ScanDirection, type ScanScope } from './buildBayDiagram';
+import { buildBayDiagram, buildScanOrder, type ScanFrom, type ScanPattern, type ScanScope, type ScanVertical } from './buildBayDiagram';
 
 // `source: 'bay-chip'` marks arriving from an Audit Details bay chip
 // specifically — the one entry point where the bay lock is meant to stay
@@ -45,21 +46,6 @@ const FULL_DIAGRAM_ROW_WIDTH = RACK_DIAGRAM_SLOTS_PER_LEVEL * DIAGRAM_CELL_WIDTH
 // the whole rack's bays render together on canvas, and level/slot numbers
 // repeat across bays, so the bare pallet ID alone is ambiguous once more
 // than one bay is in view.
-// Feeds the canvas header's Scan Direction badge — the currently active
-// pattern at a glance, without opening the popover.
-function scanDirectionArrowIcon(direction: ScanDirection): keyof typeof Ionicons.glyphMap {
-  switch (direction) {
-    case 'right':
-      return 'arrow-forward';
-    case 'left':
-      return 'arrow-back';
-    case 'up':
-      return 'arrow-up';
-    case 'down':
-      return 'arrow-down';
-  }
-}
-
 function palletIdFor(loc: { level?: number; slot?: number; code: string }, bayCode?: string): string {
   const base = loc.level != null && loc.slot != null ? `P-${String(loc.level).padStart(2, '0')}${String(loc.slot).padStart(2, '0')}` : loc.code;
   return bayCode ? `${bayCode} · ${base}` : base;
@@ -157,14 +143,13 @@ export function RackViewScreen() {
   const [closedPendingBays, setClosedPendingBays] = useState<Record<string, boolean>>({});
   const [pickerField, setPickerField] = useState<'layout' | 'rack' | 'bay' | 'pallet' | null>(null);
   // How "Scan Next SKU" walks the rack — matches how the audit is actually
-  // being physically worked (see buildScanOrder). Right/Down are the
-  // near-end starting defaults.
-  const [scanDirection, setScanDirection] = useState<ScanDirection>('right');
-  // 'rack' = today's MHE-vs-no-MHE rack-wide pattern (bays alternate);
-  // 'bay' = the same direction applied independently, unalternated, inside
-  // each bay on its own — see buildScanOrder's ScanScope param.
-  const [scanScope, setScanScope] = useState<ScanScope>('rack');
-  const [directionMenuOpen, setDirectionMenuOpen] = useState(false);
+  // being physically worked (see buildScanOrder). Defaults mirror the
+  // reference toolbar's own defaults (From Left, Left-Last-Up, Bay wise).
+  const [scanFrom, setScanFrom] = useState<ScanFrom>('left');
+  const [scanPattern, setScanPattern] = useState<ScanPattern>('last');
+  const [scanVertical, setScanVertical] = useState<ScanVertical>('up');
+  const [scanScope, setScanScope] = useState<ScanScope>('bay');
+  const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(params.loc ?? null);
   // A specific `loc` param (Resume Audit's "pick up exactly where I left
   // off", Count Sheet's Scan Next) means the inspector is being sent
@@ -470,7 +455,11 @@ export function RackViewScreen() {
   // marking it Empty flips it to 'missing', which isLocPending excludes) —
   // otherwise handleScanNext's index lookup for "this location" comes up
   // -1 and it closes back to the canvas instead of advancing.
-  const scannableLocations = buildScanOrder(scanDirection, bayDiagrams, scanScope).filter((l) => isLocSelectable(l.code) || l.code === selectedLoc);
+  const scannableLocations = buildScanOrder(
+    { from: scanFrom, pattern: scanPattern, vertical: scanVertical, scope: scanScope },
+    bayDiagrams,
+    selectedLoc ? bayCodeForLoc(selectedLoc) : undefined,
+  ).filter((l) => isLocSelectable(l.code) || l.code === selectedLoc);
 
   // In-scope locations still waiting on a clean, confirmed match — either
   // never scanned at all, or scanned and found to mismatch (wrong SKU, or
@@ -1022,40 +1011,39 @@ export function RackViewScreen() {
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
               Front View — Rack {rackObj.code} — {rackObj.bays.length} Bay{rackObj.bays.length === 1 ? '' : 's'}
             </Text>
-            <View style={styles.directionAnchor}>
-              {/* Status badge — shows the active pattern, purely informational,
-                  kept separate from the settings icon below so the two don't
-                  read as one confusing combined tap target. */}
-              <View style={[styles.directionBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.xl }]}>
-                <Ionicons
-                  name={scanDirection === 'up' || scanDirection === 'down' ? 'swap-vertical-outline' : 'swap-horizontal-outline'}
-                  size={14}
-                  color={tokens.accentBlue.strong}
-                />
-                <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                  {scanDirection === 'up' || scanDirection === 'down' ? 'Vertical' : 'Horizontal'}
-                  {scanScope === 'bay' ? ' · Each Bay' : ' · Whole Rack'}
-                </Text>
-                <Ionicons name={scanDirectionArrowIcon(scanDirection)} size={14} color={tokens.accentBlue.strong} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {/* Scope dropdown — the only actual control up here; the
+                  From/Pattern controls live in the toolbar at the bottom
+                  of the canvas instead of a settings icon/modal. */}
+              <View>
+                <Pressable
+                  onPress={() => setScopeMenuOpen((v) => !v)}
+                  style={[dirToolbarStyles.scopeBtn, { borderColor: scopeMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.lg }]}
+                >
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{scanScope === 'bay' ? "Bay's Level" : 'Bay wise'}</Text>
+                  <Ionicons name={scopeMenuOpen ? 'chevron-up' : 'chevron-down'} size={14} color={tokens.mutedForeground} />
+                </Pressable>
+                {scopeMenuOpen ? (
+                  <InlineDropdown
+                    options={[
+                      { value: 'bay', label: "Bay's Level" },
+                      { value: 'rack', label: 'Bay wise' },
+                    ]}
+                    selectedValue={scanScope}
+                    onSelect={(v) => {
+                      setScanScope(v as ScanScope);
+                      setScopeMenuOpen(false);
+                    }}
+                  />
+                ) : null}
               </View>
-              {/* Settings icon — the actual tap target that opens the centered Scan Direction modal. */}
-              <Pressable
-                onPress={() => setDirectionMenuOpen((v) => !v)}
-                style={[styles.directionSettingsBtn, { borderColor: directionMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.lg }]}
-              >
-                <Ionicons name="options-outline" size={16} color={tokens.foreground} />
-              </Pressable>
-              <ScanDirectionMenu
-                visible={directionMenuOpen}
-                direction={scanDirection}
-                scope={scanScope}
-                onSelectScope={setScanScope}
-                onSelect={(d) => {
-                  setScanDirection(d);
-                  setDirectionMenuOpen(false);
-                }}
-                onClose={() => setDirectionMenuOpen(false)}
-              />
+              {/* Purely informational recap of the active pattern. */}
+              <View style={[styles.directionBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.xl }]}>
+                <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                  {scanScope === 'bay' ? "Bay's Level" : 'Bay wise'} · {scanFrom === 'left' ? 'Left' : 'Right'}-{scanPattern === 'last' ? 'Last' : 'First'}-
+                  {scanVertical === 'up' ? 'Up' : 'Down'}
+                </Text>
+              </View>
             </View>
           </View>
           <View style={styles.diagramBody}>
@@ -1188,6 +1176,16 @@ export function RackViewScreen() {
                 </Pressable>
               </View>
             ) : null}
+            <ScanDirectionToolbar
+              from={scanFrom}
+              pattern={scanPattern}
+              vertical={scanVertical}
+              onSetFrom={setScanFrom}
+              onSetPattern={(p, v) => {
+                setScanPattern(p);
+                setScanVertical(v);
+              }}
+            />
           </View>
         </Card>
 
@@ -1975,193 +1973,131 @@ function RackCell({
   );
 }
 
-// The canvas header's Scan Direction control — a centered modal (matching
-// this screen's other modals, e.g. the Unresolved Locations one), not an
-// anchored popover. Mode first, direction second — a bare 4-way D-pad
-// conflates "which pattern" with "which end it starts from" into one
-// ambiguous gesture, so this splits them: a Horizontal/Vertical tab picks
-// the real-world pattern (no-MHE sweeping every bay one level at a time,
-// vs. MHE clearing one bay fully before the fork moves), then two
-// clearly-labeled rows pick which end that pattern starts from.
-function ScanDirectionMenu({
-  visible,
-  direction,
-  scope,
-  onSelectScope,
-  onSelect,
-  onClose,
+// Replaces the old settings-icon + centered-modal Scan Direction control —
+// a persistent bottom toolbar on the canvas itself (never hidden behind a
+// tap), matching the reference: a From Left/Right pair, a 4-way Pattern
+// group (combining vertical direction with raster-vs-snake), and a scope
+// dropdown. Always visible, whether or not the Reconciliation Form panel
+// is open, since the pattern matters just as much while still picking the
+// first pallet as it does mid-audit.
+// Just the From/Pattern controls — Scope now lives in the canvas header
+// next to the info pill, not down here.
+function ScanDirectionToolbar({
+  from,
+  pattern,
+  vertical,
+  onSetFrom,
+  onSetPattern,
 }: {
-  visible: boolean;
-  direction: ScanDirection;
-  scope: ScanScope;
-  onSelectScope: (s: ScanScope) => void;
-  onSelect: (d: ScanDirection) => void;
-  onClose: () => void;
+  from: ScanFrom;
+  pattern: ScanPattern;
+  vertical: ScanVertical;
+  onSetFrom: (f: ScanFrom) => void;
+  onSetPattern: (p: ScanPattern, v: ScanVertical) => void;
 }) {
   const { tokens } = useTheme();
-  const [mode, setMode] = useState<'horizontal' | 'vertical'>(direction === 'up' || direction === 'down' ? 'vertical' : 'horizontal');
-  // A Modal's `visible` prop hides it without unmounting it, unlike the old
-  // conditional-render popover — so this component no longer gets a fresh
-  // mount (and fresh useState initializer) every time it opens. Re-derive
-  // the tab explicitly on each open instead, so it still always reflects
-  // whatever direction is actually active right now rather than whichever
-  // tab was left selected the last time this same instance was open.
-  useEffect(() => {
-    if (visible) setMode(direction === 'up' || direction === 'down' ? 'vertical' : 'horizontal');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
-  const rows: { value: ScanDirection; icon: keyof typeof Ionicons.glyphMap; label: string; desc: string }[] =
-    mode === 'horizontal'
-      ? [
-          {
-            value: 'right',
-            icon: 'arrow-forward',
-            label: 'Left → Right',
-            desc: scope === 'bay' ? 'Each bay: L1 slots left→right, then up a level, same every bay' : 'Bay 1 → last bay at L1, then reverse each level up',
-          },
-          {
-            value: 'left',
-            icon: 'arrow-back',
-            label: 'Right → Left',
-            desc: scope === 'bay' ? 'Each bay: L1 slots right→left, then up a level, same every bay' : 'Last bay → Bay 1 at L1, then reverse each level up',
-          },
-        ]
-      : [
-          {
-            value: 'up',
-            icon: 'arrow-up',
-            label: 'Bottom → Top',
-            desc: scope === 'bay' ? 'Each bay cleared L1 → top level, same every bay' : 'Bay 1 goes L1 → top level, then reverse each next bay',
-          },
-          {
-            value: 'down',
-            icon: 'arrow-down',
-            label: 'Top → Bottom',
-            desc: scope === 'bay' ? 'Each bay cleared top level → L1, same every bay' : 'Bay 1 goes top level → L1, then reverse each next bay',
-          },
-        ];
+  // Each pattern icon is a hooked return arrow — Last (snake) hooks
+  // FORWARD (continues in the direction of travel), First (raster) hooks
+  // BACK (returns to the starting side) — matching the reference exactly.
+  // The label's leading word tracks whichever main direction (Left/Right)
+  // is currently selected — only one sub-direction can be active at a
+  // time, same set of 4 either way, just relabeled to match.
+  const fromLabel = from === 'left' ? 'Left' : 'Right';
+  const patternButtons: { pattern: ScanPattern; vertical: ScanVertical; corner: 'right-up' | 'left-up' | 'right-down' | 'left-down'; label: string }[] = [
+    { pattern: 'last', vertical: 'up', corner: 'right-up', label: `${fromLabel}-Last-Up` },
+    { pattern: 'first', vertical: 'up', corner: 'left-up', label: `${fromLabel}-First-Up` },
+    { pattern: 'last', vertical: 'down', corner: 'right-down', label: `${fromLabel}-Last-Down` },
+    { pattern: 'first', vertical: 'down', corner: 'left-down', label: `${fromLabel}-First-Down` },
+  ];
   return (
-    <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={onClose}>
-        <Pressable
-          style={[menuStyles.wrap, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={menuStyles.head}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>Scan Direction</Text>
-              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>How Scan Next SKU walks the rack</Text>
-            </View>
-            <Pressable onPress={onClose} hitSlop={8} style={[menuStyles.closeBtn, { backgroundColor: tokens.muted }]}>
-              <Ionicons name="close" size={20} color={tokens.foreground} />
-            </Pressable>
-          </View>
-          <View style={[menuStyles.headDivider, { backgroundColor: tokens.border }]} />
-
-          <ScrollView contentContainerStyle={menuStyles.scrollBody} showsVerticalScrollIndicator={false}>
-            {/* Scope — whether the picked direction below governs the whole
-                rack (bays alternate, MHE-vs-no-MHE) or is applied fresh, the
-                same way, inside each bay on its own. No icons here — the
-                two choices read fine as plain text, and a full sentence
-                underneath spells out what each one actually does. */}
-            <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground }]}>Scope</Text>
-            <View style={[menuStyles.tabs, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-              <ToggleTab label="Whole Rack" active={scope === 'rack'} onPress={() => onSelectScope('rack')} />
-              <ToggleTab label="Each Bay" active={scope === 'bay'} onPress={() => onSelectScope('bay')} />
-            </View>
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 8 }}>
-              {scope === 'rack'
-                ? 'The direction switches from bay to bay as you move up each level.'
-                : 'Every bay is scanned the same way on its own — nothing alternates.'}
-            </Text>
-
-            {/* Pattern — Horizontal (sweeps every bay a level at a time) vs.
-                Vertical (clears one bay before moving to the next), stacked
-                one below the other as a plain radio choice, same as
-                Starting Point right below it. */}
-            <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Pattern</Text>
-            <View style={{ gap: 8 }}>
-              <RadioRow icon="arrow-forward" label="Horizontal" desc="Sweeps every bay one level at a time" active={mode === 'horizontal'} onPress={() => setMode('horizontal')} />
-              <RadioRow icon="arrow-up" label="Vertical" desc="Clears one bay fully before moving to the next" active={mode === 'vertical'} onPress={() => setMode('vertical')} />
-            </View>
-
-            {/* Starting Point — same stacked radio rows as Pattern. */}
-            <Text style={[menuStyles.groupLabel, { color: tokens.mutedForeground, marginTop: 18 }]}>Starting Point</Text>
-            <View style={{ gap: 8 }}>
-              {rows.map((row) => (
-                <RadioRow key={row.value} icon={row.icon} label={row.label} desc={row.desc} active={direction === row.value} onPress={() => onSelect(row.value)} />
-              ))}
-            </View>
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <View style={[dirToolbarStyles.row, { borderTopColor: tokens.border }]}>
+      <DirToolbarBtn customIcon={<BarArrowIcon pointing="left" color={from === 'right' ? tokens.primary : tokens.foreground} />} label="Right" active={from === 'right'} onPress={() => onSetFrom('right')} />
+      <DirToolbarBtn customIcon={<BarArrowIcon pointing="right" color={from === 'left' ? tokens.primary : tokens.foreground} />} label="Left" active={from === 'left'} onPress={() => onSetFrom('left')} />
+      <View style={[dirToolbarStyles.divider, { backgroundColor: tokens.border }]} />
+      {patternButtons.map((b) => (
+        <DirToolbarBtn
+          key={`${b.pattern}-${b.vertical}`}
+          customIcon={<CornerArrowIcon corner={b.corner} color={pattern === b.pattern && vertical === b.vertical ? tokens.primary : tokens.foreground} />}
+          label={b.label}
+          active={pattern === b.pattern && vertical === b.vertical}
+          onPress={() => onSetPattern(b.pattern, b.vertical)}
+        />
+      ))}
+    </View>
   );
 }
 
-// Shared borderless toggle button for Scope / Pattern / Starting Point — a
-// plain filled-background pill (no border, no radio dot), optionally with a
-// leading icon, so all three controls in this popup read as one family
-// instead of three different control types.
-function ToggleTab({
-  label,
+// Ionicons has no "arrow into a wall" glyph — a straight stroke with an
+// arrowhead on one end and a flat bar on the other — so this is drawn
+// directly as an SVG path to match the reference pixel-for-pixel instead
+// of approximating with a stock icon.
+function BarArrowIcon({ pointing, color }: { pointing: 'left' | 'right'; color: string }) {
+  return (
+    <Svg width={18} height={16} viewBox="0 0 24 24" fill="none">
+      {pointing === 'left' ? (
+        <>
+          <Path d="M20 12 H7" stroke={color} strokeWidth={2} strokeLinecap="round" />
+          <Path d="M11 7 L6 12 L11 17" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M20 5 V19" stroke={color} strokeWidth={2} strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <Path d="M4 12 H17" stroke={color} strokeWidth={2} strokeLinecap="round" />
+          <Path d="M13 7 L18 12 L13 17" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M4 5 V19" stroke={color} strokeWidth={2} strokeLinecap="round" />
+        </>
+      )}
+    </Svg>
+  );
+}
+
+// Same "sharp-cornered" hook shape the reference uses (an L-turn into an
+// arrowhead), not Ionicons' smoother return-up/return-down curves —
+// mirrored/flipped per corner rather than four separate hand-drawn paths.
+function CornerArrowIcon({ corner, color }: { corner: 'right-up' | 'left-up' | 'right-down' | 'left-down'; color: string }) {
+  // Base shape drawn as "right-up": foot at bottom-left, corner turn on
+  // the right, arrowhead pointing up. The other 3 corners are this exact
+  // same path, just reflected horizontally and/or vertically.
+  const flipX = corner === 'left-up' || corner === 'left-down';
+  const flipY = corner === 'right-down' || corner === 'left-down';
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ transform: [{ scaleX: flipX ? -1 : 1 }, { scaleY: flipY ? -1 : 1 }] }}>
+      <Path d="M4 18 H11 Q17 18 17 12 V6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M13 10 L17 6 L21 10" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// Icon and label are two separate elements, not one bordered pill — only
+// the icon square gets a border/fill for the active state; the label
+// underneath is plain text, same as the reference.
+function DirToolbarBtn({
   icon,
+  customIcon,
+  label,
   active,
   onPress,
 }: {
-  label: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  customIcon?: ReactNode;
+  label: string;
   active: boolean;
   onPress: () => void;
 }) {
   const { tokens } = useTheme();
   return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      style={({ pressed }) => [menuStyles.tab, { backgroundColor: active ? tokens.card : 'transparent', borderRadius: tokens.radius.sm, opacity: pressed ? 0.6 : 1 }]}
-    >
-      {icon ? <Ionicons name={icon} size={16} color={active ? tokens.primary : tokens.mutedForeground} /> : null}
-      <Text style={{ color: active ? tokens.foreground : tokens.mutedForeground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.xs }}>
+    <Pressable onPress={onPress} style={dirToolbarStyles.btnWrap}>
+      <View
+        style={[dirToolbarStyles.btn, { borderColor: active ? tokens.primary : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg }]}
+      >
+        {customIcon ?? (icon ? <Ionicons name={icon} size={16} color={active ? tokens.primary : tokens.foreground} /> : null)}
+      </View>
+      {/* No numberOfLines/truncation — the wrap is wide enough (and the
+          font small enough) that every label fits on one line, same as
+          the reference; clipping it to an ellipsis was the actual bug. */}
+      <Text style={{ color: active ? tokens.primary : tokens.mutedForeground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: 10, textAlign: 'center' }}>
         {label}
       </Text>
-    </Pressable>
-  );
-}
-
-// Plain circle-fill radio row — bordered, stacked one below the other,
-// used for both Pattern and Starting Point so they read as the same kind
-// of choice.
-function RadioRow({
-  icon,
-  label,
-  desc,
-  active,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  desc: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const { tokens } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      style={[menuStyles.radioRow, { borderColor: active ? tokens.primary : tokens.border, backgroundColor: active ? tokens.accentBlue.soft : tokens.card, borderRadius: tokens.radius.lg }]}
-    >
-      <View style={[menuStyles.radioRowIcon, { backgroundColor: '#fff', borderRadius: tokens.radius.xxl }]}>
-        <Ionicons name={icon} size={16} color={tokens.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: tokens.foreground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: tokens.text.sm }}>{label}</Text>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{desc}</Text>
-      </View>
-      <View style={[menuStyles.radioOuter, { borderColor: active ? tokens.primary : tokens.border }]}>
-        {active ? <View style={[menuStyles.radioInner, { backgroundColor: tokens.primary }]} /> : null}
-      </View>
     </Pressable>
   );
 }
@@ -2212,9 +2148,7 @@ const styles = StyleSheet.create({
   singleRow: { flex: 1 },
   splitRow: { flex: 1, flexDirection: 'row', gap: 16 },
   diagramHeadRow: { minHeight: 60, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
-  directionAnchor: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   directionBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12 },
-  directionSettingsBtn: { width: 36, height: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   diagramBody: { flex: 1, padding: 14 },
   diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
@@ -2296,17 +2230,10 @@ const styles = StyleSheet.create({
   pendingTabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 38, borderWidth: 1, paddingHorizontal: 8 },
 });
 
-const menuStyles = StyleSheet.create({
-  wrap: { width: '100%', maxWidth: 560, maxHeight: '85%', borderWidth: 1, padding: 22 },
-  head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  headDivider: { height: StyleSheet.hairlineWidth, marginTop: 14 },
-  scrollBody: { paddingTop: 16 },
-  groupLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  tabs: { flexDirection: 'row', gap: 3, padding: 4 },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 9, minHeight: 44 },
-  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 56 },
-  radioRowIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  radioOuter: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  radioInner: { width: 9, height: 9, borderRadius: 4.5 },
+const dirToolbarStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 14, marginTop: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  divider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 4, marginHorizontal: 2 },
+  btnWrap: { alignItems: 'center', gap: 6, width: 76 },
+  btn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  scopeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12, borderWidth: 1 },
 });
