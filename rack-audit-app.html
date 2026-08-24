@@ -3682,10 +3682,10 @@ function renderRackViewDirToolbar(){
   const rv = STATE.rackView;
   const fromLabel = rv.from === 'left' ? 'Left' : 'Right';
   const patternButtons = [
-    { pattern:'last', vertical:'up', corner:'right-up', label:`${fromLabel}-Last-Up` },
     { pattern:'first', vertical:'up', corner:'left-up', label:`${fromLabel}-First-Up` },
-    { pattern:'last', vertical:'down', corner:'right-down', label:`${fromLabel}-Last-Down` },
+    { pattern:'last', vertical:'up', corner:'right-up', label:`${fromLabel}-Last-Up` },
     { pattern:'first', vertical:'down', corner:'left-down', label:`${fromLabel}-First-Down` },
+    { pattern:'last', vertical:'down', corner:'right-down', label:`${fromLabel}-Last-Down` },
   ];
   const dirBtn = (iconSvg, label, active, onclick) => `
     <button type="button" class="rv-dir-btn ${active ? 'active' : ''}" onclick="${onclick}">
