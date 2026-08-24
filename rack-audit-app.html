@@ -576,7 +576,7 @@
   .qs-toolbar-strip{display:flex; align-items:center; gap:6px; padding:8px 20px; font-size:var(--text-xs); font-weight:600; color:var(--muted-foreground); background:var(--muted); border-bottom:1px solid var(--border);}
   .qs-toolbar-strip svg{flex-shrink:0;}
   .qs-toolbar-strip.pin{background:var(--rag-amber-soft); color:var(--rag-amber-strong); font-weight:700;}
-  .qs-canvas{flex:1;}
+  .qs-canvas{flex:1; min-width:0; overflow:auto;}
 
   .acc-section{border-bottom:1px solid var(--border); padding:14px 0;}
   .acc-section:last-child{border-bottom:none; padding-bottom:0;}
@@ -687,7 +687,7 @@
      diagram rows that ran even slightly past the card's estimated height.
      Rounded-corner clipping is done per-corner on the header/body children
      below instead, so content can never be silently cut off. */
-  .rv-diagram-card{padding:0; flex:1; min-height:0; display:flex; flex-direction:column; border-radius:var(--radius-lg);}
+  .rv-diagram-card{padding:0; flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; border-radius:var(--radius-lg);}
   .rv-diagram-header{padding:9px 18px; background:var(--muted); border-bottom:1px solid var(--border); font-weight:700; font-size:var(--text-base); color:var(--foreground); flex-shrink:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
   .rv-header-right{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   /* Scope pill ("Bay's Level" / "Bay wise") — the only control left in the
@@ -796,9 +796,16 @@
      container) rather than the viewport, so it stays inside the simulated
      device on both phone and tablet widths instead of a fixed overlay that
      would ignore the frame. Full-width on phone, fixed column on tablet. */
+  /* Still used by Warehouse Map's rack/floor-area/aisle sheets (genuine
+     modal popups there) — just no longer by the Reconciliation Form below,
+     which sits side by side with its canvas instead of overlaying it. */
   .rv-sku-panel-backdrop{position:absolute; inset:0; z-index:60; background:rgba(10,14,15,.4);}
-  .rv-sku-panel{position:absolute; top:0; right:0; bottom:0; z-index:61; width:100%; max-width:530px; background:var(--card); box-shadow:-8px 0 24px rgba(15,23,42,.18); display:flex; flex-direction:column; transform:translateX(0); animation:rv-sku-panel-in .18s ease;}
-  @keyframes rv-sku-panel-in{from{transform:translateX(100%);} to{transform:translateX(0);}}
+  /* Canvas + Reconciliation Form sit SIDE BY SIDE, both full height — not an
+     overlay/backdrop popup covering the canvas — matching the RN
+     reference's Card-based split layout exactly. */
+  .body-pad.rv-split-row{flex-direction:row; align-items:stretch;}
+  .rv-sku-panel{position:static; flex:0 0 420px; max-width:420px; min-height:0; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-card); display:flex; flex-direction:column;}
+  @media (max-width:960px){ .rv-sku-panel{flex-basis:360px;} }
   .rv-sku-panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); flex-shrink:0; position:sticky; top:0; z-index:2; background:var(--card);}
   .rv-sku-panel-head h3{font-size:var(--text-lg); font-weight:800; margin:0 0 4px;}
   .rv-sku-panel-sub{font-size:var(--text-xs); font-weight:600; color:var(--muted-foreground);}
@@ -4180,8 +4187,7 @@ function renderRackViewSkuPanel(){
   const alreadyReported = manual && locObj && locObj.pallets.some(p => p.saved);
   const showSummary = manual && alreadyReported && !scan.manualReviewExpanded;
   return `
-    <button type="button" class="rv-sku-panel-backdrop" onclick="cancelRackViewSkuScan()" aria-label="Close"></button>
-    <div class="rv-sku-panel" onclick="event.stopPropagation()">
+    <div class="rv-sku-panel">
       <div class="rv-sku-panel-head">
         <div>
           <h3>${manual ? 'Manual Issue Report' : 'Reconciliation Form'}</h3>
@@ -4737,7 +4743,7 @@ function renderRackView(){
     ${headerBlock({ title: a.audit_name, sub: a.audit_id, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="rv-toolbar-row">${topFields}</div>
     ${manualBanner}
-    <div class="body-pad">
+    <div class="body-pad rv-split-row">
       <div class="card rv-diagram-card">
         <div class="rv-diagram-header">
           <span>Front View — Rack ${rackObj.code}${rackObj.bays.length > 1 ? ` — ${rackObj.bays.length} Bays` : ''}</span>
@@ -4752,8 +4758,8 @@ function renderRackView(){
         </div>
         ${renderRackViewDirToolbar()}
       </div>
+      ${renderRackViewSkuPanel()}
     </div>
-    ${renderRackViewSkuPanel()}
   `;
 }
 
@@ -5628,8 +5634,7 @@ function renderQuickScanForm(){
   const label = pinRequired ? 'Pin Required' : it.matched === false ? 'Location Mismatch' : it.matched === true ? 'Matched' : 'No Expectation on Record';
   const locLabel = it.origin === 'rack' ? quickScanLocationLabel(it) : (it.pinnedZone || (pinRequired ? 'Not pinned yet' : '—'));
   return `
-    <button type="button" class="rv-sku-panel-backdrop" onclick="quickScanCancel()" aria-label="Close"></button>
-    <div class="rv-sku-panel" onclick="event.stopPropagation()">
+    <div class="rv-sku-panel">
       <div class="rv-sku-panel-head">
         <div>
           <h3>Reconciliation Form</h3>
@@ -5817,10 +5822,10 @@ function renderQuickScan(){
     ${headerBlock({ title:'Quick Scan', sub:'Zone / Rack / Floor canvas', showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     ${modeRow}
     ${toolbarStrip}
-    <div class="body-pad qs-canvas">
-      ${canvasHtml}
+    <div class="body-pad rv-split-row">
+      <div class="qs-canvas">${canvasHtml}</div>
+      ${renderQuickScanForm()}
     </div>
-    ${renderQuickScanForm()}
     ${renderTabBar('scan')}
   `;
 }
