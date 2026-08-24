@@ -619,6 +619,12 @@
   /* Sized so the whole Rack View screen (header + toolbar + this diagram +
      footer) fits within the tablet frame without the page scrolling — cell
      height/padding are deliberately compact (was 28px cells, now 16px). */
+  /* Whole-rack canvas — every bay as its own column, side by side and
+     horizontally scrollable, instead of only ever drawing whichever single
+     bay the toolbar picker happens to have selected. */
+  .rack-diagram-multibay{display:flex; align-items:flex-end; gap:28px; padding:2px 4px;}
+  .rack-diagram-bay-col{display:flex; flex-direction:column; align-items:center; flex-shrink:0;}
+  .rack-diagram-bay-col.active .rack-diagram-caption{color:var(--primary); font-weight:800;}
   .rack-diagram-card{display:flex; justify-content:center; padding:6px 0 2px;}
   .rack-diagram{display:flex; flex-direction:column;}
   .rack-diagram-row{display:flex; align-items:center; gap:8px;}
@@ -3731,44 +3737,58 @@ function renderRackViewManualToggle(){
   `;
 }
 
-// Renders one bay's diagram — cells colored/ordered per the current Scan
-// Direction settings (from/pattern/vertical/scope) and Manual Mode.
-// `rackObj` supplies every bay in the rack so scope 'rack' ("Bay wise") can
-// compute a whole-rack scan order even though only one bay's grid is drawn
-// here at a time.
+// Renders the WHOLE rack's diagram — every bay side by side in one
+// horizontally-scrollable row (matching the RN reference's full-rack Front
+// View canvas), not just the toolbar's currently-picked bay. Cells are
+// colored/ordered per the current Scan Direction settings (from/pattern/
+// vertical/scope) and Manual Mode. `bayObj` still marks which bay's caption
+// is highlighted as "active" (whatever the Bay picker/toolbar has selected).
 function buildBayDiagram(bayObj, selectedLocCode, rackObj){
   const rv = STATE.rackView;
-  const rows = buildBayDiagramRows(bayObj);
   const bays = rackObj ? rackObj.bays : [bayObj];
-  const bayDiagrams = bays.map(b => ({ bay: b, rows: b.code === bayObj.code ? rows : buildBayDiagramRows(b) }));
+  const bayDiagrams = bays.map(b => ({ bay: b, rows: buildBayDiagramRows(b) }));
   const scanOrder = buildScanOrder({ from: rv.from, pattern: rv.pattern, vertical: rv.vertical, scope: rv.scope }, bayDiagrams, bayObj.code);
   const orderIndex = new Map(scanOrder.map((loc, i) => [loc.code, i + 1]));
-  const rowsHtml = rows.map(row => {
-    const cells = row.cells.map(loc => {
-      if (!loc) return `<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`;
-      const isSelected = loc.code === selectedLocCode;
-      const manualOnly = isRackViewManualOnly(loc.code);
-      const selectable = isRackViewLocSelectable(loc.code);
-      const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : '', manualOnly ? 'manual-only' : '', !selectable ? 'locked' : ''].filter(Boolean).join(' ');
-      const order = orderIndex.get(loc.code);
-      const badge = order ? `<span class="order-badge">${order}</span>` : '';
-      const action = selectable ? ` onclick="selectRackViewLoc('${loc.code}')"` : ' disabled';
-      return `<button type="button" class="${cls}" title="${loc.code} · ${loc.status}${manualOnly ? ' · Manual Mode only' : ''}" aria-label="${loc.code}"${action}>${badge}</button>`;
+
+  const bayColsHtml = bayDiagrams.map(({ bay, rows }) => {
+    const rowsHtml = rows.map(row => {
+      const cells = row.cells.map(loc => {
+        if (!loc) return `<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`;
+        const isSelected = loc.code === selectedLocCode;
+        const manualOnly = isRackViewManualOnly(loc.code);
+        const selectable = isRackViewLocSelectable(loc.code);
+        const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : '', manualOnly ? 'manual-only' : '', !selectable ? 'locked' : ''].filter(Boolean).join(' ');
+        const order = orderIndex.get(loc.code);
+        const badge = order ? `<span class="order-badge">${order}</span>` : '';
+        const action = selectable ? ` onclick="selectRackViewLoc('${loc.code}')"` : ' disabled';
+        return `<button type="button" class="${cls}" title="${loc.code} · ${loc.status}${manualOnly ? ' · Manual Mode only' : ''}" aria-label="${loc.code}"${action}>${badge}</button>`;
+      }).join('');
+      return `<div class="rack-diagram-row"><span class="rack-diagram-row-label">L${row.level}</span><div class="rack-diagram-row-cells">${cells}</div></div>`;
     }).join('');
-    return `<div class="rack-diagram-row"><span class="rack-diagram-row-label">L${row.level}</span><div class="rack-diagram-row-cells">${cells}</div></div>`;
+    return `
+      <div class="rack-diagram-bay-col${bay.code === bayObj.code ? ' active' : ''}">
+        <div class="rack-diagram-card"><div class="rack-diagram">${rowsHtml}</div></div>
+        <div class="rack-diagram-caption">Bay ${bay.code}</div>
+      </div>
+    `;
   }).join('');
-  return `
-    <div class="rack-diagram-card">
-      <div class="rack-diagram">${rowsHtml}</div>
-    </div>
-    <div class="rack-diagram-caption">Bay ${bayObj.code}</div>
-  `;
+
+  return `<div class="rack-diagram-multibay">${bayColsHtml}</div>`;
 }
 
+// Selecting a location — now that the canvas draws every bay in the rack
+// side by side, the tapped cell might belong to a DIFFERENT bay than
+// whatever the toolbar's Bay field currently shows. Sync the Bay field to
+// the tapped location's actual bay (same rule the RN reference's
+// selectLocation follows) instead of leaving it stale.
 function selectRackViewLoc(code){
   if (!isRackViewLocSelectable(code)) return;
+  const { auditId, layout, rack } = STATE.params;
+  const rackObj = findRackIn(auditId, layout, rack);
+  const ownerBay = rackObj && rackObj.bays.find(b => b.locations.some(l => l.code === code));
   STATE.rackViewClickedLoc = code;
   STATE.params.loc = code;
+  if (ownerBay) STATE.params.bay = ownerBay.code;
   render();
 }
 function cancelRackViewSelection(){ STATE.rackViewClickedLoc = null; STATE.params.loc = null; render(); }
@@ -4608,7 +4628,7 @@ function renderRackView(){
   const layouts = layoutsOf(auditId);
   const layoutObj = findLayoutIn(auditId, layout) || layouts[0];
   const rackObj = (layoutObj && findRackIn(auditId, layoutObj.name, rack)) || (layoutObj && layoutObj.racks[0]);
-  const bayObj = (rackObj && rackObj.bays.find(b => b.code === bay)) || (rackObj && rackObj.bays[0]);
+  let bayObj = (rackObj && rackObj.bays.find(b => b.code === bay)) || (rackObj && rackObj.bays[0]);
   if (!layoutObj || !rackObj || !bayObj) return renderAuditDetails();
   // Keep STATE.params in sync with whatever was actually resolved above —
   // the Rack/Bay picker list functions (rackViewPickerBayListHtml etc.) read
@@ -4617,28 +4637,39 @@ function renderRackView(){
   STATE.params.rack = rackObj.code;
   STATE.params.bay = bayObj.code;
 
+  // The canvas now draws every bay in the rack at once (not just whichever
+  // one the toolbar's Bay field points at), so a selection can legitimately
+  // belong to any bay in this rack — collect all of them, and key "have we
+  // landed on a fresh rack" by rack only, not bay, or picking a location in
+  // a different bay (which syncs the Bay field, see selectRackViewLoc) would
+  // immediately wipe out that very selection on the next render.
+  const rackLocations = rackObj.bays.flatMap(b => b.locations);
+
   // Nothing is highlighted until the inspector actually taps a cell — UNLESS
   // a specific location was passed in via STATE.params.loc (e.g. Dashboard's
   // Resume Audit, which deep-links straight to the last-touched location),
   // in which case that location is auto-selected and its Reconciliation
-  // Form opens immediately, same as the RN reference. Landing on this bay
-  // fresh (a new auditId/layout/rack/bay combo) without a loc param still
-  // clears any selection left over from a previously viewed bay.
-  const seedKey = `${auditId}|${layoutObj.name}|${rackObj.code}|${bayObj.code}`;
+  // Form opens immediately, same as the RN reference. Landing on this rack
+  // fresh (a new auditId/layout/rack combo) without a loc param still clears
+  // any selection left over from a previously viewed rack.
+  const seedKey = `${auditId}|${layoutObj.name}|${rackObj.code}`;
   if (STATE._rackViewSeedKey !== seedKey) {
     STATE._rackViewSeedKey = seedKey;
-    const deepLoc = STATE.params.loc && bayObj.locations.some(l => l.code === STATE.params.loc) ? STATE.params.loc : null;
+    const deepLoc = STATE.params.loc && rackLocations.some(l => l.code === STATE.params.loc) ? STATE.params.loc : null;
     STATE.rackViewClickedLoc = deepLoc;
     if (deepLoc) {
-      ensureScanState(auditId, layoutObj.name, rackObj.code, bayObj.code, deepLoc, findLoc(auditId, layoutObj.name, rackObj.code, bayObj.code, deepLoc));
+      const deepBay = rackObj.bays.find(b => b.locations.some(l => l.code === deepLoc));
+      STATE.params.bay = deepBay.code;
+      bayObj = deepBay;
+      ensureScanState(auditId, layoutObj.name, rackObj.code, deepBay.code, deepLoc, findLoc(auditId, layoutObj.name, rackObj.code, deepBay.code, deepLoc));
       STATE.scan.qtyEditing = false;
       STATE.scan.damageEditing = false;
       STATE.scan.manualReviewExpanded = false;
       STATE.rackViewSkuPanelOpen = true;
     }
   }
-  const selectedCode = bayObj.locations.find(l => l.code === STATE.rackViewClickedLoc) ? STATE.rackViewClickedLoc : null;
-  const selectedLoc = bayObj.locations.find(l => l.code === selectedCode);
+  const selectedCode = rackLocations.find(l => l.code === STATE.rackViewClickedLoc) ? STATE.rackViewClickedLoc : null;
+  const selectedLoc = rackLocations.find(l => l.code === selectedCode);
 
   const picker = STATE.rackViewPicker;
   const rackDropdown = picker && picker.field === 'rack' ? `
