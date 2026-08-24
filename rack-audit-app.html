@@ -733,6 +733,58 @@
   .rv-dir-btn.active .lbl{color:var(--primary); font-weight:800;}
   .rv-dir-divider{width:1px; align-self:stretch; background:var(--border); margin:2px 8px;}
 
+  /* ---- Reconciliation Form (Rack View SKU panel) — ported from RN's
+     RackViewScreen.tsx skuPanel block: location-details box, pallet
+     condition, dotted scan target, Matched/Mismatch compare, and two
+     independent field-cards (Quantity/Damage) each with its own status
+     pill, inline edit, Raise Issue, and evidence. ---- */
+  .rf-label-caps{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px;}
+  .rf-loc-box{display:flex; flex-direction:column; gap:6px; border:1px solid var(--border); border-radius:var(--radius-xl); padding:12px 14px; background:var(--card);}
+  .rf-detail-row{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:var(--text-sm);}
+  .rf-detail-row .lbl{color:var(--muted-foreground);}
+  .rf-detail-row .val{color:var(--foreground); font-weight:700;}
+  .rf-divider{height:1px; background:var(--border); margin:2px 0;}
+  .rf-field-card{border:1px solid var(--border); border-radius:var(--radius-xl); background:var(--card); overflow:hidden;}
+  .rf-field-card.plain{border:none;}
+  .rf-field-card-head{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; background:#F7F8FA; border-bottom:1px solid var(--border);}
+  .rf-field-card-head span.title{font-size:var(--text-sm); font-weight:700; color:var(--foreground);}
+  .rf-field-card-body{display:flex; flex-direction:column; gap:10px; padding:14px;}
+  .rf-cond-grid{display:flex; flex-wrap:wrap; gap:14px; margin-top:8px;}
+  .rf-cond-chip{display:flex; align-items:center; gap:7px; cursor:pointer; background:none; border:none; font:inherit; padding:0;}
+  .rf-radio-dot{width:16px; height:16px; border-radius:50%; border:2px solid var(--slate-400); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .rf-radio-dot.on{border-color:var(--primary);}
+  .rf-radio-dot .fill{width:8px; height:8px; border-radius:50%; background:var(--primary);}
+  .rf-cond-chip span.lbl{font-size:var(--text-xs); color:var(--foreground);}
+  .rf-scan-dotted{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:26px 14px; border:2px dashed var(--slate-400); border-radius:var(--radius-xl); background:none; width:100%; cursor:pointer;}
+  .rf-scan-dotted .icon-wrap{width:48px; height:48px; border-radius:50%; background:var(--primary); color:var(--primary-foreground); display:flex; align-items:center; justify-content:center;}
+  .rf-scan-dotted .icon-wrap svg{width:26px; height:26px;}
+  .rf-scan-dotted .lbl{font-size:var(--text-sm); font-weight:600; color:var(--foreground);}
+  .rf-scan-hint{font-size:var(--text-xs); color:var(--muted-foreground); text-align:center;}
+  .rf-no-scanner-row{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--muted-foreground); border-radius:var(--radius-lg); background:var(--slate-300);}
+  .rf-no-scanner-row span{font-size:var(--text-sm); font-weight:600; color:var(--foreground); flex:1;}
+  .rf-status-pill-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .rf-pill{padding:4px 10px; border-radius:var(--radius-lg); border:1px solid; font-size:var(--text-xs); font-weight:700;}
+  .rf-compare-row{display:flex; gap:10px;}
+  .rf-compare-col{flex:1; min-width:0; border:1px solid var(--border); border-radius:var(--radius-xl); background:var(--card); padding:12px;}
+  .rf-compare-col .cap{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.4px;}
+  .rf-compare-col .sku{font-size:var(--text-sm); font-weight:700; color:var(--foreground); margin-top:4px;}
+  .rf-compare-col .name{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:1px;}
+  .rf-compare-col .qty{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:5px;}
+  .rf-raise-issue{display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid; border-radius:var(--radius-lg); background:none; width:100%; cursor:pointer; font:inherit;}
+  .rf-raise-issue span.lbl{flex:1; font-weight:700; font-size:var(--text-sm); text-align:left;}
+  .rf-raise-issue span.tap{font-size:var(--text-xs); font-weight:600;}
+  .rf-raise-issue:disabled{cursor:default;}
+  .rf-field-value-row{display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; background:none; border:none; font:inherit; width:100%; padding:0; text-align:left;}
+  .rf-field-value-row .val{font-size:var(--text-sm); color:var(--foreground);}
+  .rf-edit-icon-btn{width:22px; height:22px; border-radius:var(--radius); background:var(--muted); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .rf-edit-icon-btn svg{width:14px; height:14px;}
+  .rf-qty-edit-row{display:flex; gap:8px; align-items:center;}
+  .rf-qty-edit-row input{flex:1; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--input-background); padding:8px 12px; font:inherit; font-size:var(--text-sm); color:var(--foreground);}
+  .rf-small-primary-btn{background:var(--primary); color:var(--primary-foreground); border:none; border-radius:var(--radius-lg); padding:8px 14px; font-weight:700; font-size:var(--text-xs); cursor:pointer; font:inherit;}
+  .rf-small-primary-btn:disabled{opacity:.5; cursor:default;}
+  .rf-manual-summary{display:flex; flex-direction:column; gap:4px; border:1px solid var(--border); border-radius:var(--radius-xl); background:var(--card); padding:14px; cursor:pointer; width:100%; text-align:left; font:inherit;}
+  .rf-manual-summary .tap{color:var(--primary); font-weight:600; font-size:var(--text-xs); margin-top:8px;}
+
   /* Right-side SKU panel — slides in over the Rack View screen after a scan.
      Anchored to .screen (position:relative, the device frame's own scroll
      container) rather than the viewport, so it stays inside the simulated
@@ -1357,6 +1409,16 @@ function expectedZoneForSku(sku){
   return null;
 }
 const CONDITIONS = ['Good','Damaged','Broken','Wet','Open Package','Other'];
+// Rack View Reconciliation Form's Damage field — ported from lib/types.ts's
+// ACTIVITY_PHASES/OBSERVATIONS_BY_PHASE (same 5 observations for every phase
+// for now, matching the RN source's own "swap in real per-phase lists once
+// they're defined" note).
+const ACTIVITY_PHASES = ['Installation', 'Operation & Maintenance', 'Design Discrepancy'];
+const OBSERVATIONS_BY_PHASE = {
+  'Installation': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+  'Operation & Maintenance': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+  'Design Discrepancy': ['Deformation', 'Visible Crack', 'Missing Baseplate', 'Deflection or Tilting up', 'Damaged or Sheared Anchor Bolt'],
+};
 // Same "Good" = unflagged split summaryStats() already uses for the Audit
 // Summary's flagged-items list — Damaged/Broken read as an outright defect
 // (red), Wet/Open Package/Other as needing a look but not necessarily bad
@@ -1899,6 +1961,13 @@ async function doLogin(){
   await loadAllData();
   STATE.authBusy = false; STATE.stack = ['dashboard']; saveNav(); render(); scrollTop();
 }
+// TEMP DEV-ONLY: skips real Supabase auth and enters with the built-in mock
+// AUDITS/LOCATIONS/INSPECTOR data (same fallback path doLogin() already takes
+// when `sb` isn't configured), so the app can be previewed without a Supabase
+// login. Remove before this build is considered production-ready.
+function devSkipLogin(){
+  STATE.stack = ['dashboard']; STATE.params = {}; saveNav(); render(); scrollTop();
+}
 
 function toast(msg, type){
   type = type || 'success'; // 'success' | 'error' | 'info'
@@ -1965,6 +2034,8 @@ const ICON = {
   pencil: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11 2.5l2.5 2.5-8 8L3 13.5l.5-2.5 8-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
   scan: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10.2" width="3.6" height="3.6" rx=".6" fill="currentColor"/></svg>',
   check: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  flag: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 3v18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 4h11l-2.5 4L16 12H5V4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   checkSm: '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevronDown: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevronUp: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -2072,6 +2143,7 @@ function renderLogin(){
           <div class="login-field"><label>Password</label><div class="login-input">${ICON.lock}<input type="password" placeholder="••••••••" value="${STATE.loginPassword}" oninput="STATE.loginPassword=this.value" onkeydown="if(event.key==='Enter') doLogin()" style="background:none; border:none; color:var(--foreground); font-size:var(--text-base); flex:1; min-width:0;" /></div></div>
           ${STATE.loginError ? `<div class="banner warn" style="width:100%; margin-bottom:13px;"><span class="dot"></span> ${STATE.loginError}</div>` : ''}
           <button class="login-btn" onclick="doLogin()" ${STATE.authBusy ? 'disabled' : ''}>${STATE.authBusy ? 'Logging in…' : 'Log in'}</button>
+          <button class="login-btn" style="background:var(--secondary); color:var(--foreground); border:1px dashed var(--border); margin-top:8px;" onclick="devSkipLogin()">Skip Login (Dev)</button>
           <div class="login-foot">Forgot password? Contact your supervisor</div>
         </div>
       </div>
@@ -3363,10 +3435,16 @@ function ensureScanState(auditId, layout, rack, bay, locCode, locObj){
   STATE.scan = { auditId, layout, rack, bay, loc:locCode, pallet: existing ? existing.pallet : null, lines: existing ? existing.lines.slice() : [], scanCount: 0 };
   STATE.expandedSavedPallet = null;
 }
+// Skips Audit Details entirely — straight into the Rack View canvas +
+// Reconciliation Form, picking up exactly where the inspector left off
+// (the last-touched location), same as the RN reference. Falls back to
+// the first bay with work left, then to Audit Details if nothing resolves.
 function resumeAudit(auditId){
   const ls = lastSaved(auditId);
-  if (ls) push('countSheet', { auditId, layout: ls.layout, rack: ls.rack, bay: ls.bay, loc: ls.loc.code });
-  else push('auditDetails', { auditId });
+  if (ls) { push('rackView', { auditId, layout: ls.layout, rack: ls.rack, bay: ls.bay, loc: ls.loc.code }); return; }
+  const next = nextPending(auditId);
+  if (next) { push('rackView', { auditId, layout: next.layout, rack: next.rack, bay: next.bay }); return; }
+  push('auditDetails', { auditId });
 }
 
 /* ================= COUNT SHEET ================= */
@@ -3448,113 +3526,6 @@ function renderScanLinesAccordion(scan, { withEvidence } = {}){
   `).join('');
 }
 
-// Rack View's Reconciliation Form checklist — splits results into SKU
-// Mismatch / Quantity Mismatch / Matched / Awaiting Scan (instead of one
-// generic mixed list) so the two different kinds of "doesn't match" are
-// never confused for each other. Only used here; Count Sheet keeps
-// renderScanLinesAccordion's plain collapsed-row/edit-card list untouched.
-function expectedGroupHeadHtml(label, count, iconSvg, ragVar){
-  const color = ragVar ? `var(--rag-${ragVar}-strong)` : 'var(--muted-foreground)';
-  return `<div style="display:flex; align-items:center; gap:6px; margin-top:14px;">
-    <span style="color:${color}; display:inline-flex;">${iconSvg}</span>
-    <span style="color:${color}; font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.4px;">${label} · ${count}</span>
-  </div>`;
-}
-function expectedQtyBadgeHtml(label, ragVar){
-  const border = ragVar ? `var(--rag-${ragVar}-border)` : 'var(--border)';
-  const color = ragVar ? `var(--rag-${ragVar}-strong)` : 'var(--muted-foreground)';
-  return `<span style="border:1px solid ${border}; border-radius:var(--radius-lg); padding:4px 8px; font-size:var(--text-xs); font-weight:700; color:${color}; background:var(--card); flex-shrink:0; white-space:nowrap;">${label}</span>`;
-}
-function expectedRowHtml({ icon, sku, sub, ragVar, badgesHtml, idx }){
-  const bg = ragVar ? `var(--rag-${ragVar}-soft)` : 'var(--muted)';
-  const border = ragVar ? `var(--rag-${ragVar}-border)` : 'var(--border)';
-  const iconColor = ragVar ? `var(--rag-${ragVar}-strong)` : '#667085';
-  return `
-    <div style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid ${border}; background:${bg}; border-radius:var(--radius-lg); margin-top:8px;">
-      <span style="color:${iconColor}; display:inline-flex; flex-shrink:0;">${icon}</span>
-      <div style="flex:1; min-width:0;">
-        <div style="font-weight:700; font-size:var(--text-sm); color:var(--foreground);">${sku}</div>
-        <div style="font-size:10.5px; color:var(--muted-foreground); margin-top:1px;">${sub}</div>
-      </div>
-      ${badgesHtml}
-      ${idx != null ? `<button type="button" class="icon-action-btn" onclick="editLine(${idx})" aria-label="Edit ${sku}">${ICON.pencil}</button>` : ''}
-    </div>
-  `;
-}
-function renderRackViewExpectedChecklist(scan){
-  const expectedSkus = EXPECTED_SKUS[scan.loc] || [];
-  const skuMismatchLines = scan.lines
-    .map((line, idx) => ({ line, idx }))
-    .filter(({ line }) => !expectedSkus.some(e => e.sku === line.sku));
-
-  if (!expectedSkus.length && !skuMismatchLines.length) {
-    return `<div style="color:var(--muted-foreground); font-size:var(--text-sm); text-align:center; padding:20px 0;">No SKUs scanned yet — use the scanner above.</div>`;
-  }
-
-  const scored = expectedSkus.map(exp => {
-    const foundIdx = scan.lines.findIndex(l => l.sku === exp.sku);
-    const found = foundIdx !== -1 ? scan.lines[foundIdx] : null;
-    const status = !found ? 'pending' : found.qty === exp.qty ? 'matched' : 'qtyMismatch';
-    return { exp, found, foundIdx, status };
-  });
-  const scannedCount = expectedSkus.length ? scan.lines.filter(l => expectedSkus.some(e => e.sku === l.sku)).length : 0;
-
-  let html = `
-    <div style="border:1px solid var(--border); border-radius:var(--radius-xl); background:var(--card); padding:14px;">
-      <div style="display:flex; align-items:center; gap:10px;">
-        <span style="width:28px; height:28px; border-radius:var(--radius-lg); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;">${ICON.box}</span>
-        <div style="flex:1; font-weight:700; font-size:var(--text-sm); color:var(--foreground);">Expected on this Pallet</div>
-        ${expectedSkus.length ? `<span style="background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-weight:700; font-size:var(--text-xs); padding:4px 10px; border-radius:var(--radius-lg);">${scannedCount}/${expectedSkus.length}</span>` : ''}
-      </div>
-  `;
-
-  if (skuMismatchLines.length) {
-    html += expectedGroupHeadHtml('SKU Mismatch — Unexpected Item', skuMismatchLines.length, ICON.close, 'red');
-    html += `<div style="font-size:10.5px; color:var(--muted-foreground); margin-top:3px;">Scanned, but this SKU isn't on the expected list for this pallet at all.</div>`;
-    skuMismatchLines.forEach(({ line, idx }) => {
-      html += expectedRowHtml({
-        icon: ICON.close, sku: line.sku, sub: `${line.name} · ${line.condition}`, ragVar: 'red', idx,
-        badgesHtml: expectedQtyBadgeHtml(`Scanned ${line.qty}`, 'red'),
-      });
-    });
-  }
-
-  const groupDefs = [
-    { key:'qtyMismatch', label:'Quantity Mismatch — Same SKU, Wrong Count', rag:'amber', icon: ICON.sync },
-    { key:'matched', label:'Matched', rag:'green', icon: ICON.check },
-    { key:'pending', label:'Awaiting Scan', rag:null, icon: ICON.dot },
-  ];
-  groupDefs.forEach(g => {
-    const items = scored.filter(s => s.status === g.key);
-    if (!items.length) return;
-    html += expectedGroupHeadHtml(g.label, items.length, g.icon, g.rag);
-    items.forEach(({ exp, found, foundIdx, status }) => {
-      const badgesHtml = status === 'pending'
-        ? expectedQtyBadgeHtml(`Exp ${exp.qty}`, null)
-        : `${expectedQtyBadgeHtml(`Exp ${exp.qty}`, null)}${expectedQtyBadgeHtml(`Actual ${found.qty}`, g.rag)}`;
-      html += expectedRowHtml({ icon: g.icon, sku: exp.sku, sub: exp.name, ragVar: g.rag, idx: found ? foundIdx : null, badgesHtml });
-    });
-  });
-
-  html += `</div>`;
-  return html;
-}
-// The single expanded line's own edit card (skuEditCardBody + evidence +
-// Save/Delete footer) — same markup renderScanLinesAccordion's active branch
-// uses, factored out so Rack View can show it standalone (replacing the
-// checklist entirely while a line is open) instead of alongside a full
-// collapsed-row list of every other line.
-function renderRackViewActiveLineCard(scan, idx){
-  const line = scan.lines[idx];
-  if (!line) return '';
-  return `
-    <div class="sku-card active">
-      ${skuEditCardBody(line, { qtySetter: v => `setQty(${idx}, ${v})`, condSetter: c => `setCondition(${idx}, '${c}')` })}
-      ${renderEvidenceBlock(idx, line)}
-      ${skuCardFooter('collapseLine()', `removeLine(${idx})`, 'Delete SKU')}
-    </div>
-  `;
-}
 /* ================= RACK VIEW (tablet-only) =================
    Reached from a bay pill on Audit Details — shows a schematic elevation of
    the tapped bay (levels stacked bottom-up, a fixed count of slots per
@@ -3812,8 +3783,15 @@ function scanSkuFromRackView(auditId, layout, rack, bay, locCode){
   const locObj = findLoc(auditId, layout, rack, bay, locCode);
   if (!locObj) return;
   ensureScanState(auditId, layout, rack, bay, locCode, locObj);
+  // Opening the panel no longer auto-scans — matching the RN reference,
+  // scanning is its own explicit step (the dotted "Tap to Scan SKU" target
+  // inside the panel), not something that fires the instant a pallet is
+  // selected on the canvas.
+  STATE.scan.qtyEditing = false;
+  STATE.scan.damageEditing = false;
+  STATE.scan.manualReviewExpanded = false;
   STATE.rackViewSkuPanelOpen = true;
-  scanSku();
+  render();
 }
 // The panel can hold a whole pallet's worth of SKUs, so Cancel just closes
 // it — undoing one SKU is the accordion card's own delete button
@@ -4010,7 +3988,8 @@ function resetImageAnnotations(){
 }
 function saveImageAttachment(){
   const m = STATE.imageAttachmentModal;
-  ensureEvidence(STATE.scan.lines[m.lineIdx]).images.push({ strokes: m.strokes });
+  const target = m.rvField ? rvEnsureFieldEvidence(rfLine(STATE.scan), m.rvField) : ensureEvidence(STATE.scan.lines[m.lineIdx]);
+  target.images.push({ strokes: m.strokes });
   closeImageAttachmentModal();
 }
 function drawImageAnnotationStroke(ctx, stroke){
@@ -4150,43 +4129,472 @@ function renderEvidenceBlock(idx, line){
   `;
 }
 
-// A single location can hold several pallets (P1, P2, P3 stacked at the same
-// level), and a single pallet can carry several SKUs — this panel is the
-// reconciliation record for whichever pallet is currently being scanned:
-// scan.pallet identifies it, scan.lines holds every SKU counted on it so far.
-// The scan icon in the header (not a close/X) re-runs scanSku() without
-// closing the panel, so a whole pallet's worth of SKUs can be counted in one
-// sitting without hunting for a scan action buried below a scrolling list of
-// already-counted SKU cards. Cancel/Save in the fixed footer close it.
+// Rack View's Reconciliation Form — rebuilt to match the RN reference's
+// current single-SKU-per-pallet model exactly: Selected Location Details,
+// pallet condition, a dotted "Tap to Scan SKU" target (scanning is its own
+// explicit step, not automatic on open), a Matched/Mismatch compare once
+// scanned, and two INDEPENDENT field-cards (Quantity, Damage) each with its
+// own status pill, inline edit, Raise Issue, and evidence. Manual Mode
+// shares this same shape but skips the Expected/Scanned compare (there's
+// nothing expected at an out-of-scope pallet) and collapses to a summary
+// card once already reported. NOT the same data model as Count Sheet's
+// renderScanLinesAccordion (multi-SKU-per-pallet) — that stays untouched;
+// only scan.lines[0] is ever read/written here.
+function rfLine(scan){ return (scan.lines && scan.lines[0]) || null; }
+function rfExpected(scan){ return (EXPECTED_SKUS[scan.loc] || [])[0] || null; }
+function rfFormIsManual(scan){ return STATE.rackView.manualMode && isRackViewManualOnly(scan.loc); }
+function rfSkuMatched(scan){ const line = rfLine(scan), exp = rfExpected(scan); return !!line && !!exp && line.sku === exp.sku; }
+function rfMisplaced(scan){ return !!rfLine(scan) && !rfFormIsManual(scan) && !rfSkuMatched(scan); }
+function rfPillHtml(label, rag){
+  return `<span class="rf-pill" style="background:var(--rag-${rag}-soft); border-color:var(--rag-${rag}-border); color:var(--rag-${rag}-strong);">${label}</span>`;
+}
+function rfDetailRow(label, value){
+  return `<div class="rf-detail-row"><span class="lbl">${label}</span><span class="val mono">${value}</span></div>`;
+}
+
 function renderRackViewSkuPanel(){
-  if (!STATE.rackViewSkuPanelOpen || !STATE.scan || !STATE.scan.lines.length) return '';
+  if (!STATE.rackViewSkuPanelOpen || !STATE.scan) return '';
   const scan = STATE.scan;
-  // Same activeIdx rule renderScanLinesAccordion uses — while a specific
-  // line is expanded for editing, the footer's left button should just back
-  // out to the checklist (like the line's own Save/collapseLine), not close
-  // the whole Reconciliation Form the way "Cancel" implies.
-  const activeIdx = scan.expandedIdx === -1 ? -1
-    : scan.lines.length ? Math.min(scan.expandedIdx ?? scan.lines.length - 1, scan.lines.length - 1) : -1;
-  const isEditingLine = activeIdx !== -1;
+  const manual = rfFormIsManual(scan);
+  const locObj = findLoc(scan.auditId, scan.layout, scan.rack, scan.bay, scan.loc);
+  const alreadyReported = manual && locObj && locObj.pallets.some(p => p.saved);
+  const showSummary = manual && alreadyReported && !scan.manualReviewExpanded;
   return `
     <button type="button" class="rv-sku-panel-backdrop" onclick="cancelRackViewSkuScan()" aria-label="Close"></button>
     <div class="rv-sku-panel" onclick="event.stopPropagation()">
       <div class="rv-sku-panel-head">
         <div>
-          <h3>${STATE.rackView.manualMode && isRackViewManualOnly(scan.loc) ? 'Manual Issue Report' : 'Reconciliation Form'}</h3>
+          <h3>${manual ? 'Manual Issue Report' : 'Reconciliation Form'}</h3>
           <div class="rv-sku-panel-sub mono">${scan.loc} · ${scan.pallet || 'New Pallet'}</div>
         </div>
-        <button type="button" class="card-icon-btn" onclick="scanSku()" title="Scan another SKU" aria-label="Scan another SKU">${ICON.qr}</button>
       </div>
       <div class="rv-sku-panel-body">
-        <div class="rv-sku-list">${isEditingLine ? renderRackViewActiveLineCard(scan, activeIdx) : renderRackViewExpectedChecklist(scan)}</div>
+        <div class="rf-label-caps">Selected Location Details</div>
+        <div class="rf-loc-box">
+          ${rfDetailRow('Location Code', scan.loc || '—')}
+          ${rfDetailRow('Rack', scan.rack || '—')}
+          ${rfDetailRow('Bay', scan.bay || '—')}
+          ${rfDetailRow('Pallet', scan.pallet || '—')}
+        </div>
+        <div class="rf-divider"></div>
+        <div class="rv-sku-list">${showSummary ? renderRfManualSummary(locObj) : renderRfBody(scan, manual)}</div>
       </div>
-      <div class="rv-sku-panel-footer">
-        <button type="button" class="btn outline" onclick="${isEditingLine ? 'collapseLine()' : 'cancelRackViewSkuScan()'}">${isEditingLine ? 'Back' : 'Cancel'}</button>
-        <button type="button" class="btn primary" onclick="saveRackViewSkuScan()">Save</button>
+      ${renderRfFooter(scan, manual, showSummary)}
+    </div>
+  `;
+}
+
+function renderRfBody(scan, manual){
+  const line = rfLine(scan);
+  let html = '';
+  if (!manual) {
+    html += `
+      <div class="rf-field-card plain">
+        <div class="rf-field-card-body" style="padding:0;">
+          <span style="font-weight:700; font-size:var(--text-sm); color:var(--foreground);">Is the pallet condition at this location good?</span>
+          <div class="rf-cond-grid">
+            ${[['Good', true], ['Not Good', false]].map(([label, val]) => {
+              const selected = scan.palletConditionGood === val;
+              return `<button type="button" class="rf-cond-chip" onclick="rvSetPalletCondition(${val})">
+                <span class="rf-radio-dot ${selected ? 'on' : ''}">${selected ? '<span class="fill"></span>' : ''}</span>
+                <span class="lbl">${label}</span>
+              </button>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  if (scan.noScannerFound) {
+    html += `<div class="rf-no-scanner-row">${ICON.warn}<span>Marked Empty — no scanner code found at this location</span></div>`;
+  }
+
+  if (!line && !scan.noScannerFound) {
+    html += `
+      <button type="button" class="rf-scan-dotted" onclick="rvScanSku()">
+        <span class="icon-wrap">${ICON.qr}</span>
+        <span class="lbl">Tap to Scan SKU</span>
+      </button>
+      <div class="rf-scan-hint">${manual ? 'Scans the SKU code on this pallet so you can report what you actually found here.' : "Scans the SKU code on the pallet at this location, then checks it against what's expected here."}</div>
+    `;
+  }
+
+  if (line) html += renderRfScannedSection(scan, manual);
+  return html;
+}
+
+function renderRfScannedSection(scan, manual){
+  const line = rfLine(scan);
+  const exp = rfExpected(scan);
+  const misplaced = rfMisplaced(scan);
+  const qtyChecked = line.qty != null;
+  const damageChecked = !!line.condition;
+  let html = '';
+
+  if (!manual) {
+    const primary = misplaced ? { label: 'Mismatch', rag: 'red' } : { label: 'Matched', rag: 'green' };
+    const qtyMismatch = !misplaced && qtyChecked && exp && line.qty !== exp.qty;
+    const conditionFlagged = !misplaced && damageChecked && line.condition !== 'Good';
+    html += `<div class="rf-status-pill-row">
+      ${rfPillHtml(primary.label, primary.rag)}
+      ${qtyMismatch ? rfPillHtml('Quantity Mismatch', 'amber') : ''}
+      ${conditionFlagged ? rfPillHtml('Damage Mismatch', 'amber') : ''}
+    </div>`;
+    html += `<div class="rf-compare-row">
+      <div class="rf-compare-col">
+        <div class="cap">Expected</div>
+        ${exp ? `<div class="sku">${exp.sku}</div><div class="name">${exp.name}</div><div class="qty">Qty ${exp.qty}</div>` : `<div class="name" style="margin-top:4px;">Nothing expected</div>`}
+      </div>
+      <div class="rf-compare-col">
+        <div class="cap">Scanned</div>
+        <div class="sku">${line.sku}</div><div class="name">${line.name}</div>
+        <div class="qty">Qty ${qtyChecked ? line.qty : '-'} · ${damageChecked ? line.condition : '-'}</div>
+      </div>
+    </div>`;
+  }
+
+  if (misplaced) {
+    const raised = !!line.skuIssueRaised;
+    html += `<button type="button" class="rf-raise-issue" style="background:var(--rag-${raised ? 'green' : 'red'}-soft); border-color:var(--rag-${raised ? 'green' : 'red'}-border); color:var(--rag-${raised ? 'green' : 'red'}-strong);" ${raised ? 'disabled' : ''} onclick="rvRaiseSkuIssue()">
+      ${raised ? ICON.check : ICON.flag}
+      <span class="lbl">${raised ? 'Issue raised for this SKU' : 'Raise Issue — wrong item scanned'}</span>
+      ${!raised ? '<span class="tap">Tap to raise</span>' : ''}
+    </button>`;
+  } else {
+    html += renderRfQtyField(scan, manual);
+    html += renderRfDamageField(scan, manual);
+  }
+  return html;
+}
+
+function renderRfQtyField(scan, manual){
+  const line = rfLine(scan);
+  const exp = rfExpected(scan);
+  const qtyChecked = line.qty != null;
+  const matchedQty = qtyChecked && exp && line.qty === exp.qty;
+  const showPill = !manual && qtyChecked;
+  const showRaise = manual ? qtyChecked : (qtyChecked && exp && line.qty !== exp.qty);
+  const raised = !!line.qtyIssueRaised;
+  return `
+    <div class="rf-field-card">
+      <div class="rf-field-card-head">
+        <span class="title">Issue For 1: Quantity</span>
+        ${showPill ? rfPillHtml(matchedQty ? 'Matched' : 'Mismatched', matchedQty ? 'green' : 'amber') : ''}
+      </div>
+      <div class="rf-field-card-body">
+        ${scan.qtyEditing ? `
+          <div class="rf-qty-edit-row">
+            <input type="number" inputmode="numeric" placeholder="Quantity you found" value="${scan.qtyInputText || ''}" oninput="STATE.scan.qtyInputText=this.value" autofocus>
+            <button type="button" class="rf-small-primary-btn" onclick="rvConfirmQty()">Confirm</button>
+          </div>
+        ` : `
+          <button type="button" class="rf-field-value-row" onclick="rvOpenQtyEdit()">
+            <span class="val">Qty found: <strong>${qtyChecked ? line.qty : '-'}</strong></span>
+            <span class="rf-edit-icon-btn">${qtyChecked ? ICON.pencil : ICON.plus}</span>
+          </button>
+        `}
+        ${showRaise ? `
+          <button type="button" class="rf-raise-issue" style="background:var(--rag-${raised ? 'green' : 'red'}-soft); border-color:var(--rag-${raised ? 'green' : 'red'}-border); color:var(--rag-${raised ? 'green' : 'red'}-strong);" ${raised ? 'disabled' : ''} onclick="rvRaiseFieldIssue('qty')">
+            ${raised ? ICON.check : ICON.flag}<span class="lbl">${raised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}</span>
+          </button>
+        ` : ''}
+        <div class="rf-label-caps" style="margin-bottom:0;">Evidence</div>
+        ${renderRvEvidenceBlock('qty', line)}
       </div>
     </div>
   `;
+}
+
+function renderRfDamageField(scan, manual){
+  const line = rfLine(scan);
+  const damageChecked = !!line.condition;
+  const showPill = !manual && damageChecked;
+  const matchedDamage = damageChecked && line.condition === 'Good';
+  const showRaise = damageChecked && line.condition !== 'Good';
+  const raised = !!line.damageIssueRaised;
+  return `
+    <div class="rf-field-card">
+      <div class="rf-field-card-head">
+        <span class="title">Issue For 2: Damage</span>
+        ${showPill ? rfPillHtml(matchedDamage ? 'Matched' : 'Mismatched', matchedDamage ? 'green' : 'amber') : ''}
+      </div>
+      <div class="rf-field-card-body">
+        ${scan.damageEditing ? `
+          <div class="rf-label-caps" style="margin-bottom:2px;">Activity Phase <span style="color:var(--rag-red-strong);">*</span></div>
+          <div class="rf-cond-grid" style="margin-top:0;">
+            ${ACTIVITY_PHASES.map(phase => {
+              const selected = scan.damagePhaseDraft === phase;
+              return `<button type="button" class="rf-cond-chip" onclick="rvSelectDamagePhase('${phase.replace(/'/g, "\\'")}')">
+                <span class="rf-radio-dot ${selected ? 'on' : ''}">${selected ? '<span class="fill"></span>' : ''}</span>
+                <span class="lbl">${phase}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <div class="rf-label-caps" style="margin-bottom:2px;">Observations <span style="color:var(--rag-red-strong);">*</span></div>
+          ${scan.damagePhaseDraft ? `
+            <div class="rf-cond-grid" style="margin-top:0;">
+              ${OBSERVATIONS_BY_PHASE[scan.damagePhaseDraft].map(obs => {
+                const selected = scan.damageObservationDraft === obs;
+                return `<button type="button" class="rf-cond-chip" onclick="rvSelectDamageObservation('${obs.replace(/'/g, "\\'")}')">
+                  <span class="rf-radio-dot ${selected ? 'on' : ''}">${selected ? '<span class="fill"></span>' : ''}</span>
+                  <span class="lbl">${obs}</span>
+                </button>`;
+              }).join('')}
+            </div>
+          ` : `<div style="font-size:var(--text-xs); color:var(--muted-foreground);">Pick an Activity Phase first.</div>`}
+          <button type="button" class="rf-small-primary-btn" style="align-self:flex-start;" ${(!scan.damagePhaseDraft || !scan.damageObservationDraft) ? 'disabled' : ''} onclick="rvConfirmDamage()">Confirm</button>
+        ` : `
+          <button type="button" class="rf-field-value-row" onclick="rvOpenDamageEdit()">
+            <div style="flex:1;">
+              <div class="val">Damage found: <strong>${damageChecked ? (line.observation || line.condition) : '-'}</strong></div>
+              ${damageChecked && line.activityPhase ? `<div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${line.activityPhase}</div>` : ''}
+            </div>
+            <span class="rf-edit-icon-btn">${damageChecked ? ICON.pencil : ICON.plus}</span>
+          </button>
+        `}
+        ${showRaise ? `
+          <button type="button" class="rf-raise-issue" style="background:var(--rag-${raised ? 'green' : 'red'}-soft); border-color:var(--rag-${raised ? 'green' : 'red'}-border); color:var(--rag-${raised ? 'green' : 'red'}-strong);" ${raised ? 'disabled' : ''} onclick="rvRaiseFieldIssue('damage')">
+            ${raised ? ICON.check : ICON.flag}<span class="lbl">${raised ? 'Issue raised for damage' : 'Raise Issue — damage'}</span>
+          </button>
+        ` : ''}
+        <div class="rf-label-caps" style="margin-bottom:0;">Evidence</div>
+        ${renderRvEvidenceBlock('damage', line)}
+      </div>
+    </div>
+  `;
+}
+
+function renderRfManualSummary(locObj){
+  const p = locObj && locObj.pallets.find(x => x.saved);
+  const line = p ? p.lines[0] : null;
+  if (!line) return '';
+  return `
+    <button type="button" class="rf-manual-summary" onclick="STATE.scan.manualReviewExpanded=true; render();">
+      ${rfPillHtml('Issue Raised', 'green')}
+      <div style="font-weight:700; font-size:var(--text-sm); color:var(--foreground); margin-top:2px;">${line.sku}</div>
+      <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:1px;">${line.name}</div>
+      <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:5px;">Qty ${line.qty} · ${line.condition}</div>
+      <div class="tap">Tap to see details</div>
+    </button>
+  `;
+}
+
+function renderRfFooter(scan, manual, showSummary){
+  const line = rfLine(scan);
+  if (manual) {
+    return `
+      <div class="rv-sku-panel-footer">
+        <button type="button" class="btn outline" onclick="cancelRackViewSkuScan()">Cancel</button>
+        <button type="button" class="btn primary" ${(!line || showSummary) ? 'disabled' : ''} onclick="rvSaveManualIssue()">${showSummary ? 'Issue Raised ✓' : 'Raise Issue'}</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="rv-sku-panel-footer">
+      <button type="button" class="btn outline" onclick="cancelRackViewSkuScan()">Cancel</button>
+      <button type="button" class="btn outline" ${scan.noScannerFound ? 'disabled' : ''} onclick="rvMarkEmpty()">${scan.noScannerFound ? 'Marked Empty' : 'Empty'}</button>
+      <button type="button" class="btn primary" ${(!line && !scan.noScannerFound) ? 'disabled' : ''} onclick="rvSaveAndScanNext()">Save & Scan Next</button>
+    </div>
+  `;
+}
+
+// Per-field evidence (independent Quantity/Damage evidence, not per-SKU-line
+// like Count Sheet's ensureEvidence/renderEvidenceBlock) — same visual/CSS
+// pattern (.rv-evidence*), keyed by field name ('qty'|'damage') instead of a
+// line index so it can't collide with the Count Sheet accordion's evidence.
+function rvEnsureFieldEvidence(line, field){
+  const key = field + 'Evidence';
+  if (!line[key]) line[key] = { note:'', noteOpen:false, audio:null, images:[], videos:[] };
+  return line[key];
+}
+function renderRvEvidenceBlock(field, line){
+  const ev = rvEnsureFieldEvidence(line, field);
+  return `
+    <div class="rv-evidence">
+      <div class="rv-evidence-row">
+        <span class="rv-evidence-label">Write a note or record an audio for the issue</span>
+        <div class="rv-evidence-btns">
+          <button type="button" class="card-icon-btn" title="Add note" aria-label="Add note" onclick="rvFocusEvidenceNote('${field}')">${ICON.pencil}</button>
+          <button type="button" class="card-icon-btn" title="Record audio" aria-label="Record audio" onclick="rvRecordEvidenceAudio('${field}')">${ICON.mic}</button>
+        </div>
+      </div>
+      ${(ev.noteOpen || ev.note) ? `<textarea class="rv-evidence-note" id="rv-evidence-note-${field}" placeholder="Add a note..." onchange="rvSetEvidenceNote('${field}', this.value)">${ev.note}</textarea>` : ''}
+      ${ev.audio ? `
+        <div class="rv-evidence-audio">
+          <button type="button" class="card-icon-btn" onclick="rvToggleEvidenceAudioPlay('${field}')" aria-label="${ev.audio.playing ? 'Pause' : 'Play'}">${ev.audio.playing ? ICON.pauseTri : ICON.playTri}</button>
+          <div class="rv-evidence-waveform">${ev.audio.bars.map(h => `<span style="height:${h}px;"></span>`).join('')}</div>
+          <span class="rv-evidence-duration">${ev.audio.durationSec}s</span>
+          <button type="button" class="card-icon-btn danger" onclick="rvRemoveEvidenceAudio('${field}')" aria-label="Delete audio">${ICON.trash}</button>
+        </div>
+      ` : ''}
+      <div class="rv-evidence-row">
+        <span class="rv-evidence-label">Click on upload image or capture video for the issue</span>
+        <div class="rv-evidence-btns">
+          <button type="button" class="card-icon-btn" title="Add photo" aria-label="Add photo" onclick="rvAddEvidenceImage('${field}')">${ICON.camera}</button>
+          <button type="button" class="card-icon-btn" title="Add video" aria-label="Add video" onclick="rvAddEvidenceVideo('${field}')">${ICON.video}</button>
+        </div>
+      </div>
+      ${ev.images.length ? `
+        <div class="rv-evidence-group">
+          <div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(ev.images.length).padStart(2, '0')}</span></div>
+          <div class="rv-evidence-thumbs">${ev.images.map((img, i) => `<button type="button" class="rv-evidence-thumb" onclick="rvRemoveEvidenceImage('${field}', ${i})" aria-label="Remove image">${ICON.image}</button>`).join('')}</div>
+        </div>
+      ` : ''}
+      ${ev.videos.length ? `
+        <div class="rv-evidence-group">
+          <div class="rv-evidence-group-head">${ICON.video} Video Attachments <span class="acc-badge">${String(ev.videos.length).padStart(2, '0')}</span></div>
+          <div class="rv-evidence-thumbs">${ev.videos.map((v, i) => `<button type="button" class="rv-evidence-thumb" onclick="rvRemoveEvidenceVideo('${field}', ${i})" aria-label="Remove video"><span class="dur">00:${v.durationSec}sec</span>${ICON.playTri}</button>`).join('')}</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+function rvFocusEvidenceNote(field){
+  rvEnsureFieldEvidence(rfLine(STATE.scan), field).noteOpen = true;
+  render();
+  const el = document.getElementById(`rv-evidence-note-${field}`);
+  if (el) el.focus();
+}
+function rvSetEvidenceNote(field, val){ rvEnsureFieldEvidence(rfLine(STATE.scan), field).note = val; }
+function rvRecordEvidenceAudio(field){
+  rvEnsureFieldEvidence(rfLine(STATE.scan), field).audio = { durationSec:20, playing:false, bars: generateWaveformBars() };
+  render();
+}
+function rvToggleEvidenceAudioPlay(field){
+  const ev = rvEnsureFieldEvidence(rfLine(STATE.scan), field);
+  if (!ev.audio) return;
+  ev.audio.playing = !ev.audio.playing;
+  render();
+}
+function rvRemoveEvidenceAudio(field){ rvEnsureFieldEvidence(rfLine(STATE.scan), field).audio = null; render(); }
+function rvAddEvidenceImage(field){
+  STATE.imageAttachmentModal = { rvField: field, color: ANNOTATION_COLORS[0], strokes: [], redoStack: [], drawMode: true };
+  render();
+}
+function rvRemoveEvidenceImage(field, i){ rvEnsureFieldEvidence(rfLine(STATE.scan), field).images.splice(i, 1); render(); }
+function rvAddEvidenceVideo(field){ rvEnsureFieldEvidence(rfLine(STATE.scan), field).videos.push({ durationSec:20 }); render(); }
+function rvRemoveEvidenceVideo(field, i){ rvEnsureFieldEvidence(rfLine(STATE.scan), field).videos.splice(i, 1); render(); }
+
+function rvSetPalletCondition(good){ STATE.scan.palletConditionGood = good; render(); }
+function rvMarkEmpty(){ STATE.scan.noScannerFound = true; STATE.scan.lines = []; render(); }
+function rvApplySkuResult(pick){
+  STATE.scan.lines = [{ sku: pick.sku, name: pick.name, lot: pick.lot }];
+  STATE.scan.noScannerFound = false;
+  render();
+}
+function rvScanSku(){
+  if (!IS_REAL_MOBILE) return rvScanSkuSimulated();
+  openCameraScan('Point at the SKU code', (text) => {
+    const code = text.trim();
+    const pick = INVENTORY_POOL.find(p => p.sku === code) || { sku:code, name:'Unlisted SKU', lot:'—' };
+    rvApplySkuResult(pick);
+  });
+}
+function rvScanSkuSimulated(){
+  const pick = INVENTORY_POOL[STATE.scan.scanCount % INVENTORY_POOL.length];
+  STATE.scan.scanCount++;
+  rvApplySkuResult(pick);
+}
+function rvOpenQtyEdit(){
+  const line = rfLine(STATE.scan);
+  STATE.scan.qtyInputText = line.qty != null ? String(line.qty) : '';
+  STATE.scan.qtyEditing = true;
+  render();
+}
+function rvConfirmQty(){
+  const line = rfLine(STATE.scan);
+  const n = parseInt(STATE.scan.qtyInputText, 10);
+  line.qty = isNaN(n) ? 0 : Math.max(0, n);
+  STATE.scan.qtyEditing = false;
+  render();
+}
+function rvOpenDamageEdit(){
+  const line = rfLine(STATE.scan);
+  STATE.scan.damagePhaseDraft = line.activityPhase || null;
+  STATE.scan.damageObservationDraft = line.observation || null;
+  STATE.scan.damageEditing = true;
+  render();
+}
+function rvSelectDamagePhase(phase){ STATE.scan.damagePhaseDraft = phase; STATE.scan.damageObservationDraft = null; render(); }
+function rvSelectDamageObservation(obs){ STATE.scan.damageObservationDraft = obs; render(); }
+function rvConfirmDamage(){
+  const line = rfLine(STATE.scan);
+  line.activityPhase = STATE.scan.damagePhaseDraft;
+  line.observation = STATE.scan.damageObservationDraft;
+  line.condition = 'Damaged';
+  STATE.scan.damageEditing = false;
+  render();
+}
+function rvRaiseSkuIssue(){ rfLine(STATE.scan).skuIssueRaised = true; render(); }
+function rvRaiseFieldIssue(field){ rfLine(STATE.scan)[field + 'IssueRaised'] = true; render(); }
+
+// Persists the current single-line pallet the same way Count Sheet's
+// saveRecord() does (same locObj.pallets shape, same Supabase count_records
+// insert), so Reported Audits/Progress keep working unchanged against
+// whatever Rack View saves here.
+function rvPersistPallet(){
+  const { auditId, layout, rack, bay, loc } = STATE.scan;
+  const locObj = findLoc(auditId, layout, rack, bay, loc);
+  const line = rfLine(STATE.scan);
+  const recordId = loc + '-' + (locObj.pallets.length + 1);
+  const savedLines = line ? [line] : [];
+  locObj.pallets.push({ pallet: recordId, lines: savedLines, saved: true });
+  locObj.status = 'Completed';
+  if (sb && locObj.db_id) {
+    if (savedLines.length) {
+      const rows = savedLines.map(l => ({
+        audit_id: auditId, location_id: locObj.db_id, pallet_id: recordId,
+        sku: l.sku, sku_name: l.name, lot: l.lot, qty: l.qty ?? 0, condition: l.condition || 'Good', saved: true,
+      }));
+      sb.from('count_records').insert(rows).select().then(({data, error}) => {
+        if (error) { syncWriteFailed(error); return; }
+        (data || []).forEach((row, i) => { if (savedLines[i]) savedLines[i].id = row.id; });
+      });
+    }
+    sb.from('locations').update({ status: locObj.status }).eq('id', locObj.db_id)
+      .then(({error}) => { if (error) syncWriteFailed(error); });
+  }
+  return locObj;
+}
+// Next pending location in the ACTIVE Scan Direction/Scope order (Phase 1's
+// buildScanOrder), not just "first not-completed" — so Save & Scan Next
+// actually follows whatever From/Pattern/Scope the toolbar has selected,
+// same as the RN reference's handleScanNext/handleSaveManualIssue.
+function rvNextInScanOrder(rackObj, currentLocCode){
+  const rv = STATE.rackView;
+  const bayDiagrams = rackObj.bays.map(b => ({ bay:b, rows: buildBayDiagramRows(b) }));
+  const currentBay = rackObj.bays.find(b => b.locations.some(l => l.code === currentLocCode));
+  const order = buildScanOrder({ from: rv.from, pattern: rv.pattern, vertical: rv.vertical, scope: rv.scope }, bayDiagrams, currentBay ? currentBay.code : rackObj.bays[0].code);
+  const idx = order.findIndex(l => l.code === currentLocCode);
+  const rest = idx === -1 ? order : order.slice(idx + 1);
+  return rest.find(l => l.status !== 'Completed' && isRackViewLocSelectable(l.code)) || null;
+}
+function rvAdvanceOrClose(auditId, layout, rack, currentLoc){
+  const rackObj = findRackIn(auditId, layout, rack);
+  const next = rackObj ? rvNextInScanOrder(rackObj, currentLoc) : null;
+  if (next) {
+    const nextBay = rackObj.bays.find(b => b.locations.some(l => l.code === next.code));
+    STATE.params.bay = nextBay.code;
+    scanSkuFromRackView(auditId, layout, rack, nextBay.code, next.code);
+  } else {
+    STATE.rackViewSkuPanelOpen = false;
+    toast('All locations in this rack counted');
+    render();
+  }
+}
+function rvSaveAndScanNext(){
+  const scan = STATE.scan;
+  if (!rfLine(scan) && !scan.noScannerFound) return;
+  rvPersistPallet();
+  toast('Record saved');
+  rvAdvanceOrClose(scan.auditId, scan.layout, scan.rack, scan.loc);
+}
+function rvSaveManualIssue(){
+  const scan = STATE.scan;
+  if (!rfLine(scan)) return;
+  rvPersistPallet();
+  toast('Issue raised');
+  rvAdvanceOrClose(scan.auditId, scan.layout, scan.rack, scan.loc);
 }
 
 function renderRackView(){
@@ -4209,14 +4617,25 @@ function renderRackView(){
   STATE.params.rack = rackObj.code;
   STATE.params.bay = bayObj.code;
 
-  // Nothing is highlighted until the inspector actually taps a cell — no
-  // auto-picked "first open location" default. Landing on this bay fresh
-  // (a new auditId/layout/rack/bay combo, e.g. via a bay pill elsewhere)
+  // Nothing is highlighted until the inspector actually taps a cell — UNLESS
+  // a specific location was passed in via STATE.params.loc (e.g. Dashboard's
+  // Resume Audit, which deep-links straight to the last-touched location),
+  // in which case that location is auto-selected and its Reconciliation
+  // Form opens immediately, same as the RN reference. Landing on this bay
+  // fresh (a new auditId/layout/rack/bay combo) without a loc param still
   // clears any selection left over from a previously viewed bay.
   const seedKey = `${auditId}|${layoutObj.name}|${rackObj.code}|${bayObj.code}`;
   if (STATE._rackViewSeedKey !== seedKey) {
     STATE._rackViewSeedKey = seedKey;
-    STATE.rackViewClickedLoc = null;
+    const deepLoc = STATE.params.loc && bayObj.locations.some(l => l.code === STATE.params.loc) ? STATE.params.loc : null;
+    STATE.rackViewClickedLoc = deepLoc;
+    if (deepLoc) {
+      ensureScanState(auditId, layoutObj.name, rackObj.code, bayObj.code, deepLoc, findLoc(auditId, layoutObj.name, rackObj.code, bayObj.code, deepLoc));
+      STATE.scan.qtyEditing = false;
+      STATE.scan.damageEditing = false;
+      STATE.scan.manualReviewExpanded = false;
+      STATE.rackViewSkuPanelOpen = true;
+    }
   }
   const selectedCode = bayObj.locations.find(l => l.code === STATE.rackViewClickedLoc) ? STATE.rackViewClickedLoc : null;
   const selectedLoc = bayObj.locations.find(l => l.code === selectedCode);
