@@ -409,9 +409,73 @@
   .issue-card-head .k{font-size:12.5px; font-weight:600; color:var(--foreground); text-transform:none;}
   .issue-head-icon{display:flex; flex-shrink:0; color:var(--accent-blue-strong);}
   .issue-head-icon svg{width:14px; height:14px;}
-  .issue-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; padding:14px;}
+  .issue-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; padding:14px 14px 0;}
   .issue-card-grid .todo-field .k{font-size:12px; font-weight:500; color:var(--muted-foreground); text-transform:none; letter-spacing:normal;}
   .issue-card-grid .todo-field .v{font-size:13.5px; font-weight:700; color:var(--foreground);}
+  /* Rounded, dot-free severity badge on the card header (Green/Amber/Red,
+     worst-of-its-lines) — reuses the same sev-* soft/strong tokens as
+     .severity-pill so it agrees visually with the condition pill used
+     elsewhere, just pinned to the right end of the header strip. */
+  .issue-card-head{position:relative;}
+  .issue-status-badge{margin-left:auto; flex-shrink:0; padding:5px 12px; border-radius:999px; font-size:11px; font-weight:800;}
+  .issue-status-badge.sev-green{background:var(--rag-green-soft); color:var(--rag-green-strong);}
+  .issue-status-badge.sev-amber{background:var(--rag-amber-soft); color:var(--rag-amber-strong);}
+  .issue-status-badge.sev-red{background:var(--rag-red-soft); color:var(--rag-red-strong);}
+  .issue-card-body{padding:0 14px 14px;}
+  .issue-audit-tag{font-size:10px; font-weight:700; color:var(--accent-blue-strong); margin:10px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  /* One row per SKU on the pallet — a reconciliation form can log several
+     SKUs under one LPN, so a pallet's card can carry more than one
+     independently-flagged line, each individually pressable into Issue
+     Details. */
+  .issue-sku-list{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+  .issue-sku-row{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:var(--radius-lg); background:none; text-align:left; font:inherit; cursor:pointer; color:inherit;}
+  .issue-sku-row:active{transform:scale(.98);}
+  .issue-sku-row-left{display:flex; flex-direction:column; gap:3px; min-width:0;}
+  .issue-sku-condition-row{display:flex; align-items:center; gap:5px; font-size:10.5px; color:var(--muted-foreground);}
+  .issue-sku-condition-row .dot{width:5px; height:5px; border-radius:999px; flex-shrink:0;}
+  .issue-sku-condition-row .dot.sev-red{background:var(--rag-red-strong);}
+  .issue-sku-condition-row .dot.sev-amber{background:var(--rag-amber-strong);}
+  .issue-sku-condition-row .dot.sev-green{background:var(--rag-green-strong);}
+
+  /* Section headers grouping the board's 3 cases (Mismatch SKUs / Matched
+     Qty-Damage / Manually Reported) — icon + title + count badge + a
+     one-line explainer, same shape as the reference's card-grid sections.
+     Each section renders nothing at all when its group is empty. */
+  .issue-section{margin-bottom:22px;}
+  .issue-section-head{display:flex; align-items:flex-start; gap:10px; margin-bottom:12px;}
+  .issue-section-icon{width:30px; height:30px; border-radius:var(--radius-lg); background:var(--accent-blue-soft); color:var(--accent-blue-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .issue-section-icon svg{width:16px; height:16px;}
+  .issue-section-title-row{display:flex; align-items:center; gap:8px;}
+  .issue-section-title{font-weight:800; font-size:var(--text-base); color:var(--foreground);}
+  .issue-section-count{background:var(--muted); color:var(--muted-foreground); font-weight:700; font-size:10px; padding:2px 9px; border-radius:999px;}
+  .issue-section-subtitle{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:1px;}
+
+  /* Persistent active-filter chip strip — rendered as its own card below the
+     toolbar (not inline chips inside the toolbar row) whenever any filter is
+     active, summarizing every dimension (Severity/Damage/Rack/Bay) as
+     removable chips, plus a "Close all" row that clears every filter at once. */
+  .issue-summary{margin-bottom:14px; padding:14px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card);}
+  .issue-summary-top{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px;}
+  .issue-summary-total{font-weight:800; font-size:var(--text-base); color:var(--foreground); flex-shrink:0;}
+  .issue-summary-chip-group{display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
+  .issue-summary-chip-label{display:flex; align-items:center; gap:6px; font-size:var(--text-xs); font-weight:700; color:var(--muted-foreground); margin-right:2px;}
+  .issue-summary-chip-label .dot{width:5px; height:5px; border-radius:999px; background:var(--muted-foreground); flex-shrink:0;}
+  .issue-summary-chip{display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:999px; background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-xs); font-weight:700; border:none; cursor:pointer; font-family:var(--font-body);}
+  .issue-summary-chip svg{width:11px; height:11px;}
+  .issue-summary-close-row{display:flex; align-items:center; justify-content:flex-end; gap:4px; margin-top:8px; background:none; border:none; color:var(--muted-foreground); font-weight:700; font-size:var(--text-sm); cursor:pointer; font-family:var(--font-body); width:100%; padding:0;}
+
+  /* "Mismatch SKUs" toolbar toggle — the same custom pill-track + circular
+     knob switch as Rack View's Manual Mode toggle (.rv-switch-track /
+     .rv-switch-thumb), reused as-is rather than a new toggle style, only
+     with its own "on" color/position rules since it isn't a
+     .rv-manual-toggle. OFF = Matched SKUs (Qty/Damage) view, ON = Mismatch
+     SKUs + Manually Reported view. */
+  .issue-view-toggle-wrap{display:flex; align-items:center; gap:8px; margin-left:14px; flex-shrink:0;}
+  .issue-view-toggle-wrap .lbl{font-weight:700; font-size:var(--text-sm); color:var(--foreground); white-space:nowrap;}
+  .issue-view-toggle{background:none; border:none; padding:0; cursor:pointer; display:flex; flex-shrink:0;}
+  .issue-view-toggle .rv-switch-track{background:var(--slate-300);}
+  .issue-view-toggle.on .rv-switch-track{background:var(--primary);}
+  .issue-view-toggle.on .rv-switch-thumb{left:16px;}
 
   /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
   .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--primary); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
@@ -501,6 +565,18 @@
   .za-zone-card{min-width:100px; flex:1 1 100px; text-align:center; padding:14px 10px; border-radius:var(--radius-xl); border:1.5px solid var(--border); background:var(--card); color:var(--foreground); font-weight:700; font-size:var(--text-sm); cursor:pointer; transition:border-color .12s ease, background .12s ease;}
   .za-zone-card.selected{border-color:var(--accent-blue-strong); border-width:2.5px; background:var(--accent-blue-soft); color:var(--accent-blue-strong);}
   .device.tablet .za-zone-card{flex:0 1 160px;}
+  .za-zone-card:disabled{cursor:default;}
+
+  /* Quick Scan (3-mode canvas) — pulsing "ready to scan" dot on the scan
+     icon (RN's ReadyDot), a small count badge on the Scanned SKUs list icon,
+     and the canvas toolbar strip line under the mode row. */
+  .qs-ready-dot{position:absolute; top:2px; right:2px; width:8px; height:8px; border-radius:50%; background:var(--rag-green-strong); box-shadow:0 0 0 2px var(--card); animation:qs-pulse 1.4s ease-in-out infinite;}
+  @keyframes qs-pulse{0%,100%{transform:scale(1); opacity:1;} 50%{transform:scale(1.4); opacity:.5;}}
+  .qs-count-badge{position:absolute; top:-4px; right:-4px; min-width:15px; height:15px; padding:0 3px; border-radius:999px; background:var(--accent-blue-strong); color:#fff; font-size:9.5px; font-weight:800; line-height:15px; text-align:center;}
+  .qs-toolbar-strip{display:flex; align-items:center; gap:6px; padding:8px 20px; font-size:var(--text-xs); font-weight:600; color:var(--muted-foreground); background:var(--muted); border-bottom:1px solid var(--border);}
+  .qs-toolbar-strip svg{flex-shrink:0;}
+  .qs-toolbar-strip.pin{background:var(--rag-amber-soft); color:var(--rag-amber-strong); font-weight:700;}
+  .qs-canvas{flex:1;}
 
   .acc-section{border-bottom:1px solid var(--border); padding:14px 0;}
   .acc-section:last-child{border-bottom:none; padding-bottom:0;}
@@ -550,11 +626,25 @@
   .rack-diagram-row-cells{display:flex; gap:3px; padding:2px 5px; border-left:1.5px solid var(--foreground); border-right:1.5px solid var(--foreground); border-top:1px solid var(--border);}
   .rack-diagram-row:first-child .rack-diagram-row-cells{border-top:1.5px solid var(--foreground);}
   .rack-diagram-row:last-child .rack-diagram-row-cells{border-bottom:1.5px solid var(--foreground);}
-  .rack-diagram-cell{width:70px; height:20px; border-radius:2px; background:var(--muted); border:1px solid var(--border); flex-shrink:0; padding:0; transition:transform .1s ease, background .1s ease;}
+  .rack-diagram-cell{position:relative; width:70px; height:20px; border-radius:2px; background:var(--muted); border:1px solid var(--border); flex-shrink:0; padding:0; transition:transform .1s ease, background .1s ease;}
   .rack-diagram-cell.empty{border:1px dashed var(--border); opacity:.5;}
   .rack-diagram-cell.filled{cursor:pointer;}
   .rack-diagram-cell.filled:active{transform:scale(.9);}
+  /* Manual Mode-only pallets — outside the audit's assigned scope, only
+     selectable/reportable because Manual Mode opened them up. Dashed amber
+     border marks "not originally in scope" without needing a fill color
+     (see RackViewScreen.tsx's isManualOnly). */
+  .rack-diagram-cell.manual-only{border-style:dashed; border-color:var(--rag-amber-strong);}
+  /* Locked = manual-only AND Manual Mode is currently off — not selectable
+     at all right now, dimmed and inert. */
+  .rack-diagram-cell.locked{opacity:.4; cursor:not-allowed;}
+  .rack-diagram-cell.locked:active{transform:none;}
   .rack-diagram-cell.selected{background:var(--accent-blue); border-color:var(--accent-blue-strong); box-shadow:0 0 0 2px var(--accent-blue-soft);}
+  /* Small scan-order badge — the web port's way of making the From/Pattern
+     toolbar's effect on traversal order directly visible on the canvas
+     (the RN reference shows order only implicitly, via Scan Next). */
+  .rack-diagram-cell .order-badge{position:absolute; top:1px; right:2px; font-size:8px; line-height:1; font-weight:800; color:var(--accent-blue-strong); pointer-events:none;}
+  .rack-diagram-cell.selected .order-badge{color:var(--primary-foreground);}
   .rack-diagram-caption{text-align:center; font-weight:700; color:var(--accent-blue-strong); margin-top:8px; font-size:var(--text-sm);}
 
   /* Rack View's Rack/Bay picker — a richer combobox (search + grouped
@@ -592,7 +682,17 @@
      Rounded-corner clipping is done per-corner on the header/body children
      below instead, so content can never be silently cut off. */
   .rv-diagram-card{padding:0; flex:1; min-height:0; display:flex; flex-direction:column; border-radius:var(--radius-lg);}
-  .rv-diagram-header{padding:9px 18px; background:var(--muted); border-bottom:1px solid var(--border); font-weight:700; font-size:var(--text-base); color:var(--foreground); flex-shrink:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
+  .rv-diagram-header{padding:9px 18px; background:var(--muted); border-bottom:1px solid var(--border); font-weight:700; font-size:var(--text-base); color:var(--foreground); flex-shrink:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .rv-header-right{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  /* Scope pill ("Bay's Level" / "Bay wise") — the only control left in the
+     canvas header once From/Pattern moved down into the persistent bottom
+     toolbar (see RackViewScreen.tsx's scope Pressable + InlineDropdown). */
+  .rv-scope-btn{display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); font:inherit; font-size:var(--text-sm); font-weight:600; color:var(--foreground); cursor:pointer;}
+  .rv-scope-btn.open{border-color:var(--primary);}
+  .rv-scope-btn svg{color:var(--muted-foreground); flex-shrink:0;}
+  /* Purely informational recap of the active From/Pattern/Vertical settings,
+     next to the scope pill — matches RN's directionBadge. */
+  .rv-scope-badge{display:flex; align-items:center; padding:6px 12px; border-radius:999px; background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-xs); font-weight:800; white-space:nowrap;}
   /* flex-direction:column — buildBayDiagram returns the diagram and its "Bay
      X" caption as two sibling elements meant to stack vertically; without
      this they sit side-by-side in a row, pushing the caption to the right
@@ -601,8 +701,37 @@
   /* Bottom-right, width-fit action buttons inside the diagram card — matches
      the Figma reference's "No Issues" / "Report New Issue" placement, instead
      of a full-bleed sticky footer bar. */
-  .rv-actions-row{display:flex; justify-content:flex-end; gap:10px; padding:10px 16px; border-top:1px solid var(--border); flex-shrink:0; border-radius:0 0 var(--radius-lg) var(--radius-lg);}
+  .rv-actions-row{display:flex; justify-content:flex-end; gap:10px; padding:10px 16px; border-top:1px solid var(--border); flex-shrink:0;}
   .rv-scan-qr{display:flex; align-items:center; gap:10px; flex-shrink:0; color:var(--muted-foreground); font-size:var(--text-sm); font-weight:600;}
+
+  /* Manual Mode toggle — a real track+thumb switch (not a color-swapped
+     checkbox), matching RackViewScreen.tsx's ManualModeToggle. Lives in the
+     top toolbar row alongside the Rack/Bay/Pallet pickers. */
+  .rv-manual-toggle{display:flex; align-items:center; gap:7px; height:36px; padding:0 8px; border:none; background:none; cursor:pointer; border-radius:var(--radius-lg); flex-shrink:0; color:var(--muted-foreground); font:inherit;}
+  .rv-manual-toggle .lbl{font-size:var(--text-xs); font-weight:700; color:var(--foreground); white-space:nowrap;}
+  .rv-manual-toggle.on{color:var(--rag-amber-strong);}
+  .rv-manual-toggle.on .lbl{color:var(--rag-amber-strong);}
+  .rv-switch-track{width:34px; height:20px; border-radius:10px; background:var(--slate-300); position:relative; flex-shrink:0; transition:background .18s ease;}
+  .rv-manual-toggle.on .rv-switch-track{background:var(--rag-amber-strong);}
+  .rv-switch-thumb{position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .18s ease; box-shadow:0 1px 2px rgba(0,0,0,.3);}
+  .rv-manual-toggle.on .rv-switch-thumb{left:16px;}
+
+  /* Amber caution banner shown while Manual Mode is on — matches RN's
+     manualModeBanner. */
+  .rv-manual-banner{display:flex; align-items:center; gap:8px; padding:8px 20px; background:var(--rag-amber-soft); border-bottom:1px solid var(--rag-amber-border); color:var(--rag-amber-strong); font-size:var(--text-xs); font-weight:600;}
+  .rv-manual-banner svg{flex-shrink:0;}
+
+  /* Scan Direction bottom toolbar — persistent on the canvas itself (never
+     hidden behind a settings icon/modal), matching the reference rebuild in
+     commit 4b24992: a From Left/Right pair, a divider, then a 4-way Pattern
+     group (raster/snake x up/down). */
+  .rv-dir-toolbar{display:flex; align-items:flex-start; gap:2px; padding:8px 12px; border-top:1px solid var(--border); flex-shrink:0; background:var(--card); overflow-x:auto; border-radius:0 0 var(--radius-lg) var(--radius-lg);}
+  .rv-dir-btn{display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; padding:4px 6px; cursor:pointer; flex-shrink:0; font:inherit;}
+  .rv-dir-btn .icon-box{width:34px; height:30px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); color:var(--foreground);}
+  .rv-dir-btn.active .icon-box{border-color:var(--primary); background:var(--accent-blue-soft); color:var(--primary);}
+  .rv-dir-btn .lbl{font-size:9px; font-weight:600; color:var(--muted-foreground); text-align:center; white-space:nowrap;}
+  .rv-dir-btn.active .lbl{color:var(--primary); font-weight:800;}
+  .rv-dir-divider{width:1px; align-self:stretch; background:var(--border); margin:2px 8px;}
 
   /* Right-side SKU panel — slides in over the Rack View screen after a scan.
      Anchored to .screen (position:relative, the device frame's own scroll
@@ -1012,6 +1141,66 @@
     .device, .device.phone, .device.tablet{width:100%; height:100dvh; border-radius:0; border:none; box-shadow:none;}
     .device-inner, .device.tablet .device-inner{height:100%;}
   }
+  /* ============ WAREHOUSE MAP (Tasks on Map) ============ */
+  .tasks-search-row{display:flex; align-items:center; gap:10px;}
+  .wm-entry-btn{display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); color:var(--foreground); font:inherit; font-size:var(--text-xs); font-weight:600; white-space:nowrap; cursor:pointer; flex-shrink:0;}
+  .wm-entry-btn svg{flex-shrink:0;}
+  .wm-card{padding:0; flex:1; min-height:0; display:flex; flex-direction:column; border-radius:var(--radius-lg); position:relative;}
+  .wm-toolbar-row{display:flex; align-items:center; gap:12px; padding:9px 16px; background:var(--muted); border-bottom:1px solid var(--border); border-radius:var(--radius-lg) var(--radius-lg) 0 0; flex-shrink:0; flex-wrap:wrap;}
+  .wm-legend{display:flex; align-items:center; gap:6px; font-size:var(--text-xs); color:var(--muted-foreground); font-weight:600;}
+  .wm-legend-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+  .wm-chip{display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:var(--radius); background:var(--accent-blue-soft); color:var(--accent-blue-strong); font-size:var(--text-2xs); font-weight:700;}
+  .wm-chip button{display:flex; color:inherit; background:none; border:none; padding:0; cursor:pointer;}
+  .wm-filter-panel{position:absolute; top:calc(100% + 6px); right:0; width:230px; max-height:400px; overflow-y:auto; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow); z-index:50; padding:8px 0;}
+  .wm-filter-label{font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--muted-foreground); padding:8px 14px 4px;}
+  .wm-stage{flex:1; min-height:0; overflow:hidden; position:relative; cursor:grab; background:var(--card); display:flex; align-items:center; justify-content:center;}
+  .wm-stage.dragging{cursor:grabbing;}
+  .wm-canvas{transform-origin:center center; will-change:transform;}
+  .wm-plan{display:flex; align-items:flex-start; gap:40px; padding:10px;}
+  .wm-zone-col{display:flex; flex-direction:column; gap:24px;}
+  .wm-zone-row{display:flex; align-items:flex-start; gap:24px;}
+  .wm-zone{display:flex; flex-direction:column; gap:6px;}
+  .wm-zone-head{display:flex; align-items:center; gap:5px; color:var(--muted-foreground); font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;}
+  .wm-zone-aisle{display:flex; flex-wrap:wrap; gap:4px;}
+  .wm-zone-aisle.vertical{flex-direction:column; flex-wrap:nowrap;}
+  .wm-rack-with-aisle{display:flex; align-items:stretch; gap:2px;}
+  .wm-rack-card{display:flex; flex-direction:column; align-items:center; width:66px; border-width:1.5px; border-style:solid; border-radius:5px; padding:5px 4px; gap:3px; background:var(--card); font:inherit; cursor:pointer;}
+  .wm-rack-card.assigned{background:#F3F5F8;}
+  .wm-rack-label{font-size:9px; font-weight:600; color:var(--slate-400); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+  .wm-rack-card.assigned .wm-rack-label{color:var(--foreground); font-weight:700;}
+  .wm-bay-row{display:flex; gap:1.5px;}
+  .wm-bay-seg{width:9px; height:14px; border:1px solid; border-radius:1.5px;}
+  .wm-rack-count{color:var(--slate-400); font-size:7px; margin-top:1px;}
+  .wm-aisle-strip{width:10px; border:1px dashed var(--border); border-radius:3px; display:flex; align-items:center; justify-content:center; background:none; cursor:pointer; padding:0;}
+  .wm-aisle-strip.selected{border-color:var(--accent-blue); border-width:2px; border-style:solid;}
+  .wm-aisle-strip span{font-size:6px; color:var(--slate-400); writing-mode:vertical-rl; white-space:nowrap;}
+  .wm-floor-card{width:66px; min-height:44px; border:1.5px dashed var(--border); border-radius:5px; display:flex; align-items:center; justify-content:center; padding:4px; background:none; cursor:pointer; text-align:center; color:var(--slate-400); font-weight:600; font-size:9px;}
+  .wm-floor-card.selected{border-color:var(--accent-blue); border-style:solid;}
+  .wm-zoom-controls{position:absolute; right:14px; bottom:14px; display:flex; flex-direction:column; gap:8px; z-index:5;}
+  .wm-zoom-controls .card-icon-btn{width:34px; height:34px; font-size:16px; font-weight:700; box-shadow:var(--shadow);}
+  /* Rack/Floor-Area/Aisle info sheet — same absolute-over-.screen pattern as
+     .rv-sku-panel, just centered instead of anchored right. */
+  .wm-sheet{position:absolute; inset:0; margin:auto; z-index:71; width:100%; max-width:480px; max-height:82%; height:fit-content; background:var(--card); border-radius:var(--radius-xl); box-shadow:var(--shadow); padding:18px 20px; overflow-y:auto;}
+  .wm-sheet-sm{max-width:360px; height:fit-content;}
+  .wm-sheet-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px;}
+  .wm-sheet-title{font-size:var(--text-base); font-weight:800; color:var(--foreground);}
+  .wm-sheet-sub{font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;}
+  .wm-sheet-divider{height:1px; background:var(--border); margin-bottom:12px;}
+  .wm-sheet-section-label{font-size:11px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px;}
+  .wm-sheet-body{display:flex; flex-direction:column; gap:10px;}
+  .wm-sheet-copy{color:var(--muted-foreground); font-size:var(--text-sm); line-height:1.6; margin:0;}
+  .wm-task-block{display:flex; flex-direction:column; gap:8px;}
+  .wm-task-card{border:1px solid var(--border); border-left-width:4px; border-radius:var(--radius-lg); background:var(--muted); padding:12px;}
+  .wm-task-top{display:flex; align-items:center; gap:6px;}
+  .wm-task-name{flex:1; min-width:0; font-weight:700; font-size:var(--text-sm); color:var(--foreground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .wm-task-meta{display:flex; align-items:center; gap:6px; margin-top:4px; font-size:var(--text-2xs); color:var(--muted-foreground);}
+  .wm-dot-sep{width:3px; height:3px; border-radius:50%; background:var(--slate-400); flex-shrink:0;}
+  .wm-rack-chips-label{font-size:10px; font-weight:600; color:var(--muted-foreground); margin-bottom:5px;}
+  .wm-rack-chip-group{margin-top:6px;}
+  .wm-rack-chip-layout{font-size:9px; font-weight:700; color:var(--slate-400); text-transform:uppercase; letter-spacing:.3px; margin-bottom:4px;}
+  .wm-rack-chips-row{display:flex; flex-wrap:wrap; gap:6px;}
+  .wm-rack-chip{border:1px solid var(--border); border-radius:6px; padding:4px 8px; background:var(--card); font-size:var(--text-2xs); font-weight:600; color:var(--foreground);}
+  .wm-start-btn{width:100%; display:flex; align-items:center; justify-content:center; gap:4px; height:36px;}
 </style>
 
 <div class="page">
@@ -1539,14 +1728,6 @@ const QR_POOL = [
 // camera scan can't know in advance what label the inspector is pointing at, so
 // this pool exercises the "wrong code type" path: a pallet or SKU tag scanned
 // from the global Scan tab rather than from inside an already-open count sheet.
-const QUICK_SCAN_POOL = [
-  { kind:'location', code: QR_POOL[0] },
-  { kind:'location', code: QR_POOL[1] },
-  { kind:'pallet', code:'P-10483' },
-  { kind:'location', code: QR_POOL[3] },
-  { kind:'sku', code:{ sku:'SKU-2218', name:'Pallet Support Pin', lot:'L-2292' } },
-  { kind:'location', code: QR_POOL[2] },
-];
 function findRackIn(auditId, layoutName, rackCode){
   const layout = findLayoutIn(auditId, layoutName);
   return layout ? layout.racks.find(r => r.code === rackCode) : null;
@@ -1657,21 +1838,37 @@ let STATE = {
   device: 'tablet', stack: ['login'], params: {}, previewMode: 'normal',
   tasksSearch: '', scan: null, menuOpen: false,
   issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false, issuesSortAnchor: null,
-  issuesFilterOpen: false, issuesFilterAnchor: null,
-  issuesFilterValues: { rack: [], bay: [], condition: [] },
+  issuesFilterOpen: false, issuesFilterAnchor: null, issuesOpenCategory: null,
+  // 'issues' (default) = Matched SKUs with a quantity/damage discrepancy;
+  // 'mismatches' = wrong-SKU pallets + Manual Mode reports — mirrors
+  // ReportedAuditsBoard.tsx's BoardView toggle.
+  issuesView: 'issues',
+  issuesFilterValues: { rack: [], bay: [], condition: [], severity: [] },
   imageAttachmentModal: null,
-  quickScan: { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null },
-  // Zone Audit Map (preview) — a floor-area pick + scan-and-reconcile flow,
-  // independent of the audit-scoped Rack View machinery (findRackIn/
-  // STATE.params) since it isn't tied to a specific rack/bay/loc, only a
-  // named zone. items is the saved scan history; pendingItem is the
-  // in-progress Reconciliation Form (cleared on Save or Cancel).
-  zoneAudit: { floorAreaId:null, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false },
+  // Quick Scan — 3-mode canvas (Zone / Rack / Floor), ported from
+  // QuickScanScreen.tsx. `items` is the saved scan history across all three
+  // modes (each item tagged with its `origin`); `pendingItem` is the
+  // in-progress Reconciliation Form (cleared on Save or Cancel). Rack mode
+  // reuses the Rack View machinery (STATE.params/STATE.rackViewClickedLoc/
+  // STATE.rackViewPicker + buildBayDiagram) for its Layout/Rack/Bay/Pallet
+  // drill-down and canvas instead of duplicating it — see quickScanSeedRack.
+  quickScan: { mode:'zone', modeMenuOpen:false, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false, activeZoneId:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
   auditDetailsClosed: {},
   scheduleCal: null, scheduleModal: null,
   rackViewPicker: null, rackViewClickedLoc: null, _rackViewSeedKey: null,
+  // Scan Direction (from/pattern/vertical/scope, independent axes — see
+  // buildScanOrder) + Manual Mode, ported from the RN Rack View screen's
+  // persistent bottom toolbar (commit 4b24992). Defaults mirror RN's:
+  // Left-Last-Up, scope "Bay's Level", Manual Mode off.
+  rackView: { from:'left', pattern:'last', vertical:'up', scope:'bay', scopeMenuOpen:false, manualMode:false },
+  // Warehouse Map (Tasks on Map), ported from WarehouseMapScreen.tsx — a
+  // top-down plan, wheel-zoom + drag-to-pan standing in for RN's pinch/pan
+  // gesture. `selectedCell`/`selectedFloorAreaId`/`selectedAisleCell` mirror
+  // which of the three kinds of map tap-target currently has its info sheet
+  // open (only one at a time).
+  warehouseMap: { dueFilter:'All', typeFilter:'All', auditFilter:'All', filterOpen:false, scale:0.85, panX:0, panY:0, selectedCell:null, selectedFloorAreaId:null, selectedAisleCell:null },
 };
 // Accordion sections on Audit Details default open — this just tracks the
 // ones a user has explicitly collapsed, keyed by a layout/rack path so state
@@ -1770,11 +1967,17 @@ const ICON = {
   check: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   checkSm: '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevronDown: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chevronUp: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   sync: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3.40492 3.40313C5.94143 0.865625 10.0554 0.865625 12.5951 3.40313L13.4416 4.25H10.9988C10.5834 4.25 10.2491 4.58437 10.2491 5C10.2491 5.41563 10.5834 5.75 10.9988 5.75H15.2503C15.6658 5.75 16 5.41563 16 5V0.75C16 0.334375 15.6658 0 15.2503 0C14.8348 0 14.5006 0.334375 14.5006 0.75V3.19062L13.654 2.34375C10.5303 -0.78125 5.46661 -0.78125 2.34596 2.34375C0.996486 3.69375 0.228036 5.40937 0.0468567 7.17188C0.00312378 7.58437 0.303007 7.95313 0.715346 7.99375C1.12768 8.03438 1.49629 7.7375 1.5369 7.325C1.68684 5.89375 2.30847 4.50313 3.40492 3.40313ZM15.9531 8.82812C15.9969 8.41563 15.697 8.04688 15.2847 8.00625C14.8723 7.96563 14.5037 8.2625 14.4631 8.675C14.3163 10.1063 13.6915 11.5 12.5951 12.5969C10.0586 15.1344 5.94455 15.1344 3.40492 12.5969L2.55838 11.75H5.00117C5.41663 11.75 5.75088 11.4156 5.75088 11C5.75088 10.5844 5.41663 10.25 5.00117 10.25H0.749707C0.334244 10.25 0 10.5844 0 11V15.25C0 15.6656 0.334244 16 0.749707 16C1.16517 16 1.49941 15.6656 1.49941 15.25V12.8094L2.34596 13.6562C5.46974 16.7812 10.5334 16.7812 13.654 13.6562C15.0035 12.3062 15.772 10.5906 15.9531 8.82812Z" fill="currentColor"/></svg>',
   box: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1.125 0C1.74844 0 2.25 0.501562 2.25 1.125V7.875H21.75V1.125C21.75 0.501562 22.2516 0 22.875 0C23.4984 0 24 0.501562 24 1.125V22.875C24 23.4984 23.4984 24 22.875 24C22.2516 24 21.75 23.4984 21.75 22.875V22.125H2.25V22.875C2.25 23.4984 1.74844 24 1.125 24C0.501562 24 0 23.4984 0 22.875V1.125C0 0.501562 0.501562 0 1.125 0ZM2.25 19.875H21.75V10.125H2.25V19.875ZM7.125 12H9.375C10.4109 12 11.25 12.8391 11.25 13.875V16.125C11.25 17.1609 10.4109 18 9.375 18H7.125C6.08906 18 5.25 17.1609 5.25 16.125V13.875C5.25 12.8391 6.08906 12 7.125 12ZM12.75 13.875C12.75 12.8391 13.5891 12 14.625 12H16.875C17.9109 12 18.75 12.8391 18.75 13.875V16.125C18.75 17.1609 17.9109 18 16.875 18H14.625C13.5891 18 12.75 17.1609 12.75 16.125V13.875ZM14.625 0H16.875C17.9109 0 18.75 0.839062 18.75 1.875V4.125C18.75 5.16094 17.9109 6 16.875 6H14.625C13.5891 6 12.75 5.16094 12.75 4.125V1.875C12.75 0.839062 13.5891 0 14.625 0Z" fill="currentColor"/></svg>',
   user: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.4" r="2.6" stroke="currentColor" stroke-width="1.5"/><path d="M3.2 13.5c1.2-2.6 3.6-3.9 4.8-3.9s3.6 1.3 4.8 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   lock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7.2" width="9" height="6.3" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 5 0v2.2" stroke="currentColor" stroke-width="1.4"/></svg>',
+  // Ionicons "construct"/"construct-outline" stand-in for the Manual Mode
+  // toggle (see RackViewScreen.tsx's ManualModeToggle) — a simple wrench.
+  wrench: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 6a5 5 0 0 1-6.1 4.9L7 20a2.1 2.1 0 0 1-3-3l9.1-8.9A5 5 0 0 1 18 2c.6 0 1.2.1 1.7.3l-3.8 3.8 1 3 3 1 3.8-3.8c.2.5.3 1.1.3 1.7z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  // Ionicons "warning-outline" — the Manual Mode banner's caution glyph.
+  warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3.5 L22 20.5 H2 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1" fill="currentColor"/></svg>',
   wh: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 14.5s4.5-3.9 4.5-7.4A4.5 4.5 0 0 0 3.5 7.1c0 3.5 4.5 7.4 4.5 7.4z" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="6.8" r="1.5" stroke="currentColor" stroke-width="1.4"/></svg>',
   home: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 4l8 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10v9h12v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   tasks: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="17" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
@@ -2197,10 +2400,351 @@ function renderTasks(){
     ${headerBlock({ title:'My Audit Tasks', sub:`${myTasks.length} Assigned · ${INSPECTOR.warehouse}`, showBack: true,
       menuItems:[{label:'Sync Now', action:"toast('Synced')"},{label:'Settings', action:"push('settings')"}] })}
     <div class="body-pad">
-      <div class="search-wrap">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
+      <div class="tasks-search-row">
+        <div class="search-wrap" style="flex:1;">${ICON.search}<input placeholder="Search audit ID, layout, rack..." value="${STATE.tasksSearch}" oninput="STATE.tasksSearch=this.value; render()" /></div>
+        <button type="button" class="wm-entry-btn" onclick="push('warehouseMap')">${ICON.box}<span>View Tasks on 3D</span></button>
+      </div>
       <div class="todo-board">${columns}</div>
     </div>
     ${renderTabBar('tasks')}
+  `;
+}
+
+/* ================= WAREHOUSE MAP (Tasks on Map) =================
+   Ports WarehouseMapScreen.tsx (~732 ln) — not a tracker of where the
+   inspector physically is, just a visual "where do my tasks actually sit"
+   plan of the warehouse. Drawn top-down (not isometric — RN tried that and
+   reverted it): a Layout holds several Racks in a row (aisle), and each
+   Rack is its own small stack of labeled Bay segments so a task's exact
+   bay(s) can be picked out from the rest of that rack. RN's pinch/pan
+   GestureDetector becomes wheel-zoom + drag-to-pan here (see wmWheel/
+   wmDragStart below) — the HTML has no existing canvas zoom/pan pattern to
+   reuse (Rack View's diagram just scrolls via overflow:auto), so this is a
+   new minimal implementation, not a port of a prior one. */
+const WM_TASK_TYPES = ['Full','Cycle Count','Spot Check'];
+const WM_ASSIGNED_WIRE = '#5B6B82';
+const WM_UNASSIGNED_WIRE = '#DCE1E7';
+const WM_RACKS_PER_ZONE = 12;
+const WM_BAYS_PER_RACK = 4;
+const WM_ICON_HORIZ = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M2 8l3-3M2 8l3 3M14 8l-3-3M14 8l-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const WM_ICON_VERT = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M8 2l-3 3M8 2l3 3M8 14l-3-3M8 14l3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const WM_ICON_FLOOR = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/></svg>';
+const WM_ICON_RESET = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v6M5 8h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+function wmMyTasks(){ return mine().filter(a => !['Submitted','Reconciled','Closed'].includes(a.status)); }
+
+// The grid itself (every rack + bay from every audit in the warehouse, not
+// just mine — otherwise there'd be nothing to dim) stays fixed regardless
+// of the active filter, padded with filler racks/bays so the floor reads as
+// a genuinely large warehouse against which mine stand out.
+function wmZones(){
+  const byLayout = new Map();
+  AUDITS.forEach(a => {
+    allLocations(a.audit_id).forEach(({ layout, rack, bay }) => {
+      if (!byLayout.has(layout)) byLayout.set(layout, new Map());
+      const racks = byLayout.get(layout);
+      if (!racks.has(rack)) racks.set(rack, new Map());
+      const bays = racks.get(rack);
+      if (!bays.has(bay)) bays.set(bay, { layout, rack, bay });
+    });
+  });
+  const zoneNames = [...byLayout.keys(), 'Layout D', 'Layout F'];
+  zoneNames.forEach(layout => {
+    if (!byLayout.has(layout)) byLayout.set(layout, new Map());
+    const racks = byLayout.get(layout);
+    const prefix = layout.replace(/^Layout /, '');
+    for (let n = 1; racks.size < WM_RACKS_PER_ZONE && n <= 60; n++) {
+      const code = `${prefix}-${String(n).padStart(2,'0')}`;
+      if (!racks.has(code)) racks.set(code, new Map());
+    }
+    racks.forEach((bays, rackCode) => {
+      for (let b = 1; bays.size < WM_BAYS_PER_RACK && b <= 20; b++) {
+        const bayCode = `B-${String(b).padStart(2,'0')}`;
+        if (!bays.has(bayCode)) bays.set(bayCode, { layout, rack:rackCode, bay:bayCode });
+      }
+    });
+  });
+  return Array.from(byLayout.entries()).map(([layout, racks]) => ({
+    layout,
+    racks: Array.from(racks.entries()).map(([rack, bays]) => ({
+      rack, bays: Array.from(bays.values()).sort((a,b) => a.bay.localeCompare(b.bay)),
+    })).sort((a,b) => a.rack.localeCompare(b.rack)),
+  })).sort((a,b) => a.layout.localeCompare(b.layout));
+}
+
+function wmTasksTouching(cell, pool){ return pool.filter(a => allLocations(a.audit_id).some(l => l.layout === cell.layout && l.rack === cell.rack)); }
+function wmBayTasksTouching(cell, pool){ return pool.filter(a => allLocations(a.audit_id).some(l => l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay)); }
+function wmBayLocs(cell, pool){ const out = []; pool.forEach(a => allLocations(a.audit_id).forEach(l => { if (l.layout === cell.layout && l.rack === cell.rack && l.bay === cell.bay) out.push(l.loc); })); return out; }
+function wmRackLocs(cell, pool){ const out = []; pool.forEach(a => allLocations(a.audit_id).forEach(l => { if (l.layout === cell.layout && l.rack === cell.rack) out.push(l.loc); })); return out; }
+function wmIsAssigned(cell){ return wmTasksTouching(cell, wmMyTasks()).length > 0; }
+
+// Three states instead of a color per due-bucket: red if any touching task
+// is overdue (wins regardless of anything else), green only if every
+// location this cell covers is actually marked Completed, blue for
+// everything else that's simply assigned/in progress.
+function wmStatusColor(touching, locs){
+  if (!touching.length) return null;
+  if (touching.some(isOverdue)) return 'var(--rag-red)';
+  if (locs.length && locs.every(l => l.status === 'Completed')) return 'var(--rag-green)';
+  return 'var(--accent-blue-border)';
+}
+
+// With no Due Date filter picked, delayed tasks are hidden from the map by
+// default — a rack only shows red once "Delayed" is explicitly selected.
+function wmFilteredTasks(){
+  const wm = STATE.warehouseMap;
+  return wmMyTasks().filter(a =>
+    (wm.dueFilter === 'All' ? !isOverdue(a) : dueBucket(a) === wm.dueFilter) &&
+    (wm.typeFilter === 'All' || a.audit_type === wm.typeFilter) &&
+    (wm.auditFilter === 'All' || a.audit_id === wm.auditFilter)
+  );
+}
+
+function wmRenderZone(zone, vertical){
+  const wm = STATE.warehouseMap;
+  const filtered = wmFilteredTasks();
+  const racksHtml = zone.racks.map(rackGroup => {
+    const cell = { layout: zone.layout, rack: rackGroup.rack };
+    const assigned = wmIsAssigned(cell);
+    const rackColor = wmStatusColor(wmTasksTouching(cell, filtered), wmRackLocs(cell, filtered));
+    const isSelected = wm.selectedCell && wm.selectedCell.layout === cell.layout && wm.selectedCell.rack === cell.rack;
+    const rackBorder = isSelected ? 'var(--accent-blue)' : (rackColor || (assigned ? WM_ASSIGNED_WIRE : WM_UNASSIGNED_WIRE));
+    const bayCount = rackGroup.bays.length;
+    const aisleSelected = wm.selectedAisleCell && wm.selectedAisleCell.layout === cell.layout && wm.selectedAisleCell.rack === cell.rack;
+    const baysHtml = rackGroup.bays.map(bayCell => {
+      const bayColor = wmStatusColor(wmBayTasksTouching(bayCell, filtered), wmBayLocs(bayCell, filtered));
+      return `<div class="wm-bay-seg" style="background:${bayColor || 'transparent'}; border-color:${bayColor || (assigned ? rackBorder : WM_UNASSIGNED_WIRE)};"></div>`;
+    }).join('');
+    return `
+      <div class="wm-rack-with-aisle">
+        <button type="button" class="wm-rack-card ${assigned ? 'assigned' : ''}" style="border-color:${rackBorder}; border-width:${isSelected ? '2.5px' : '1.5px'};" onclick="wmSelectCell('${zone.layout}','${rackGroup.rack}')">
+          <span class="wm-rack-label">Rack ${rackGroup.rack}</span>
+          <div class="wm-bay-row">${baysHtml}</div>
+          <span class="wm-rack-count">${bayCount} ${bayCount === 1 ? 'bay' : 'bays'}</span>
+        </button>
+        <button type="button" class="wm-aisle-strip ${aisleSelected ? 'selected' : ''}" onclick="wmSelectAisle('${zone.layout}','${rackGroup.rack}')" aria-label="Aisle next to Rack ${rackGroup.rack}"><span>Aisle</span></button>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="wm-zone">
+      <div class="wm-zone-head">${vertical ? WM_ICON_VERT : WM_ICON_HORIZ}<span>${zone.layout}</span></div>
+      <div class="wm-zone-aisle ${vertical ? 'vertical' : ''}">${racksHtml}</div>
+    </div>
+  `;
+}
+
+function wmRenderRackSheet(){
+  const wm = STATE.warehouseMap;
+  if (!wm.selectedCell) return '';
+  const cell = wm.selectedCell;
+  const tasks = wmTasksTouching(cell, wmMyTasks());
+  const bucketVar = { Delayed:'var(--rag-red)', Today:'var(--rag-green)', 'This Week':'var(--accent-blue)', 'This Month':'var(--rag-amber)' };
+  const rows = tasks.length ? tasks.map(a => {
+    const bucket = dueBucket(a);
+    const otherRacks = Array.from(new Map(allLocations(a.audit_id).filter(l => !(l.layout === cell.layout && l.rack === cell.rack)).map(l => [`${l.layout}|${l.rack}`, l])).values());
+    const byLayout = new Map();
+    otherRacks.forEach(l => { if (!byLayout.has(l.layout)) byLayout.set(l.layout, []); byLayout.get(l.layout).push(l); });
+    const chipsHtml = Array.from(byLayout.entries()).map(([layoutName, racksInLayout]) => `
+      <div class="wm-rack-chip-group">
+        <div class="wm-rack-chip-layout">${layoutName}</div>
+        <div class="wm-rack-chips-row">${racksInLayout.map(l => `<span class="wm-rack-chip">Rack ${l.rack}</span>`).join('')}</div>
+      </div>
+    `).join('');
+    return `
+      <div class="wm-task-block">
+        <div class="wm-task-card" style="border-left-color:${bucketVar[bucket]};">
+          <div class="wm-task-top"><span class="wm-task-name">${a.audit_name}</span><span class="pill ${pillClass(uiStatus(a))}">${uiStatus(a)}</span></div>
+          <div class="wm-task-meta"><span>${a.audit_id}</span><span class="wm-dot-sep"></span><span>${a.audit_type}</span><span class="wm-dot-sep"></span><span style="color:${bucketVar[bucket]}; font-weight:700;">${bucket}</span></div>
+          <div class="wm-sheet-divider" style="margin:10px 0;"></div>
+          <div class="wm-rack-chips-label">${otherRacks.length ? `Also on this task (${otherRacks.length})` : 'Only location on this task'}</div>
+          ${chipsHtml}
+        </div>
+        <button type="button" class="btn primary wm-start-btn" onclick="wmStartTask('${a.audit_id}')">Start Task ${ICON.chevron}</button>
+      </div>
+    `;
+  }).join('') : `<div class="empty-state" style="padding:20px 0;"><div>No task currently touches this rack.</div></div>`;
+
+  return `
+    <div class="rv-sku-panel-backdrop" style="z-index:70;" onclick="wmCloseSheet()"></div>
+    <div class="wm-sheet" onclick="event.stopPropagation()">
+      <div class="wm-sheet-head">
+        <div><div class="wm-sheet-title">Rack ${cell.rack}</div><div class="wm-sheet-sub">${cell.layout}</div></div>
+        <button class="icon-btn" onclick="wmCloseSheet()" aria-label="Close">${ICON.close}</button>
+      </div>
+      <div class="wm-sheet-divider"></div>
+      ${tasks.length ? `<div class="wm-sheet-section-label">Part of ${tasks.length} task${tasks.length === 1 ? '' : 's'}</div>` : ''}
+      <div class="wm-sheet-body">${rows}</div>
+    </div>
+  `;
+}
+
+// Floor Area and Aisle info sheets — simpler than the rack sheet above:
+// neither kind of place has task-assignment data of its own in this data
+// model, so these just confirm what was tapped rather than fabricating a
+// task list.
+function wmRenderFloorAreaSheet(){
+  const id = STATE.warehouseMap.selectedFloorAreaId;
+  if (!id) return '';
+  const area = FLOOR_AREAS.find(a => a.id === id);
+  return `
+    <div class="rv-sku-panel-backdrop" style="z-index:70;" onclick="wmCloseFloorSheet()"></div>
+    <div class="wm-sheet wm-sheet-sm" onclick="event.stopPropagation()">
+      <div class="wm-sheet-head">
+        <div><div class="wm-sheet-title">${area ? area.label : ''}</div><div class="wm-sheet-sub">Open-floor storage — no rack structure</div></div>
+        <button class="icon-btn" onclick="wmCloseFloorSheet()" aria-label="Close">${ICON.close}</button>
+      </div>
+      <div class="wm-sheet-divider"></div>
+      <p class="wm-sheet-copy">Pallets found here come from Quick Scan's "Pin Exact Location" step, same as any floor find — this area doesn't hold a rack layout of its own.</p>
+    </div>
+  `;
+}
+function wmRenderAisleSheet(){
+  const cell = STATE.warehouseMap.selectedAisleCell;
+  if (!cell) return '';
+  return `
+    <div class="rv-sku-panel-backdrop" style="z-index:70;" onclick="wmCloseAisleSheet()"></div>
+    <div class="wm-sheet wm-sheet-sm" onclick="event.stopPropagation()">
+      <div class="wm-sheet-head">
+        <div><div class="wm-sheet-title">Aisle — Rack ${cell.rack}</div><div class="wm-sheet-sub">${cell.layout}</div></div>
+        <button class="icon-btn" onclick="wmCloseAisleSheet()" aria-label="Close">${ICON.close}</button>
+      </div>
+      <div class="wm-sheet-divider"></div>
+      <p class="wm-sheet-copy">The walkway next to this rack — pallets sitting here were never actually racked. Reported via Quick Scan's Pin Exact Location as an Aisle find.</p>
+    </div>
+  `;
+}
+
+function wmToggleFilter(){ STATE.warehouseMap.filterOpen = !STATE.warehouseMap.filterOpen; render(); }
+function wmSetDueFilter(key){ STATE.warehouseMap.dueFilter = key; render(); }
+function wmSetTypeFilter(key){ STATE.warehouseMap.typeFilter = key; STATE.warehouseMap.auditFilter = 'All'; render(); }
+function wmSetAuditFilter(key){ STATE.warehouseMap.auditFilter = key; render(); }
+function wmSelectCell(layout, rack){ STATE.warehouseMap.selectedCell = { layout, rack }; render(); }
+function wmCloseSheet(){ STATE.warehouseMap.selectedCell = null; render(); }
+function wmSelectFloorArea(id){ STATE.warehouseMap.selectedFloorAreaId = id; render(); }
+function wmCloseFloorSheet(){ STATE.warehouseMap.selectedFloorAreaId = null; render(); }
+function wmSelectAisle(layout, rack){ STATE.warehouseMap.selectedAisleCell = { layout, rack }; render(); }
+function wmCloseAisleSheet(){ STATE.warehouseMap.selectedAisleCell = null; render(); }
+
+// Straight into the Rack View canvas for the exact rack tapped on the map
+// (not Audit Details) — no specific bay came from the map (only rack-level),
+// so `bay` is left blank; Rack View self-heals to that rack's first bay.
+function wmStartTask(auditId){
+  const cell = STATE.warehouseMap.selectedCell;
+  STATE.warehouseMap.selectedCell = null;
+  push('rackView', { auditId, layout: cell.layout, rack: cell.rack, bay: '' });
+}
+
+function wmApplyTransform(){
+  const wm = STATE.warehouseMap;
+  const canvas = document.getElementById('wm-canvas');
+  if (canvas) canvas.style.transform = `translate(${wm.panX}px, ${wm.panY}px) scale(${wm.scale})`;
+}
+function wmZoomBy(delta){ const wm = STATE.warehouseMap; wm.scale = Math.min(3, Math.max(0.3, +(wm.scale + delta).toFixed(2))); wmApplyTransform(); }
+function wmResetView(){ const wm = STATE.warehouseMap; wm.scale = 0.85; wm.panX = 0; wm.panY = 0; wmApplyTransform(); }
+function wmWheel(e){
+  e.preventDefault();
+  wmZoomBy(e.deltaY > 0 ? -0.08 : 0.08);
+}
+let wmDrag = null;
+function wmDragStart(e){
+  if (e.button !== 0) return;
+  const wm = STATE.warehouseMap;
+  wmDrag = { startX:e.clientX, startY:e.clientY, panX0:wm.panX, panY0:wm.panY };
+  const stage = document.getElementById('wm-stage');
+  if (stage) stage.classList.add('dragging');
+  window.addEventListener('mousemove', wmDragMove);
+  window.addEventListener('mouseup', wmDragEnd);
+}
+function wmDragMove(e){
+  if (!wmDrag) return;
+  const wm = STATE.warehouseMap;
+  wm.panX = wmDrag.panX0 + (e.clientX - wmDrag.startX);
+  wm.panY = wmDrag.panY0 + (e.clientY - wmDrag.startY);
+  wmApplyTransform();
+}
+function wmDragEnd(){
+  wmDrag = null;
+  const stage = document.getElementById('wm-stage');
+  if (stage) stage.classList.remove('dragging');
+  window.removeEventListener('mousemove', wmDragMove);
+  window.removeEventListener('mouseup', wmDragEnd);
+}
+
+function renderWarehouseMap(){
+  const wm = STATE.warehouseMap;
+  const zones = wmZones();
+  const totalRackCount = zones.reduce((n,z) => n + z.racks.length, 0);
+  const assignedRackCount = zones.reduce((n,z) => n + z.racks.filter(r => wmIsAssigned({ layout:z.layout, rack:r.rack })).length, 0);
+  const horizontalZones = zones.filter((_,i) => i % 2 === 0);
+  const verticalZones = zones.filter((_,i) => i % 2 === 1);
+  const myTasks = wmMyTasks();
+  const auditsOfType = wm.typeFilter === 'All' ? [] : myTasks.filter(a => a.audit_type === wm.typeFilter);
+
+  const chips = [];
+  if (wm.dueFilter !== 'All') chips.push(`<div class="wm-chip">${wm.dueFilter}<button onclick="wmSetDueFilter('All')" aria-label="Clear">${ICON.close}</button></div>`);
+  if (wm.typeFilter !== 'All') chips.push(`<div class="wm-chip">${wm.typeFilter}<button onclick="wmSetTypeFilter('All')" aria-label="Clear">${ICON.close}</button></div>`);
+  if (wm.auditFilter !== 'All') chips.push(`<div class="wm-chip">${wm.auditFilter}<button onclick="wmSetAuditFilter('All')" aria-label="Clear">${ICON.close}</button></div>`);
+
+  const filterDropdown = wm.filterOpen ? `
+    <button type="button" class="rvpick-backdrop" onclick="wmToggleFilter()" aria-label="Close"></button>
+    <div class="wm-filter-panel" onclick="event.stopPropagation()">
+      <div class="wm-filter-label">Due Date</div>
+      ${['All', ...DUE_BUCKETS.map(b => b.key)].map(key => `<button type="button" class="rvpick-item ${wm.dueFilter===key?'selected':''}" onclick="wmSetDueFilter('${key}')"><span>${key}</span>${wm.dueFilter===key?ICON.checkSm:''}</button>`).join('')}
+      <div class="wm-filter-label">Task Type</div>
+      ${['All', ...WM_TASK_TYPES].map(key => `<button type="button" class="rvpick-item ${wm.typeFilter===key?'selected':''}" onclick="wmSetTypeFilter('${key}')"><span>${key}</span>${wm.typeFilter===key?ICON.checkSm:''}</button>`).join('')}
+      ${wm.typeFilter !== 'All' && auditsOfType.length > 1 ? `
+        <div class="wm-filter-label">Audit</div>
+        ${['All', ...auditsOfType.map(a => a.audit_id)].map(key => {
+          const audit = key === 'All' ? null : auditsOfType.find(a => a.audit_id === key);
+          return `<button type="button" class="rvpick-item ${wm.auditFilter===key?'selected':''}" onclick="wmSetAuditFilter('${key}')"><span>${audit ? `${audit.audit_id} · ${audit.audit_name}` : 'All'}</span>${wm.auditFilter===key?ICON.checkSm:''}</button>`;
+        }).join('')}
+      ` : ''}
+    </div>
+  ` : '';
+
+  const body = zones.length ? `
+    <div class="card wm-card">
+      <div class="wm-toolbar-row">
+        <div class="wm-legend"><span class="wm-legend-dot" style="background:var(--rag-green);"></span>Completed</div>
+        <div class="wm-legend"><span class="wm-legend-dot" style="background:var(--accent-blue-border);"></span>Assigned</div>
+        <div style="flex:1;"></div>
+        ${chips.join('')}
+        <div class="rvpick-wrap">
+          <button type="button" class="card-icon-btn ${wm.filterOpen ? 'issue-filter-active' : ''}" onclick="wmToggleFilter()" aria-label="Filter">${ICON.filter}</button>
+          ${filterDropdown}
+        </div>
+      </div>
+      <div class="wm-stage" id="wm-stage" onwheel="wmWheel(event)" onmousedown="wmDragStart(event)">
+        <div class="wm-canvas" id="wm-canvas" style="transform:translate(${wm.panX}px, ${wm.panY}px) scale(${wm.scale});">
+          <div class="wm-plan">
+            <div class="wm-zone-col">
+              ${horizontalZones.map(z => wmRenderZone(z, false)).join('')}
+              <div class="wm-zone">
+                <div class="wm-zone-head">${WM_ICON_FLOOR}<span>Floor Areas</span></div>
+                <div class="wm-zone-aisle">
+                  ${FLOOR_AREAS.map(area => `<button type="button" class="wm-floor-card ${wm.selectedFloorAreaId===area.id?'selected':''}" onclick="wmSelectFloorArea('${area.id}')">${area.label}</button>`).join('')}
+                </div>
+              </div>
+            </div>
+            <div class="wm-zone-row">${verticalZones.map(z => wmRenderZone(z, true)).join('')}</div>
+          </div>
+        </div>
+      </div>
+      <div class="wm-zoom-controls">
+        <button type="button" class="card-icon-btn" onclick="wmZoomBy(0.15)" aria-label="Zoom in">+</button>
+        <button type="button" class="card-icon-btn" onclick="wmZoomBy(-0.15)" aria-label="Zoom out">−</button>
+        <button type="button" class="card-icon-btn" onclick="wmResetView()" aria-label="Reset view">${WM_ICON_RESET}</button>
+      </div>
+    </div>
+  ` : `<div class="empty-state"><div>No task locations to map yet.</div></div>`;
+
+  return `
+    ${headerBlock({ title:'Tasks on Map', sub:`${assignedRackCount} of ${totalRackCount} racks assigned to you`, showBack: true })}
+    <div class="body-pad">${body}</div>
+    ${wmRenderRackSheet()}
+    ${wmRenderFloorAreaSheet()}
+    ${wmRenderAisleSheet()}
   `;
 }
 
@@ -2674,90 +3218,12 @@ function applyLocationQRResult(scan, code){
   render();
 }
 
-// Quick Scan (tab bar) — not tied to a specific audit. Finds whichever of the
-// inspector's own assigned, non-completed audits actually has this location in
-// its scope, preferring an audit already In Progress (resume) over one still To Do.
-function findAuditForScan(code){
-  const candidates = mine().filter(a => !['Submitted','Reconciled','Closed'].includes(a.status));
-  const inProgress = candidates.filter(a => a.status === 'In Progress');
-  const rest = candidates.filter(a => a.status !== 'In Progress');
-  for (const list of [inProgress, rest]) {
-    const hit = list.find(a => validateScanCode(a.audit_id, code).ok);
-    if (hit) return hit;
-  }
-  return null;
-}
+// Quick Scan (tab bar) — 3-mode canvas (Zone/Rack/Floor). Resets back to the
+// untouched default page (Zone mode, nothing picked) every time the tab is
+// opened fresh, same as QuickScanScreen.tsx does after every Save & Scan Next.
 function openQuickScan(){
-  STATE.quickScan = { scanCount:0, code:null, error:null, matchedAuditId:null, wrongKind:null, wrongLabel:null };
+  STATE.quickScan = { mode:'zone', modeMenuOpen:false, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false, activeZoneId:null };
   railTo('scan');
-}
-// Tablet routes into Rack View (same destination a bay pill / Start Audit
-// use) instead of jumping straight to Count Sheet — mirrors every other
-// "enter an audit task" entry point's per-device routing.
-function quickScanOpenLocation(auditId, layout, rack, bay, loc){
-  if (STATE.device === 'tablet') push('rackView', { auditId, layout, rack, bay, loc });
-  else push('countSheet', { auditId, layout, rack, bay, loc });
-}
-function applyQuickScanLocation(code){
-  const qs = STATE.quickScan;
-  qs.wrongKind = null; qs.wrongLabel = null;
-  const audit = findAuditForScan(code);
-  if (audit) {
-    qs.code = code; qs.error = null; qs.matchedAuditId = audit.audit_id;
-    toast(`Matched to ${audit.audit_id}`);
-  } else {
-    qs.code = null; qs.error = `No assigned audit covers ${code.layout} · Rack ${code.rack} · Bay ${code.bay}. It may be outside your scope.`; qs.matchedAuditId = null;
-    toast('No matching audit for this location', 'error');
-  }
-  render();
-}
-// Real camera scan — storage-location QR codes encode JSON
-// {layout,rack,bay,loc} (same shape scanLocationQR expects); pallet/SKU QR
-// codes are plain text ("P-..." / "SKU-...").
-function applyQuickScanResult(text){
-  const qs = STATE.quickScan;
-  let parsed = null;
-  try { parsed = JSON.parse(text); } catch(e) { parsed = null; }
-  if (parsed && parsed.layout && parsed.rack && parsed.bay && parsed.loc) {
-    applyQuickScanLocation(parsed);
-    return;
-  }
-  qs.code = null; qs.matchedAuditId = null; qs.error = null;
-  if (text.indexOf('P-') === 0) {
-    qs.wrongKind = 'pallet'; qs.wrongLabel = text;
-  } else {
-    const inv = INVENTORY_POOL.find(p => p.sku === text);
-    qs.wrongKind = 'sku'; qs.wrongLabel = inv ? `${inv.sku} · ${inv.name}` : text;
-  }
-  toast(`That's a ${qs.wrongKind === 'pallet' ? 'pallet' : 'SKU'} code, not a location`, 'error');
-  render();
-}
-function quickScan(){
-  if (!IS_REAL_MOBILE) return quickScanSimulated();
-  openCameraScan('Point at a storage location QR code', (text) => applyQuickScanResult(text.trim()));
-}
-// Desktop web preview has no camera — cycles through a fixture pool
-// (including pallet/SKU entries, to exercise the reject/rescan path too)
-// instead of a real decoded QR payload.
-function quickScanSimulated(){
-  const qs = STATE.quickScan;
-  const item = QUICK_SCAN_POOL[qs.scanCount % QUICK_SCAN_POOL.length];
-  qs.scanCount++;
-
-  // A pallet or SKU tag has no location context of its own — it only means
-  // something once you're already inside a specific location's count sheet.
-  // Scanned from the global Scan tab, the best we can do is reject clearly and,
-  // if there's a location already in progress, offer to jump straight back into it.
-  if (item.kind !== 'location') {
-    qs.code = null; qs.matchedAuditId = null; qs.error = null;
-    qs.wrongKind = item.kind;
-    qs.wrongLabel = item.kind === 'pallet' ? item.code : `${item.code.sku} · ${item.code.name}`;
-    toast(`That's a ${item.kind === 'pallet' ? 'pallet' : 'SKU'} code, not a location`, 'error');
-    render();
-    return;
-  }
-
-  applyQuickScanLocation(item.code);
 }
 
 // Switching location while a pallet count is mid-entry (scanned but not yet
@@ -3103,7 +3569,10 @@ function renderRackViewActiveLineCard(scan, idx){
 // location instead (its levels don't all hold the same count — a real bay's
 // levels don't), so this groups by that metadata when present rather than
 // assuming uniform width.
-function buildBayDiagram(bayObj, selectedLocCode){
+// Ported from buildBayDiagram.ts's DiagramRow builder — split out from the
+// HTML-rendering half (below) so buildScanOrder can walk the same row/cell
+// data the canvas actually renders, instead of re-deriving it.
+function buildBayDiagramRows(bayObj){
   const locs = bayObj ? bayObj.locations : [];
   const perLevel = RACK_DIAGRAM_SLOTS_PER_LEVEL;
   const hasLevelMeta = locs.length > 0 && locs[0].level != null;
@@ -3121,22 +3590,216 @@ function buildBayDiagram(bayObj, selectedLocCode){
     const cells = [];
     for (let slot = 0; slot < perLevel; slot++) {
       const loc = hasLevelMeta ? (byLevel.get(level) || [])[slot] : locs[startIdx + slot];
-      if (!loc) { cells.push(`<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`); continue; }
-      const isSelected = loc.code === selectedLocCode;
-      const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : ''].filter(Boolean).join(' ');
-      cells.push(`<button type="button" class="${cls}" title="${loc.code} · ${loc.status}" aria-label="${loc.code}" onclick="selectRackViewLoc('${loc.code}')"></button>`);
+      cells.push(loc || null);
     }
-    rows.push(`<div class="rack-diagram-row"><span class="rack-diagram-row-label">L${level}</span><div class="rack-diagram-row-cells">${cells.join('')}</div></div>`);
+    rows.push({ level, cells });
   }
+  return rows;
+}
+
+// Which side of a level's 3 slots to start from ('left'|'right'). 'first'
+// (raster) = every level restarts from `from` (Left-First-Up/Down). 'last'
+// (snake) = each new level continues from whichever slot the previous level
+// ended on, instead of resetting (Left-Last-Up/Down). `vertical` is the
+// level progression: bottom(1)->top ('up') or top->bottom(1) ('down').
+// `scope`: 'bay' ("Bay's Level") confines the order to whichever single bay
+// the current selection is in — level by level within that one bay only,
+// never advancing into another bay on its own. 'rack' ("Bay wise") sweeps
+// level-major across the WHOLE rack instead — every bay's row at a level
+// before the level advances, same as a real inspector working one elevation
+// at a time instead of one bay at a time. Ported verbatim from
+// buildBayDiagram.ts's buildOneBayOrder/buildScanOrder (commit 4b24992).
+function buildOneBayOrder(from, pattern, vertical, rows){
+  const sorted = rows.slice().sort((a, b) => vertical === 'up' ? a.level - b.level : b.level - a.level);
+  const order = [];
+  let side = from;
+  sorted.forEach(row => {
+    const cells = side === 'left' ? row.cells : row.cells.slice().reverse();
+    cells.forEach(cell => { if (cell) order.push(cell); });
+    if (pattern === 'last') side = side === 'left' ? 'right' : 'left';
+  });
+  return { order, endSide: side };
+}
+// `currentBayCode` only matters for scope 'bay' — it's the bay the order
+// gets confined to (whichever bay the current selection is in). Ignored for
+// scope 'rack', which always spans every bay.
+function buildScanOrder(settings, bayDiagrams, currentBayCode){
+  if (settings.scope === 'bay') {
+    const current = currentBayCode ? bayDiagrams.find(b => b.bay.code === currentBayCode) : bayDiagrams[0];
+    if (!current) return [];
+    return buildOneBayOrder(settings.from, settings.pattern, settings.vertical, current.rows).order;
+  }
+  // 'rack' ("Bay wise") — level is the outer loop, bays are the inner loop:
+  // every bay's row at this level gets pushed (in bay-array order, or
+  // reversed under 'last'), then the level advances. Under 'last' both the
+  // bay-sweep direction and the within-bay starting side flip after each
+  // level, so the whole rack reads as one continuous snake.
+  const maxLevel = bayDiagrams.reduce((max, { rows }) => Math.max(max, ...rows.map(r => r.level)), 0);
+  const levels = [];
+  for (let l = 1; l <= maxLevel; l++) levels.push(l);
+  const orderedLevels = settings.vertical === 'up' ? levels : levels.slice().reverse();
+  const order = [];
+  let side = settings.from;
+  let bayForward = true;
+  orderedLevels.forEach(level => {
+    const bays = bayForward ? bayDiagrams : bayDiagrams.slice().reverse();
+    bays.forEach(({ rows }) => {
+      const row = rows.find(r => r.level === level);
+      if (!row) return;
+      const cells = side === 'left' ? row.cells : row.cells.slice().reverse();
+      cells.forEach(cell => { if (cell) order.push(cell); });
+    });
+    if (settings.pattern === 'last') {
+      side = side === 'left' ? 'right' : 'left';
+      bayForward = !bayForward;
+    }
+  });
+  return order;
+}
+
+// Manual Mode-only pallets — no EXPECTED_SKUS entry on record, so outside
+// this audit's normally-tracked scope; only selectable/reportable once
+// Manual Mode opens the whole rack up. Mirrors RackViewScreen.tsx's
+// isManualOnly (there driven by target_sku; the web fixtures have no
+// target_sku field, so "in scope" here means "has an expected pallet").
+function isRackViewManualOnly(locCode){ return !EXPECTED_SKUS[locCode]; }
+function isRackViewLocSelectable(locCode){ return STATE.rackView.manualMode || !isRackViewManualOnly(locCode); }
+
+function setRackViewScanFrom(f){ STATE.rackView.from = f; render(); }
+function setRackViewScanPattern(p, v){ STATE.rackView.pattern = p; STATE.rackView.vertical = v; render(); }
+function toggleRackViewScopeMenu(){ STATE.rackView.scopeMenuOpen = !STATE.rackView.scopeMenuOpen; render(); }
+function setRackViewScanScope(s){ STATE.rackView.scope = s; STATE.rackView.scopeMenuOpen = false; render(); }
+function toggleRackViewManualMode(){ STATE.rackView.manualMode = !STATE.rackView.manualMode; render(); }
+
+// Ionicons has no "arrow into a wall" glyph (a straight stroke with an
+// arrowhead on one end, a flat bar on the other), so this is the same SVG
+// path RN's BarArrowIcon draws directly, ported pixel-for-pixel.
+function barArrowIconSvg(pointing){
+  return pointing === 'left'
+    ? `<svg width="18" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 12 H7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M11 7 L6 12 L11 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 5 V19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`
+    : `<svg width="18" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12 H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13 7 L18 12 L13 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 5 V19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+// Same "sharp-cornered" hook shape RN's CornerArrowIcon uses (an L-turn into
+// an arrowhead) — base "right-up" path mirrored/flipped per corner via a CSS
+// transform, exactly like the RN version, rather than 4 hand-drawn paths.
+function cornerArrowIconSvg(corner){
+  const flipX = corner === 'left-up' || corner === 'left-down';
+  const flipY = corner === 'right-down' || corner === 'left-down';
+  const t = (flipX || flipY) ? ` style="transform:scale(${flipX ? -1 : 1},${flipY ? -1 : 1})"` : '';
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"${t}><path d="M4 18 H11 Q17 18 17 12 V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 10 L17 6 L21 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+// Persistent bottom toolbar on the Rack View canvas — replaces the old
+// settings-icon + centered-modal Scan Direction control, matching
+// RackViewScreen.tsx's ScanDirectionToolbar (commit 4b24992). Always
+// visible, whether or not the Reconciliation Form panel is open. Scope now
+// lives in the canvas header pill (see rackViewScopeControlHtml), not here.
+function renderRackViewDirToolbar(){
+  const rv = STATE.rackView;
+  const fromLabel = rv.from === 'left' ? 'Left' : 'Right';
+  const patternButtons = [
+    { pattern:'last', vertical:'up', corner:'right-up', label:`${fromLabel}-Last-Up` },
+    { pattern:'first', vertical:'up', corner:'left-up', label:`${fromLabel}-First-Up` },
+    { pattern:'last', vertical:'down', corner:'right-down', label:`${fromLabel}-Last-Down` },
+    { pattern:'first', vertical:'down', corner:'left-down', label:`${fromLabel}-First-Down` },
+  ];
+  const dirBtn = (iconSvg, label, active, onclick) => `
+    <button type="button" class="rv-dir-btn ${active ? 'active' : ''}" onclick="${onclick}">
+      <span class="icon-box">${iconSvg}</span>
+      <span class="lbl">${label}</span>
+    </button>
+  `;
+  return `
+    <div class="rv-dir-toolbar">
+      ${dirBtn(barArrowIconSvg('left'), 'Right', rv.from === 'right', `setRackViewScanFrom('right')`)}
+      ${dirBtn(barArrowIconSvg('right'), 'Left', rv.from === 'left', `setRackViewScanFrom('left')`)}
+      <div class="rv-dir-divider"></div>
+      ${patternButtons.map(b => dirBtn(cornerArrowIconSvg(b.corner), b.label, rv.pattern === b.pattern && rv.vertical === b.vertical, `setRackViewScanPattern('${b.pattern}','${b.vertical}')`)).join('')}
+    </div>
+  `;
+}
+
+// Scope pill + informational recap badge, in the canvas header (next to
+// "Front View — Rack X — N Bays"), matching RN's canvas-header scope
+// dropdown. Reuses the existing rvpick-wrap/backdrop/panel/item pattern
+// (same one the Rack/Bay/Pallet pickers use) rather than a new dropdown.
+function renderRackViewScopeControl(){
+  const rv = STATE.rackView;
+  const scopeLabel = rv.scope === 'bay' ? "Bay's Level" : 'Bay wise';
+  const menu = rv.scopeMenuOpen ? `
+    <button type="button" class="rvpick-backdrop" onclick="toggleRackViewScopeMenu()" aria-label="Close"></button>
+    <div class="rvpick-panel" style="width:170px;" onclick="event.stopPropagation()">
+      <button type="button" class="rvpick-item ${rv.scope === 'bay' ? 'selected' : ''}" onclick="setRackViewScanScope('bay')"><span>Bay's Level</span>${rv.scope === 'bay' ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>
+      <button type="button" class="rvpick-item ${rv.scope === 'rack' ? 'selected' : ''}" onclick="setRackViewScanScope('rack')"><span>Bay wise</span>${rv.scope === 'rack' ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>
+    </div>
+  ` : '';
+  return `
+    <div class="rv-header-right">
+      <div class="rvpick-wrap">
+        <button type="button" class="rv-scope-btn ${rv.scopeMenuOpen ? 'open' : ''}" onclick="toggleRackViewScopeMenu()">
+          <span>${scopeLabel}</span>${ICON.chevronDown}
+        </button>
+        ${menu}
+      </div>
+      <div class="rv-scope-badge">${scopeLabel} · ${rv.from === 'left' ? 'Left' : 'Right'}-${rv.pattern === 'last' ? 'Last' : 'First'}-${rv.vertical === 'up' ? 'Up' : 'Down'}</div>
+    </div>
+  `;
+}
+
+// A real switch (track + sliding thumb), not a color-swapped button — reads
+// unambiguously as an on/off toggle, the amber on-state matching the
+// caution banner it reveals. Matches RN's ManualModeToggle.
+function renderRackViewManualToggle(){
+  const on = STATE.rackView.manualMode;
+  return `
+    <button type="button" class="rv-manual-toggle ${on ? 'on' : ''}" onclick="toggleRackViewManualMode()" aria-pressed="${on}">
+      ${ICON.wrench}
+      <span class="lbl">Manual Mode</span>
+      <span class="rv-switch-track"><span class="rv-switch-thumb"></span></span>
+    </button>
+  `;
+}
+
+// Renders one bay's diagram — cells colored/ordered per the current Scan
+// Direction settings (from/pattern/vertical/scope) and Manual Mode.
+// `rackObj` supplies every bay in the rack so scope 'rack' ("Bay wise") can
+// compute a whole-rack scan order even though only one bay's grid is drawn
+// here at a time.
+function buildBayDiagram(bayObj, selectedLocCode, rackObj){
+  const rv = STATE.rackView;
+  const rows = buildBayDiagramRows(bayObj);
+  const bays = rackObj ? rackObj.bays : [bayObj];
+  const bayDiagrams = bays.map(b => ({ bay: b, rows: b.code === bayObj.code ? rows : buildBayDiagramRows(b) }));
+  const scanOrder = buildScanOrder({ from: rv.from, pattern: rv.pattern, vertical: rv.vertical, scope: rv.scope }, bayDiagrams, bayObj.code);
+  const orderIndex = new Map(scanOrder.map((loc, i) => [loc.code, i + 1]));
+  const rowsHtml = rows.map(row => {
+    const cells = row.cells.map(loc => {
+      if (!loc) return `<button type="button" class="rack-diagram-cell empty" disabled aria-label="Empty slot"></button>`;
+      const isSelected = loc.code === selectedLocCode;
+      const manualOnly = isRackViewManualOnly(loc.code);
+      const selectable = isRackViewLocSelectable(loc.code);
+      const cls = ['rack-diagram-cell', 'filled', isSelected ? 'selected' : '', manualOnly ? 'manual-only' : '', !selectable ? 'locked' : ''].filter(Boolean).join(' ');
+      const order = orderIndex.get(loc.code);
+      const badge = order ? `<span class="order-badge">${order}</span>` : '';
+      const action = selectable ? ` onclick="selectRackViewLoc('${loc.code}')"` : ' disabled';
+      return `<button type="button" class="${cls}" title="${loc.code} · ${loc.status}${manualOnly ? ' · Manual Mode only' : ''}" aria-label="${loc.code}"${action}>${badge}</button>`;
+    }).join('');
+    return `<div class="rack-diagram-row"><span class="rack-diagram-row-label">L${row.level}</span><div class="rack-diagram-row-cells">${cells}</div></div>`;
+  }).join('');
   return `
     <div class="rack-diagram-card">
-      <div class="rack-diagram">${rows.join('')}</div>
+      <div class="rack-diagram">${rowsHtml}</div>
     </div>
     <div class="rack-diagram-caption">Bay ${bayObj.code}</div>
   `;
 }
 
-function selectRackViewLoc(code){ STATE.rackViewClickedLoc = code; STATE.params.loc = code; render(); }
+function selectRackViewLoc(code){
+  if (!isRackViewLocSelectable(code)) return;
+  STATE.rackViewClickedLoc = code;
+  STATE.params.loc = code;
+  render();
+}
 function cancelRackViewSelection(){ STATE.rackViewClickedLoc = null; STATE.params.loc = null; render(); }
 
 // Scanning a SKU straight from Rack View (rather than only from the full Count
@@ -3510,7 +4173,7 @@ function renderRackViewSkuPanel(){
     <div class="rv-sku-panel" onclick="event.stopPropagation()">
       <div class="rv-sku-panel-head">
         <div>
-          <h3>Reconciliation Form</h3>
+          <h3>${STATE.rackView.manualMode && isRackViewManualOnly(scan.loc) ? 'Manual Issue Report' : 'Reconciliation Form'}</h3>
           <div class="rv-sku-panel-sub mono">${scan.loc} · ${scan.pallet || 'New Pallet'}</div>
         </div>
         <button type="button" class="card-icon-btn" onclick="scanSku()" title="Scan another SKU" aria-label="Scan another SKU">${ICON.qr}</button>
@@ -3605,6 +4268,7 @@ function renderRackView(){
         </button>
         ${palletDropdown}
       </div>
+      <div class="field" style="flex:0 0 auto;">${renderRackViewManualToggle()}</div>
       <div class="rv-scan-qr">
         <span>OR Scan the QR</span>
         <button type="button" class="card-icon-btn" title="Scan Pallet LPN QR" aria-label="Scan Pallet LPN QR" onclick="scanRackViewLoc('${auditId}')">${ICON.qr}</button>
@@ -3612,19 +4276,31 @@ function renderRackView(){
     </div>
   `;
 
+  const manualBanner = STATE.rackView.manualMode ? `
+    <div class="rv-manual-banner">
+      ${ICON.warn}
+      <span>Manual Mode — every pallet in this rack is selectable, outside this audit's assigned scope too. Pick a location, scan the SKU that's actually there, and report what you found.</span>
+    </div>
+  ` : '';
+
   return `
     ${headerBlock({ title: a.audit_name, sub: a.audit_id, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="rv-toolbar-row">${topFields}</div>
+    ${manualBanner}
     <div class="body-pad">
       <div class="card rv-diagram-card">
-        <div class="rv-diagram-header">Front View</div>
+        <div class="rv-diagram-header">
+          <span>Front View — Rack ${rackObj.code}${rackObj.bays.length > 1 ? ` — ${rackObj.bays.length} Bays` : ''}</span>
+          ${renderRackViewScopeControl()}
+        </div>
         <div class="rv-diagram-body">
-          ${buildBayDiagram(bayObj, selectedCode)}
+          ${buildBayDiagram(bayObj, selectedCode, rackObj)}
         </div>
         <div class="rv-actions-row">
           <button class="btn outline auto" onclick="cancelRackViewSelection()">Cancel</button>
           <button class="btn primary auto" ${selectedCode ? '' : 'disabled'} onclick="scanSkuFromRackView('${auditId}', '${layoutObj.name}', '${rackObj.code}', '${bayObj.code}', '${selectedCode}')">Start Audit ${ICON.chevron}</button>
         </div>
+        ${renderRackViewDirToolbar()}
       </div>
     </div>
     ${renderRackViewSkuPanel()}
@@ -4246,252 +4922,456 @@ function completeLocation(){
 }
 
 /* ================= QUICK SCAN (tab bar) ================= */
-function renderQuickScan(){
+/* ================= QUICK SCAN (3-mode canvas: Zone / Rack / Floor) =================
+   Ported from QuickScanScreen.tsx + PinLocationScreen.tsx. Zone mode folds in
+   what used to be the standalone "Zone Audit Map (Preview)" screen; Rack mode
+   reuses Rack View's own picker chain + buildBayDiagram (via the shared
+   STATE.params / STATE.rackViewClickedLoc / STATE.rackViewPicker — safe to
+   borrow since Quick Scan and Rack View are never on screen at once) instead
+   of re-implementing the bay diagram; Floor mode is net-new — scan first,
+   then pin the exact zone before the Reconciliation Form can be saved. */
+const QS_MODES = [
+  { key:'zone', label:'Zone' },
+  { key:'rack', label:'Rack' },
+  { key:'floor', label:'Floor' },
+];
+
+function quickScanToggleModeMenu(){ STATE.quickScan.modeMenuOpen = !STATE.quickScan.modeMenuOpen; render(); }
+function quickScanSetMode(mode){
   const qs = STATE.quickScan;
-  const matched = qs.matchedAuditId ? AUDITS.find(a => a.audit_id === qs.matchedAuditId) : null;
-
-  let body;
-  if (qs.code && matched) {
-    body = `
-      <div class="card" style="border-color:var(--rag-green-border); background:var(--rag-green-soft);">
-        <div class="card-title-row" style="margin-bottom:14px;"><h2 style="color:var(--rag-green-strong);">Scanned Location</h2>${ICON.check}</div>
-        <div class="kv-list">
-          <div class="kv-row"><span class="l">Layout</span><span class="v mono">${qs.code.layout}</span></div>
-          <div class="kv-row"><span class="l">Rack</span><span class="v mono">${qs.code.rack}</span></div>
-          <div class="kv-row"><span class="l">Bay</span><span class="v mono">${qs.code.bay}</span></div>
-          <div class="kv-row" style="border-bottom:none;"><span class="l">Storage Location</span><span class="v mono">${qs.code.loc}</span></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title-row" style="margin-bottom:14px;"><h2>Matched Audit</h2><span class="pill ${pillClass(uiStatus(matched))}">${uiStatus(matched)}</span></div>
-        <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground);">${matched.audit_name}</div>
-        <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${matched.audit_id}</div>
-      </div>
-      <button class="btn primary btn-pill" onclick="quickScanOpenLocation('${matched.audit_id}', '${qs.code.layout}', '${qs.code.rack}', '${qs.code.bay}', '${qs.code.loc}')">${STATE.device === 'tablet' ? 'Open Rack View' : 'Open Count Sheet'} ${ICON.chevron}</button>
-      <button class="btn outline small" style="width:100%;" onclick="quickScan()">${ICON.scan} Scan Another Location</button>
-    `;
-  } else if (qs.wrongKind) {
-    // Pallet/SKU codes carry no location of their own — they only mean something
-    // once you're already inside a specific location's count sheet. Best recovery
-    // here is a clear rejection plus a shortcut back into whatever location the
-    // inspector was last counting, if any.
-    const ongoing = currentOngoing();
-    const ls = ongoing ? lastSaved(ongoing.audit_id) : null;
-    body = `
-      <div class="card" style="border-color:var(--rag-amber-border); background:var(--rag-amber-soft);">
-        <div class="card-title-row" style="margin-bottom:14px;"><h2 style="color:var(--rag-amber-strong);">Wrong Code Type</h2>${ICON.close}</div>
-        <div style="font-size:var(--text-base); font-weight:700; color:var(--foreground); margin-bottom:4px;">This is a ${qs.wrongKind === 'pallet' ? 'Pallet' : 'SKU'} code, not a storage location.</div>
-        <div class="mono" style="font-size:var(--text-xs); color:var(--muted-foreground);">${qs.wrongLabel}</div>
-      </div>
-      <div class="banner info"><span class="dot"></span> Pallet and SKU codes only make sense inside an already-open location's count sheet. Scan the storage location QR first.</div>
-      ${ls ? `<button class="btn primary btn-pill" onclick="quickScanOpenLocation('${ongoing.audit_id}', '${ls.layout}', '${ls.rack}', '${ls.bay}', '${ls.loc.code}')">Continue at ${ls.loc.code} ${ICON.chevron}</button>` : ''}
-      <button class="btn outline small" style="width:100%;" onclick="quickScan()">${ICON.scan} Scan Again</button>
-    `;
-  } else {
-    // Short content (just the scan prompt + one banner) — center it in the
-    // available space instead of pinning to the top and leaving a dead gap
-    // above the tab bar.
-    body = `
-      <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
-        <div class="scan-block">
-          <div class="glyph-circle">${ICON.camera}</div>
-          <button class="btn small primary" onclick="quickScan()">Scan Location QR</button>
-        </div>
-        ${qs.error
-          ? `<div class="banner warn" style="margin-top:14px;"><span class="dot"></span> ${qs.error}</div>`
-          : `<div class="banner info" style="margin-top:14px;"><span class="dot"></span> Scan any storage location QR to jump straight to its count sheet — checked against all of your assigned audits.</div>`}
-      </div>
-    `;
-  }
-
+  qs.mode = mode;
+  qs.modeMenuOpen = false;
+  qs.zonePickerOpen = false;
+  qs.pendingItem = null;
+  if (mode === 'rack') quickScanSeedRackContext();
+  render();
+}
+function quickScanModeMenuHtml(){
+  if (!STATE.quickScan.modeMenuOpen) return '';
   return `
-    ${headerBlock({ title:'Quick Scan', sub:'Jump to any assigned location', showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
-    <div class="body-pad">
-      ${body}
-      <button class="btn outline small" style="width:100%; margin-top:14px;" onclick="openZoneAudit()">${ICON.wh} Zone Audit Map (Preview)</button>
+    <button type="button" class="rvpick-backdrop" onclick="quickScanToggleModeMenu()" aria-label="Close"></button>
+    <div class="rvpick-panel" style="width:150px;" onclick="event.stopPropagation()">
+      ${QS_MODES.map(m => `<button type="button" class="rvpick-item ${STATE.quickScan.mode===m.key?'selected':''}" onclick="quickScanSetMode('${m.key}')"><span>${m.label}</span>${STATE.quickScan.mode===m.key?ICON.checkSm:''}</button>`).join('')}
     </div>
-    ${renderTabBar('scan')}
   `;
 }
 
-/* ================= ZONE AUDIT MAP (preview) ================= */
-function openZoneAudit(){
-  STATE.zoneAudit = { floorAreaId:null, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false };
-  push('zoneAudit', {});
+// Zone mode's own dropdown (redundant with tapping a zone tile on the
+// canvas, same as QuickScanScreen.tsx's ToolbarField + canvas tap both
+// funneling through pickZone).
+function quickScanToggleZonePicker(){ STATE.quickScan.zonePickerOpen = !STATE.quickScan.zonePickerOpen; render(); }
+function quickScanZonePickerHtml(){
+  return `
+    <button type="button" class="rvpick-backdrop" onclick="quickScanToggleZonePicker()" aria-label="Close"></button>
+    <div class="rvpick-panel" onclick="event.stopPropagation()">
+      ${FLOOR_AREAS.map(z => `<button type="button" class="rvpick-item ${STATE.quickScan.activeZoneId===z.id?'selected':''}" onclick="quickScanPickZone('${z.id}')"><span>${z.label}</span>${STATE.quickScan.activeZoneId===z.id?ICON.checkSm:''}</button>`).join('')}
+    </div>
+  `;
 }
-function pickZoneArea(id){
-  STATE.zoneAudit.floorAreaId = id;
+function quickScanPickZone(id){
+  STATE.quickScan.activeZoneId = id;
+  STATE.quickScan.zonePickerOpen = false;
   render();
 }
-function zoneAuditScan(){
-  if (!STATE.zoneAudit.floorAreaId) return;
-  if (!IS_REAL_MOBILE) return zoneAuditScanSimulated();
-  openCameraScan('Point at a SKU code', (text) => applyZoneAuditSku(text.trim()));
+
+// Rack mode context lives on STATE.params (auditId/layout/rack/bay) + the
+// same STATE.rackViewClickedLoc buildBayDiagram already reads — seeded fresh
+// (first assigned audit, first layout/rack/bay) every time Rack mode is
+// entered, same as QuickScanScreen resetting its own drill-down per mode switch.
+function quickScanSeedRackContext(){
+  const a = mine()[0];
+  if (!a) { STATE.params = {}; STATE.rackViewClickedLoc = null; return; }
+  const layouts = layoutsOf(a.audit_id);
+  const layoutObj = layouts[0];
+  const rackObj = layoutObj && layoutObj.racks[0];
+  const bayObj = rackObj && rackObj.bays[0];
+  STATE.params = { auditId: a.audit_id, layout: layoutObj ? layoutObj.name : null, rack: rackObj ? rackObj.code : null, bay: bayObj ? bayObj.code : null, loc: null };
+  STATE.rackViewClickedLoc = null;
+  STATE.rackViewPicker = null;
+}
+function quickScanOpenLayoutPicker(){ openRackViewPicker('qs-layout'); }
+function quickScanLayoutListHtml(){
+  const layouts = layoutsOf(STATE.params.auditId);
+  return layouts.map(ly => {
+    const isSelected = ly.name === STATE.params.layout;
+    return `<button type="button" class="rvpick-item ${isSelected?'selected':''}" onclick="quickScanChooseLayout('${ly.name}')"><span>${ly.name}</span>${isSelected ? `<span class="check">${ICON.checkSm}</span>` : ''}</button>`;
+  }).join('');
+}
+function quickScanChooseLayout(layoutName){
+  const layoutObj = findLayoutIn(STATE.params.auditId, layoutName);
+  const firstRack = layoutObj && layoutObj.racks[0];
+  const firstBay = firstRack && firstRack.bays[0];
+  STATE.params.layout = layoutName;
+  STATE.params.rack = firstRack ? firstRack.code : null;
+  STATE.params.bay = firstBay ? firstBay.code : null;
+  STATE.params.loc = null;
+  STATE.rackViewClickedLoc = null;
+  STATE.rackViewPicker = null;
+  render();
+}
+
+function quickScanCanScan(){
+  const qs = STATE.quickScan;
+  if (qs.pendingItem) return false;
+  if (qs.mode === 'floor') return true;
+  if (qs.mode === 'zone') return !!qs.activeZoneId;
+  if (qs.mode === 'rack') return !!(STATE.params.layout && STATE.params.rack && STATE.params.bay && STATE.rackViewClickedLoc);
+  return false;
+}
+function quickScanScan(){
+  if (!quickScanCanScan()) return;
+  if (!IS_REAL_MOBILE) return quickScanSimulatedScan();
+  openCameraScan('Point at a SKU code', (text) => applyQuickScanSku(text.trim()));
 }
 // Desktop/web preview has no camera — cycles through the inventory pool,
-// same fallback pattern quickScanSimulated uses.
-function zoneAuditScanSimulated(){
-  const za = STATE.zoneAudit;
-  const item = INVENTORY_POOL[za.scanCount % INVENTORY_POOL.length];
-  za.scanCount++;
-  applyZoneAuditSku(item.sku);
+// same fallback pattern the old single-mode Quick Scan used.
+function quickScanSimulatedScan(){
+  const qs = STATE.quickScan;
+  const item = INVENTORY_POOL[qs.scanCount % INVENTORY_POOL.length];
+  qs.scanCount++;
+  applyQuickScanSku(item.sku);
 }
-function applyZoneAuditSku(sku){
-  const za = STATE.zoneAudit;
-  const zone = FLOOR_AREAS.find(z => z.id === za.floorAreaId);
-  if (!zone) return;
+function applyQuickScanSku(sku){
+  const qs = STATE.quickScan;
   const inv = INVENTORY_POOL.find(p => p.sku === sku);
-  const expectedZone = expectedZoneForSku(sku);
-  const matched = expectedZone ? expectedZone === zone.label : null;
-  za.pendingItem = {
+  const base = {
     id: 's' + Date.now() + Math.random().toString(36).slice(2,6),
-    sku, name: inv ? inv.name : sku,
-    pinnedZone: zone.label, expectedZone, matched,
-    qty: 1, condition: 'Good', evidence: { note:'', noteOpen:false, images:[] },
-    scannedAt: Date.now(),
+    sku, name: inv ? inv.name : sku, qty:1, condition:'Good',
+    evidence: { note:'', noteOpen:false, images:[] }, scannedAt: Date.now(),
   };
-  za.qtyText = '1';
+
+  if (qs.mode === 'zone') {
+    const zone = FLOOR_AREAS.find(z => z.id === qs.activeZoneId);
+    if (!zone) return;
+    const expectedZone = expectedZoneForSku(sku);
+    qs.pendingItem = { ...base, origin:'zone', pinnedZone: zone.label, pinnedFloorAreaId: zone.id, expectedZone, matched: expectedZone ? expectedZone === zone.label : null, pinnedAt: Date.now() };
+  } else if (qs.mode === 'rack') {
+    const { layout, rack, bay } = STATE.params;
+    const locCode = STATE.rackViewClickedLoc;
+    if (!(layout && rack && bay && locCode)) return;
+    const expected = EXPECTED_SKUS[locCode] || [];
+    const matched = expected.length ? expected.some(l => l.sku === sku) : null;
+    qs.pendingItem = { ...base, origin:'rack', pinnedZone: layout, pinnedRack: rack, pinnedBay: bay, pinnedLoc: locCode, expectedZone:null, matched, pinnedAt: Date.now() };
+  } else {
+    // Floor — unresolved until pinned; the Reconciliation Form still opens
+    // right away for qty/condition/evidence, same as QuickScanScreen.tsx.
+    qs.pendingItem = { ...base, origin:'floor', expectedZone: expectedZoneForSku(sku), matched:null, pinnedAt:null };
+  }
+  qs.qtyText = '1';
   render();
 }
-function zoneAuditSetQty(v){
+// "Pin Exact Location" — tapping a zone tile while a Floor-mode scan is
+// unresolved finalizes where it was actually found (PinLocationScreen.tsx's
+// tap-to-arm-then-confirm flow, folded into the same canvas tap here).
+function quickScanPinFloor(zoneId){
+  const it = STATE.quickScan.pendingItem;
+  if (!it || it.origin !== 'floor' || it.pinnedAt) return;
+  const zone = FLOOR_AREAS.find(z => z.id === zoneId);
+  if (!zone) return;
+  it.pinnedZone = zone.label;
+  it.pinnedFloorAreaId = zone.id;
+  it.matched = it.expectedZone ? it.expectedZone === zone.label : null;
+  it.pinnedAt = Date.now();
+  render();
+}
+function quickScanSetQty(v){
   const n = parseInt(v, 10);
-  STATE.zoneAudit.qtyText = v;
-  if (STATE.zoneAudit.pendingItem) STATE.zoneAudit.pendingItem.qty = Number.isNaN(n) ? 1 : Math.max(1, n);
+  STATE.quickScan.qtyText = v;
+  if (STATE.quickScan.pendingItem) STATE.quickScan.pendingItem.qty = Number.isNaN(n) ? 1 : Math.max(1, n);
   render();
 }
-function zoneAuditSetCondition(c){
-  if (STATE.zoneAudit.pendingItem) STATE.zoneAudit.pendingItem.condition = c;
+function quickScanSetCondition(c){
+  if (STATE.quickScan.pendingItem) STATE.quickScan.pendingItem.condition = c;
   render();
 }
-function zoneAuditToggleNote(){
-  const it = STATE.zoneAudit.pendingItem;
+function quickScanToggleNote(){
+  const it = STATE.quickScan.pendingItem;
   if (!it) return;
   it.evidence.noteOpen = !it.evidence.noteOpen;
   render();
 }
-function zoneAuditSetNote(v){
-  const it = STATE.zoneAudit.pendingItem;
+function quickScanSetNote(v){
+  const it = STATE.quickScan.pendingItem;
   if (it) it.evidence.note = v;
 }
-function zoneAuditAddPhoto(){
-  const it = STATE.zoneAudit.pendingItem;
+function quickScanAddPhoto(){
+  const it = STATE.quickScan.pendingItem;
   if (!it) return;
   it.evidence.images.push({});
   toast('Photo attached');
   render();
 }
-function zoneAuditSave(){
-  const za = STATE.zoneAudit;
-  if (!za.pendingItem) return;
-  za.items.unshift(za.pendingItem);
-  za.pendingItem = null;
-  za.qtyText = '1';
+function quickScanSave(){
+  const qs = STATE.quickScan;
+  const it = qs.pendingItem;
+  if (!it) return;
+  if (it.origin === 'floor' && !it.pinnedAt) { toast('Pin the exact location before saving', 'error'); return; }
+  qs.items.unshift(it);
+  qs.pendingItem = null;
+  qs.qtyText = '1';
   toast('Record saved');
   render();
 }
-function zoneAuditCancel(){
-  STATE.zoneAudit.pendingItem = null;
-  render();
+function quickScanCancel(){ STATE.quickScan.pendingItem = null; render(); }
+function quickScanToggleList(){ STATE.quickScan.listOpen = !STATE.quickScan.listOpen; render(); }
+
+function quickScanOriginLabel(origin){ return origin === 'zone' ? 'Zone Find' : origin === 'rack' ? 'Rack Find' : 'Floor Find'; }
+function quickScanLocationLabel(item){
+  return item.origin === 'rack'
+    ? `${item.pinnedZone} · Rack ${item.pinnedRack} · Bay ${item.pinnedBay} · ${item.pinnedLoc}`
+    : (item.pinnedZone || '—');
 }
-function zoneAuditToggleList(){
-  STATE.zoneAudit.listOpen = !STATE.zoneAudit.listOpen;
-  render();
-}
-function zoneAuditItemCard(item){
-  const tone = item.matched === null ? 'info' : item.matched ? 'ok' : 'warn';
-  const label = item.matched === null ? 'No Expectation on Record' : item.matched ? 'Zone Matched' : 'Location Mismatch';
+function quickScanItemCard(item){
+  const tone = item.matched === false ? 'warn' : item.matched === true ? 'ok' : 'info';
+  const label = item.matched === false ? 'Location Mismatch' : item.matched === true ? 'Matched' : 'No Expectation on Record';
   return `
     <div class="card" style="margin-bottom:10px;">
-      <div class="card-title-row" style="margin-bottom:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+        <span class="pill" style="background:var(--muted); color:var(--muted-foreground);">${quickScanOriginLabel(item.origin)}</span>
         <span class="pill ${tone==='ok'?'s-completed':tone==='warn'?'s-overdue':'s-scheduled'}">${label}</span>
       </div>
       <div style="font-weight:700; color:var(--foreground);">${item.sku}</div>
       <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:8px;">${item.name}</div>
       <div class="kv-list">
-        <div class="kv-row"><span class="l">Zone</span><span class="v">${item.pinnedZone}</span></div>
-        ${item.expectedZone ? `<div class="kv-row"><span class="l">Expected Zone</span><span class="v">${item.expectedZone}</span></div>` : ''}
+        <div class="kv-row"><span class="l">Location</span><span class="v">${quickScanLocationLabel(item)}</span></div>
         <div class="kv-row"><span class="l">Qty</span><span class="v">${item.qty}</span></div>
         <div class="kv-row" style="border-bottom:none;"><span class="l">Condition</span>${severityPillHtml(item.condition)}</div>
       </div>
     </div>
   `;
 }
-function renderZoneAuditForm(){
-  const it = STATE.zoneAudit.pendingItem;
-  if (!it) return '';
+// Full-page Scanned SKUs list, grouped by origin (Zone/Rack/Floor Find) —
+// toggled via quickScanToggleList rather than a separate stack entry, so its
+// own back arrow must close the list (not pop the real nav stack).
+function renderQuickScanList(){
+  const items = STATE.quickScan.items;
+  const groups = [
+    { key:'zone', title:'Zone Finds', rows: items.filter(i => i.origin === 'zone') },
+    { key:'rack', title:'Rack Finds', rows: items.filter(i => i.origin === 'rack') },
+    { key:'floor', title:'Floor Finds', rows: items.filter(i => i.origin === 'floor') },
+  ].filter(g => g.rows.length);
   return `
-    <div class="card" style="border-color:var(--accent-blue-border); background:var(--accent-blue-soft);">
-      <div class="card-title-row" style="margin-bottom:10px;">
-        <h2>Reconciliation Form</h2>
-        <button class="card-icon-btn" onclick="zoneAuditCancel()" aria-label="Close">${ICON.close}</button>
-      </div>
-      <div style="font-weight:700; color:var(--foreground);">${it.sku}</div>
-      <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:10px;">${it.name} · Zone: ${it.pinnedZone}</div>
-      <div class="sku-section">
-        <span class="sec-label">Quantity <span style="color:var(--rag-red-strong);">*</span></span>
-        <div class="qty-stepper-row">
-          <input class="qty-input" type="number" inputmode="numeric" min="1" value="${it.qty}" onfocus="this.select()" onchange="zoneAuditSetQty(this.value)">
+    <div class="navtop">
+      ${statusBarHtml()}
+      <div class="app-header">
+        <button class="back-btn" onclick="quickScanToggleList()" aria-label="Back">${ICON.back}</button>
+        <div style="min-width:0; flex:1;">
+          <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Scanned SKUs</h1>
         </div>
       </div>
-      <div class="sku-section">
-        <span class="sec-label">Condition <span style="color:var(--rag-red-strong);">*</span></span>
-        <div class="cond-radio-grid">${CONDITIONS.map(c => `
-          <label class="cond-radio">
-            <input type="radio" name="za-cond" ${it.condition===c?'checked':''} onchange="zoneAuditSetCondition('${c}')">
-            <span>${c}</span>
-          </label>
-        `).join('')}</div>
+    </div>
+    <div class="body-pad">
+      ${groups.length ? groups.map(g => `
+        <div class="insp-section-label" style="margin-bottom:10px;"><span class="icon-box">${ICON.box}</span>${g.title}<span class="acc-badge" style="margin-left:auto;">${g.rows.length}</span></div>
+        ${g.rows.map(quickScanItemCard).join('')}
+      `).join('') : `<div class="empty-state"><div>Scanned records will appear here.</div></div>`}
+    </div>
+  `;
+}
+// Reconciliation Form overlay — same rv-sku-panel pattern Rack View's SKU
+// panel uses (renderRackViewSkuPanel), not a bespoke form.
+function renderQuickScanForm(){
+  const it = STATE.quickScan.pendingItem;
+  if (!it) return '';
+  const pinRequired = it.origin === 'floor' && !it.pinnedAt;
+  const tone = pinRequired ? 'amber' : it.matched === false ? 'red' : 'green';
+  const label = pinRequired ? 'Pin Required' : it.matched === false ? 'Location Mismatch' : it.matched === true ? 'Matched' : 'No Expectation on Record';
+  const locLabel = it.origin === 'rack' ? quickScanLocationLabel(it) : (it.pinnedZone || (pinRequired ? 'Not pinned yet' : '—'));
+  return `
+    <button type="button" class="rv-sku-panel-backdrop" onclick="quickScanCancel()" aria-label="Close"></button>
+    <div class="rv-sku-panel" onclick="event.stopPropagation()">
+      <div class="rv-sku-panel-head">
+        <div>
+          <h3>Reconciliation Form</h3>
+          <div class="rv-sku-panel-sub mono">${it.sku} · ${quickScanOriginLabel(it.origin)}</div>
+        </div>
+        <button type="button" class="card-icon-btn" onclick="quickScanCancel()" aria-label="Close">${ICON.close}</button>
       </div>
-      <div class="rv-evidence">
-        <div class="rv-evidence-row">
-          <span class="rv-evidence-label">Write a note for this record</span>
-          <div class="rv-evidence-btns">
-            <button type="button" class="card-icon-btn" title="Add note" onclick="zoneAuditToggleNote()">${ICON.pencil}</button>
-            <button type="button" class="card-icon-btn" title="Add photo" onclick="zoneAuditAddPhoto()">${ICON.camera}</button>
+      <div class="rv-sku-panel-body">
+        <div class="card" style="border-color:var(--rag-${tone}-border); background:var(--rag-${tone}-soft); margin:0;">
+          <div style="margin-bottom:10px;"><span class="pill ${tone==='green'?'s-completed':tone==='red'?'s-overdue':'s-scheduled'}">${label}</span></div>
+          <div style="font-weight:700; color:var(--foreground);">${it.sku}</div>
+          <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:8px;">${it.name}</div>
+          <div class="kv-list">
+            <div class="kv-row" style="border-bottom:none;"><span class="l">Location</span><span class="v">${locLabel}</span></div>
+            ${it.expectedZone ? `<div class="kv-row" style="border-bottom:none;"><span class="l">Expected Zone</span><span class="v">${it.expectedZone}</span></div>` : ''}
           </div>
         </div>
-        ${it.evidence.noteOpen ? `<textarea class="rv-evidence-note" placeholder="Add a note..." onchange="zoneAuditSetNote(this.value)">${it.evidence.note}</textarea>` : ''}
-        ${it.evidence.images.length ? `<div class="rv-evidence-group"><div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(it.evidence.images.length).padStart(2,'0')}</span></div></div>` : ''}
+        ${pinRequired ? `
+          <div class="banner warn"><span class="dot"></span> Tap a zone below to pin this SKU's exact location before saving.</div>
+          <div class="za-zone-row">${FLOOR_AREAS.map(z => `<button type="button" class="za-zone-card" onclick="quickScanPinFloor('${z.id}')">${z.label}</button>`).join('')}</div>
+        ` : ''}
+        <div class="sku-section">
+          <span class="sec-label">Quantity <span style="color:var(--rag-red-strong);">*</span></span>
+          <div class="qty-stepper-row">
+            <input class="qty-input" type="number" inputmode="numeric" min="1" value="${it.qty}" onfocus="this.select()" onchange="quickScanSetQty(this.value)">
+          </div>
+        </div>
+        <div class="sku-section">
+          <span class="sec-label">Condition <span style="color:var(--rag-red-strong);">*</span></span>
+          <div class="cond-radio-grid">${CONDITIONS.map(c => `
+            <label class="cond-radio">
+              <input type="radio" name="qs-cond" ${it.condition===c?'checked':''} onchange="quickScanSetCondition('${c}')">
+              <span>${c}</span>
+            </label>
+          `).join('')}</div>
+        </div>
+        <div class="rv-evidence">
+          <div class="rv-evidence-row">
+            <span class="rv-evidence-label">Write a note for this record</span>
+            <div class="rv-evidence-btns">
+              <button type="button" class="card-icon-btn" title="Add note" onclick="quickScanToggleNote()">${ICON.pencil}</button>
+              <button type="button" class="card-icon-btn" title="Add photo" onclick="quickScanAddPhoto()">${ICON.camera}</button>
+            </div>
+          </div>
+          ${it.evidence.noteOpen ? `<textarea class="rv-evidence-note" placeholder="Add a note..." onchange="quickScanSetNote(this.value)">${it.evidence.note}</textarea>` : ''}
+          ${it.evidence.images.length ? `<div class="rv-evidence-group"><div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(it.evidence.images.length).padStart(2,'0')}</span></div></div>` : ''}
+        </div>
       </div>
-      <div class="sku-card-footer" style="margin-top:14px;">
-        <button type="button" class="btn outline small" style="flex:1;" onclick="zoneAuditCancel()">Cancel</button>
-        <button type="button" class="btn primary small" style="flex:1;" onclick="zoneAuditSave()">Save &amp; Scan Next</button>
+      <div class="rv-sku-panel-footer">
+        <button type="button" class="btn outline" onclick="quickScanCancel()">Cancel</button>
+        <button type="button" class="btn primary" ${pinRequired?'disabled':''} onclick="quickScanSave()">Save &amp; Scan Next</button>
       </div>
     </div>
   `;
 }
-function renderZoneAudit(){
-  const za = STATE.zoneAudit;
 
-  if (za.listOpen) {
-    return `
-      ${headerBlock({ title:'Scanned Records', sub:`${za.items.length} record${za.items.length===1?'':'s'}`, showBack:true })}
-      <div class="body-pad">
-        ${za.items.length ? za.items.map(zoneAuditItemCard).join('') : `<div class="empty-state"><div>Scanned records will appear here.</div></div>`}
+function renderQuickScan(){
+  const qs = STATE.quickScan;
+  if (qs.listOpen) return renderQuickScanList();
+
+  const modeMeta = QS_MODES.find(m => m.key === qs.mode);
+  const canScan = quickScanCanScan();
+
+  let subFieldsHtml = '';
+  let canvasHtml = '';
+  let toolbarText = '';
+  let toolbarPin = false;
+
+  if (qs.mode === 'zone') {
+    const zone = FLOOR_AREAS.find(z => z.id === qs.activeZoneId);
+    subFieldsHtml = `
+      <div class="field rvpick-wrap">
+        <button type="button" class="picker-btn" onclick="quickScanToggleZonePicker()">
+          <span class="mono">${zone ? zone.label : 'Select Zone'}</span>
+          <span class="chevronDown">${ICON.chevronDown}</span>
+        </button>
+        ${qs.zonePickerOpen ? quickScanZonePickerHtml() : ''}
       </div>
     `;
+    canvasHtml = `
+      <div class="za-zone-row">
+        ${FLOOR_AREAS.map(z => `<button type="button" class="za-zone-card ${qs.activeZoneId===z.id?'selected':''}" onclick="quickScanPickZone('${z.id}')">${z.label}</button>`).join('')}
+      </div>
+    `;
+    toolbarText = zone ? `Scanning into ${zone.label}.` : 'Tap a zone to scan into it.';
+  } else if (qs.mode === 'rack') {
+    const auditId = STATE.params.auditId;
+    const layoutObj = auditId ? (findLayoutIn(auditId, STATE.params.layout) || layoutsOf(auditId)[0]) : null;
+    const rackObj = layoutObj ? (findRackIn(auditId, layoutObj.name, STATE.params.rack) || layoutObj.racks[0]) : null;
+    const bayObj = rackObj ? (rackObj.bays.find(b => b.code === STATE.params.bay) || rackObj.bays[0]) : null;
+    const selectedCode = bayObj && bayObj.locations.find(l => l.code === STATE.rackViewClickedLoc) ? STATE.rackViewClickedLoc : null;
+
+    const picker = STATE.rackViewPicker;
+    const layoutDropdown = picker && picker.field === 'qs-layout' ? `
+      <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
+      <div class="rvpick-panel" onclick="event.stopPropagation()">${quickScanLayoutListHtml()}</div>
+    ` : '';
+    const rackDropdown = picker && picker.field === 'rack' ? `
+      <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
+      <div class="rvpick-panel" onclick="event.stopPropagation()">
+        <div class="rvpick-search">${ICON.search}<input autofocus placeholder="Search" value="${picker.search}" oninput="filterRackViewPicker('${auditId}', this.value)" /></div>
+        <div id="rvpick-list">${rackViewPickerRackListHtml(auditId, picker.search)}</div>
+      </div>
+    ` : '';
+    const bayDropdown = picker && picker.field === 'bay' ? `
+      <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
+      <div class="rvpick-panel" onclick="event.stopPropagation()">
+        <div class="rvpick-search">${ICON.search}<input autofocus placeholder="Search" value="${picker.search}" oninput="filterRackViewPicker('${auditId}', this.value)" /></div>
+        <div id="rvpick-list">${rackViewPickerBayListHtml(auditId, picker.search)}</div>
+      </div>
+    ` : '';
+    const palletDropdown = picker && picker.field === 'pallet' ? `
+      <button type="button" class="rvpick-backdrop" onclick="closeRackViewPicker()" aria-label="Close"></button>
+      <div class="rvpick-panel" onclick="event.stopPropagation()">
+        <div class="rvpick-search">${ICON.search}<input autofocus placeholder="Search" value="${picker.search}" oninput="filterRackViewPicker('${auditId}', this.value)" /></div>
+        <div id="rvpick-list">${rackViewPickerPalletListHtml(auditId, picker.search)}</div>
+      </div>
+    ` : '';
+
+    subFieldsHtml = `
+      <div class="field rvpick-wrap">
+        <button type="button" class="picker-btn" onclick="quickScanOpenLayoutPicker()"><span class="mono">${layoutObj ? layoutObj.name : 'No Layout'}</span><span class="chevronDown">${ICON.chevronDown}</span></button>
+        ${layoutDropdown}
+      </div>
+      <div class="field rvpick-wrap">
+        <button type="button" class="picker-btn" onclick="openRackViewPicker('rack')"><span class="mono">${rackObj ? `Rack ${rackObj.code}` : 'Any Rack'}</span><span class="chevronDown">${ICON.chevronDown}</span></button>
+        ${rackDropdown}
+      </div>
+      <div class="field rvpick-wrap">
+        <button type="button" class="picker-btn" onclick="openRackViewPicker('bay')"><span class="mono">${bayObj ? `Bay ${bayObj.code}` : 'Any Bay'}</span><span class="chevronDown">${ICON.chevronDown}</span></button>
+        ${bayDropdown}
+      </div>
+      <div class="field rvpick-wrap">
+        <button type="button" class="picker-btn" onclick="openRackViewPicker('pallet')"><span class="mono">${selectedCode ? palletIdFor(bayObj.locations.find(l => l.code === selectedCode)) : 'Select Pallet'}</span><span class="chevronDown">${ICON.chevronDown}</span></button>
+        ${palletDropdown}
+      </div>
+    `;
+    canvasHtml = bayObj ? `
+      <div class="rv-diagram-body">${buildBayDiagram(bayObj, selectedCode, rackObj)}</div>
+    ` : `<div class="empty-state"><div>No racks assigned yet.</div></div>`;
+    toolbarText = selectedCode ? `Scanning into Rack ${rackObj.code} · Bay ${bayObj.code} · ${selectedCode}.` : 'Pick a Rack, Bay, and Pallet, then tap a slot on the diagram to scan into it.';
+  } else {
+    // Floor — full warehouse plan (the same zone tiles Zone mode uses,
+    // reused as pin targets); tiles only tap-active once a scan is unresolved.
+    const armed = qs.pendingItem && qs.pendingItem.origin === 'floor' && !qs.pendingItem.pinnedAt;
+    canvasHtml = `
+      <div class="za-zone-row">
+        ${FLOOR_AREAS.map(z => {
+          const selected = armed && qs.pendingItem.pinnedFloorAreaId === z.id;
+          const grayed = !armed;
+          return `<button type="button" class="za-zone-card ${selected?'selected':''}" style="${grayed?'opacity:.45;':''}" ${armed?'':'disabled'} onclick="quickScanPinFloor('${z.id}')">${z.label}</button>`;
+        }).join('')}
+      </div>
+    `;
+    toolbarText = armed ? 'Pin Exact Location — tap a zone to pin' : 'Scan a SKU to begin — you’ll pin its exact location next.';
+    toolbarPin = armed;
   }
 
-  const zone = FLOOR_AREAS.find(z => z.id === za.floorAreaId);
-  return `
-    ${headerBlock({ title:'Zone Audit Map', sub:'Tap a zone, then scan a SKU', showBack:true, menuItems:[{label:'Scanned Records', action:'zoneAuditToggleList()'}] })}
-    <div class="body-pad">
-      <div class="za-zone-row">
-        ${FLOOR_AREAS.map(z => `
-          <button type="button" class="za-zone-card ${za.floorAreaId===z.id?'selected':''}" onclick="pickZoneArea('${z.id}')">${z.label}</button>
-        `).join('')}
-      </div>
-      ${za.pendingItem ? renderZoneAuditForm() : `
-        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; margin-top:24px;">
-          <div class="scan-block">
-            <div class="glyph-circle">${ICON.camera}</div>
-            <button class="btn small primary" ${zone?'':'disabled'} onclick="zoneAuditScan()">Scan SKU</button>
-          </div>
-          <div class="banner info" style="margin-top:14px;"><span class="dot"></span> ${zone ? `Scanning into ${zone.label}.` : 'Tap a zone above to enable scanning.'}</div>
+  const modeRow = `
+    <div class="rv-toolbar-row">
+      <div class="loc-picker-toprow rv-no-labels">
+        <div class="field rvpick-wrap">
+          <button type="button" class="picker-btn" onclick="quickScanToggleModeMenu()">
+            <span class="mono">${modeMeta.label}</span>
+            <span class="chevronDown">${ICON.chevronDown}</span>
+          </button>
+          ${quickScanModeMenuHtml()}
         </div>
-      `}
-      ${za.items.length && !za.pendingItem ? `<button class="btn outline small" style="width:100%; margin-top:16px;" onclick="zoneAuditToggleList()">View ${za.items.length} Scanned Record${za.items.length===1?'':'s'}</button>` : ''}
+        ${subFieldsHtml}
+        <div class="rv-scan-qr" style="margin-left:auto; gap:14px;">
+          <button type="button" class="card-icon-btn" style="position:relative;" title="Scan a SKU" aria-label="Scan a SKU" ${canScan?'':'disabled'} onclick="quickScanScan()">
+            ${ICON.qr}${canScan ? `<span class="qs-ready-dot"></span>` : ''}
+          </button>
+          <button type="button" class="card-icon-btn" style="position:relative;" title="Scanned SKUs" aria-label="Scanned SKUs" onclick="quickScanToggleList()">
+            ${ICON.box}${qs.items.length ? `<span class="qs-count-badge">${qs.items.length}</span>` : ''}
+          </button>
+        </div>
+      </div>
     </div>
+  `;
+
+  const toolbarStrip = `<div class="qs-toolbar-strip ${toolbarPin?'pin':''}">${toolbarPin ? ICON.pin : ICON.dot} <span>${toolbarText}</span></div>`;
+
+  return `
+    ${headerBlock({ title:'Quick Scan', sub:'Zone / Rack / Floor canvas', showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
+    ${modeRow}
+    ${toolbarStrip}
+    <div class="body-pad qs-canvas">
+      ${canvasHtml}
+    </div>
+    ${renderQuickScanForm()}
+    ${renderTabBar('scan')}
   `;
 }
 
@@ -4505,6 +5385,7 @@ function toggleIssuesSort(btnEl){
   STATE.issuesSortOpen = !STATE.issuesSortOpen;
   STATE.issuesSortAnchor = STATE.issuesSortOpen ? viewportAnchorForRight(btnEl) : null;
   STATE.issuesFilterOpen = false;
+  STATE.issuesOpenCategory = null;
   render();
 }
 function setIssuesSortDir(dir){ STATE.issuesSortDir = dir; STATE.issuesSortOpen = false; render(); }
@@ -4512,42 +5393,139 @@ function toggleIssuesFilter(btnEl){
   STATE.issuesFilterOpen = !STATE.issuesFilterOpen;
   STATE.issuesFilterAnchor = STATE.issuesFilterOpen ? viewportAnchorForRight(btnEl) : null;
   STATE.issuesSortOpen = false;
+  STATE.issuesOpenCategory = null;
   render();
 }
-// Multi-select per real field (Rack/Bay/Condition) rather than one active
-// value — a plain checklist per section, all shown at once.
+// Multi-select per real field (Severity/Rack/Bay/Condition) rather than one
+// active value — a plain checklist per section, all shown at once.
 function toggleIssuesFilterValue(facet, value){
   const list = STATE.issuesFilterValues[facet];
   const i = list.indexOf(value);
   if (i === -1) list.push(value); else list.splice(i, 1);
   render();
 }
-function clearIssuesFacet(facet){ STATE.issuesFilterValues[facet] = []; render(); }
 function clearIssuesFilters(){
-  STATE.issuesFilterValues = { rack: [], bay: [], condition: [] };
+  STATE.issuesFilterValues = { rack: [], bay: [], condition: [], severity: [] };
   render();
 }
-// One card per flagged (non-"Good") SKU line — summaryStats().flagged is the
-// same real, already-computed list Audit Summary's "Flagged Items" uses, so
-// this isn't a separate/fabricated issue log, just this data shown as the
-// reference's card grid instead of a flat kv-list. There's no per-line
-// timestamp in the data model (no "reported date" the app actually tracks),
-// so sort is by Qty — a real field — rather than inventing a fake date to
-// match the reference's "Oldest/Newest" control.
-function reportedIssueCard(auditId, f){
-  const onclick = `push('issueDetails', {auditId:'${auditId}', layout:'${f.layout}', rack:'${f.rack}', bay:'${f.bay}', locCode:'${f.locCode}', pallet:'${f.pallet}', sku:'${f.sku}'})`;
+// One of the picker's rack/bay/condition category checklists is open at a
+// time, as a second flyout panel beside the main Severity+category list —
+// mirrors ReportedAuditsBoard.tsx's openCategory state.
+function toggleIssuesFilterCategory(facet){
+  STATE.issuesOpenCategory = STATE.issuesOpenCategory === facet ? null : facet;
+  render();
+}
+function setIssuesView(view){ STATE.issuesView = view; render(); }
+
+// A location outside the audit's expected-SKU scope (Manual Mode-only, see
+// isRackViewManualOnly) has nothing to reconcile a scanned SKU against, so a
+// flagged line there is never itself a "wrong SKU" — it's a Case 3 report
+// instead. Everywhere else, a SKU this audit's EXPECTED_SKUS list for the
+// location doesn't recognize at all is a wrong-SKU / Case 1 line.
+function issueIsMismatch(f){
+  if (isRackViewManualOnly(f.locCode)) return false;
+  const expected = EXPECTED_SKUS[f.locCode] || [];
+  return expected.length > 0 && !expected.some(e => e.sku === f.sku);
+}
+// A wrong SKU is always the worst severity regardless of its own condition
+// (it's not even the right item, so the condition is beside the point) —
+// otherwise severity follows the line's condition, same conditionSeverity()
+// split Audit Summary's flagged list already uses (Damaged/Broken = red,
+// everything else worth flagging = amber).
+function issueLineSeverity(f){
+  return issueIsMismatch(f) ? 'red' : conditionSeverity(f.condition);
+}
+
+// Groups summaryStats().flagged by pallet (layout/rack/bay/locCode/pallet) —
+// a reconciliation form can log several SKUs under one pallet LPN, so one
+// pallet can carry more than one independently-flagged line. Each group is
+// tagged with which of the board's 3 cases it belongs to: manual (Case 3,
+// Manual Mode — no EXPECTED_SKUS entry to reconcile against at all), a wrong
+// SKU somewhere on the pallet (Case 1 — Mismatch SKUs), or in-scope but only
+// a quantity/damage discrepancy (Case 2 — Matched SKUs).
+function reportedAuditsGroups(auditId){
+  const flagged = summaryStats(auditId).flagged;
+  const map = new Map();
+  flagged.forEach(f => {
+    const key = [f.layout, f.rack, f.bay, f.locCode, f.pallet].map(encodeURIComponent).join('~');
+    if (!map.has(key)) map.set(key, { key, layout:f.layout, rack:f.rack, bay:f.bay, locCode:f.locCode, pallet:f.pallet, lines:[] });
+    map.get(key).lines.push(f);
+  });
+  return [...map.values()].map(g => {
+    const manual = isRackViewManualOnly(g.locCode);
+    const hasMismatch = !manual && g.lines.some(issueIsMismatch);
+    const rank = { green:0, amber:1, red:2 };
+    const severity = g.lines.reduce((worst, l) => rank[issueLineSeverity(l)] > rank[worst] ? issueLineSeverity(l) : worst, 'green');
+    const qty = g.lines.reduce((sum, l) => sum + l.qty, 0);
+    return { ...g, manual, hasMismatch, severity, qty };
+  });
+}
+function groupMatchesFilters(g, values, q){
+  if (values.rack.length && !values.rack.includes(g.rack)) return false;
+  if (values.bay.length && !values.bay.includes(g.bay)) return false;
+  if (values.condition.length && !g.lines.some(l => values.condition.includes(l.condition))) return false;
+  if (values.severity.length && !g.lines.some(l => values.severity.includes(issueLineSeverity(l)))) return false;
+  if (q) {
+    const hay = [g.pallet, g.rack, g.bay, g.locCode, ...g.lines.map(l => l.sku), ...g.lines.map(l => l.name)].join(' ').toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+// One pallet card per group — cases 1 & 3 (mismatch / manual) get "Wrong
+// SKU" called out on the offending row so the reason for a red badge is
+// legible, not just the color. Every SKU row is its own pressable target
+// into Issue Details, same identifying-fields lookup renderIssueDetails()
+// already does.
+function issueGroupCardHtml(auditId, g){
+  const badgeLabel = SEVERITY_LABEL[g.severity];
+  const rows = g.lines.map(f => {
+    const sev = issueLineSeverity(f);
+    const mismatch = issueIsMismatch(f);
+    const onclick = `push('issueDetails', {auditId:'${auditId}', layout:'${f.layout}', rack:'${f.rack}', bay:'${f.bay}', locCode:'${f.locCode}', pallet:'${f.pallet}', sku:'${f.sku}'})`;
+    const expected = EXPECTED_SKUS[f.locCode] || [];
+    const conditionLabel = mismatch ? `Wrong SKU${expected.length ? ' · Expected ' + expected[0].sku : ''}` : f.condition;
+    return `
+      <button type="button" class="issue-sku-row" onclick="${onclick}">
+        <div class="issue-sku-row-left">
+          <span class="sku-code">${f.sku}</span>
+          <div class="issue-sku-condition-row"><span class="dot sev-${sev}"></span><span>${conditionLabel}</span></div>
+        </div>
+        <span class="todo-num-chip">Qty ${f.qty}</span>
+      </button>
+    `;
+  }).join('');
   return `
-    <button type="button" class="issue-card" onclick="${onclick}">
-      <div class="issue-card-head"><span class="issue-head-icon">${ICON.box}</span><span class="k">Pallet:</span><span class="sku-code">${f.pallet}</span></div>
-      <div class="issue-card-grid">
-        <div class="todo-field"><span class="k">Scanned SKU</span><span class="v mono">${f.sku}</span></div>
-        <div class="todo-field"><span class="k">Rack</span><span class="v mono">${f.rack}</span></div>
-        <div class="todo-field"><span class="k">Bay</span><span class="v mono">${f.bay}</span></div>
-        <div class="todo-field"><span class="k">No. of SKUs</span><span class="todo-num-chip">${f.skuCount}</span></div>
-        <div class="todo-field"><span class="k">Quantity</span><span class="todo-num-chip">${f.qty}</span></div>
-        <div class="todo-field"><span class="k">Condition</span>${severityPillHtml(f.condition)}</div>
+    <div class="issue-card" style="cursor:default;">
+      <div class="issue-card-head">
+        <span class="issue-head-icon">${g.hasMismatch ? ICON.sort : ICON.box}</span><span class="k">Pallet :</span><span class="sku-code">${g.pallet}</span>
+        <span class="issue-status-badge sev-${g.severity}">${badgeLabel}</span>
       </div>
-    </button>
+      <div class="issue-card-body">
+        <div class="issue-card-grid" style="grid-template-columns:1fr 1fr; padding-top:12px;">
+          <div class="todo-field"><span class="k">Rack</span><span class="v mono">${g.rack}</span></div>
+          <div class="todo-field"><span class="k">Bay</span><span class="v mono">${g.bay}</span></div>
+        </div>
+        <div class="issue-sku-list">${rows}</div>
+      </div>
+    </div>
+  `;
+}
+// Shared header for a labeled block of cards — icon, title + count badge, a
+// one-line explainer. Renders nothing when its group is empty, so an active
+// filter that only matches one case doesn't leave a dangling empty header.
+function issueSectionHtml(auditId, { title, subtitle, icon, groups }){
+  if (!groups.length) return '';
+  return `
+    <div class="issue-section">
+      <div class="issue-section-head">
+        <span class="issue-section-icon">${icon}</span>
+        <div style="min-width:0; flex:1;">
+          <div class="issue-section-title-row"><span class="issue-section-title">${title}</span><span class="issue-section-count">${groups.length}</span></div>
+          <div class="issue-section-subtitle">${subtitle}</div>
+        </div>
+      </div>
+      <div class="issue-grid">${groups.map(g => issueGroupCardHtml(auditId, g)).join('')}</div>
+    </div>
   `;
 }
 // Detail page reached by tapping a Reported Audits card. Re-derives the
@@ -4625,57 +5603,87 @@ function renderIssueDetails(){
 // original rack/bay progress breakdown below; device-gated rather than
 // shared since the two are different content, not a responsive reflow of
 // the same page.
-const FACET_LABEL = { rack:'Rack', bay:'Bay', condition:'Condition' };
+const FACET_LABEL = { rack:'Rack Name', bay:'Bay Name', condition:'Damage' };
+const SEVERITY_LABEL = { red:'Red', amber:'Amber', green:'Green' };
 
-function issueMatchesFilters(f, values){
-  if (values.rack.length && !values.rack.includes(f.rack)) return false;
-  if (values.bay.length && !values.bay.includes(f.bay)) return false;
-  if (values.condition.length && !values.condition.includes(f.condition)) return false;
-  return true;
-}
-// One removable chip per field with an active selection — Rack/Bay/Condition
-// can all be active at once with this filter panel's multi-select checklists.
-function facetChipHtml(facet){
-  const vals = STATE.issuesFilterValues[facet];
-  if (!vals.length) return '';
-  const shown = vals.length > 1 ? `${vals[0]} +${vals.length - 1}` : vals[0];
+// One removable chip per active value, grouped under its field's label —
+// Severity/Damage/Rack/Bay can all be active at once. Rendered into the
+// persistent summary strip below the toolbar, not inline in the toolbar
+// itself (see issueSummaryStripHtml).
+function issueSummaryChipGroupHtml(label, values, onRemove){
+  if (!values.length) return '';
   return `
-    <div class="issue-sort-chip">
-      <span class="dot"></span>
-      <span>${FACET_LABEL[facet]}</span>
-      <span class="val">${shown}</span>
-      <button type="button" class="clear" onclick="clearIssuesFacet('${facet}')" aria-label="Clear ${FACET_LABEL[facet]} filter">${ICON.close}</button>
+    <div class="issue-summary-chip-group">
+      <span class="issue-summary-chip-label"><span class="dot"></span>${label}</span>
+      ${values.map(v => `<button type="button" class="issue-summary-chip" onclick="${onRemove(v)}">${v}${ICON.close}</button>`).join('')}
+    </div>
+  `;
+}
+// Persistent strip summarizing every active filter as removable chips, plus
+// a "Close all" row that clears every filter dimension at once — mirrors
+// ReportedAuditsBoard.tsx's `summary` block, shown below the toolbar instead
+// of the old inline per-facet chips inside it.
+function issueSummaryStripHtml(auditId, viewTotal){
+  const v = STATE.issuesFilterValues;
+  const activeFilterCount = v.rack.length + v.bay.length + v.condition.length + v.severity.length;
+  if (!activeFilterCount) return `<div class="acc-badge" style="margin-bottom:14px; width:fit-content; font-size:10px; padding:3px 9px;">Total : ${viewTotal}</div>`;
+  return `
+    <div class="issue-summary">
+      <div class="issue-summary-top">
+        <span class="issue-summary-total">Total : ${viewTotal}</span>
+        ${issueSummaryChipGroupHtml('Severity', v.severity.map(s => SEVERITY_LABEL[s]), (v2) => `toggleIssuesFilterValue('severity', '${Object.keys(SEVERITY_LABEL).find(k => SEVERITY_LABEL[k]===v2)}')`)}
+        ${issueSummaryChipGroupHtml('Damage', v.condition, (v2) => `toggleIssuesFilterValue('condition', '${v2}')`)}
+        ${issueSummaryChipGroupHtml('Rack', v.rack, (v2) => `toggleIssuesFilterValue('rack', '${v2}')`)}
+        ${issueSummaryChipGroupHtml('Bay', v.bay, (v2) => `toggleIssuesFilterValue('bay', '${v2}')`)}
+      </div>
+      <button type="button" class="issue-summary-close-row" onclick="clearIssuesFilters()">Close all ${ICON.chevronUp}</button>
     </div>
   `;
 }
 
 function renderProgressIssuesBoard(auditId, a){
-  const s = summaryStats(auditId);
-
   const q = STATE.issuesSearch.trim().toLowerCase();
-  let issues = s.flagged.filter(f => issueMatchesFilters(f, STATE.issuesFilterValues) &&
-    (!q || [f.sku, f.name, f.rack, f.locCode, f.pallet].join(' ').toLowerCase().includes(q)));
-  issues = issues.slice().sort((x, y) => STATE.issuesSortDir === 'asc' ? x.qty - y.qty : y.qty - x.qty);
+  const groups = reportedAuditsGroups(auditId).filter(g => groupMatchesFilters(g, STATE.issuesFilterValues, q));
+  const sorted = groups.slice().sort((x, y) => STATE.issuesSortDir === 'asc' ? x.qty - y.qty : y.qty - x.qty);
 
-  // Panel content itself is rendered by renderIssuePickerOverlay() into
-  // #issue-picker-slot (a sibling of #screen, outside its overflow-clipped
-  // box) — only the trigger buttons + active-filter chips live here.
-  const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length;
-  const chips = ['rack','bay','condition'].map(facetChipHtml).join('');
+  // Case 2 — right SKU, but a quantity/damage discrepancy (default view).
+  const case2Groups = sorted.filter(g => !g.manual && !g.hasMismatch);
+  // Case 1 — wrong SKU scanned at an in-scope location.
+  const case1Groups = sorted.filter(g => !g.manual && g.hasMismatch);
+  // Case 3 — raised via Rack View's Manual Mode, outside the audit's scope.
+  const case3Groups = sorted.filter(g => g.manual);
+  const mismatchView = STATE.issuesView === 'mismatches';
+  const viewTotal = mismatchView ? case1Groups.length + case3Groups.length : case2Groups.length;
+
+  const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length + STATE.issuesFilterValues.severity.length;
+
+  const body = mismatchView
+    ? (case1Groups.length || case3Groups.length
+        ? issueSectionHtml(auditId, { title:'Mismatch SKUs', subtitle:'Wrong SKU scanned at a location this audit expected a specific item', icon:ICON.sort, groups:case1Groups })
+          + issueSectionHtml(auditId, { title:'Manually Reported', subtitle:"Raised via Manual Mode, outside its audit's assigned scope", icon:ICON.wrench, groups:case3Groups })
+        : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No SKU mismatches</div><div>Nothing matches these filters.</div></div>`)
+    : (case2Groups.length
+        ? issueSectionHtml(auditId, { title:'Matched SKUs — Quantity/Damage', subtitle:"Right item found, but the quantity or damage doesn't match what's expected", icon:ICON.box, groups:case2Groups })
+        : `<div class="empty-state"><div class="glyph">${ICON.check}</div><div style="font-weight:700; color:var(--foreground);">No quantity/damage issues</div><div>Nothing matches these filters.</div></div>`);
 
   return `
     ${headerBlock({ title:'Reported Audits', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
       <div class="issue-toolbar">
         <div class="search-wrap" style="flex:1;">${ICON.search}<input placeholder="Search SKU, rack, location..." value="${STATE.issuesSearch}" oninput="STATE.issuesSearch=this.value; render()" /></div>
-        ${chips}
+        <div class="issue-view-toggle-wrap">
+          <span class="lbl">Mismatch SKUs</span>
+          <button type="button" class="issue-view-toggle ${mismatchView ? 'on' : ''}" aria-pressed="${mismatchView}" onclick="setIssuesView('${mismatchView ? 'issues' : 'mismatches'}')">
+            <span class="rv-switch-track"><span class="rv-switch-thumb"></span></span>
+          </button>
+        </div>
+        <div class="issue-toolbar-spacer"></div>
         <div class="issue-sort-chip">
           <span class="dot"></span>
           <span>Qty</span>
           <span class="val">${STATE.issuesSortDir==='asc'?'Low to High':'High to Low'}</span>
           <button type="button" class="clear" onclick="setIssuesSortDir('desc')" aria-label="Reset sort">${ICON.close}</button>
         </div>
-        <div class="issue-toolbar-spacer"></div>
         <div class="rvpick-wrap">
           <button type="button" class="card-icon-btn ${activeFilterCount ? 'issue-filter-active' : ''}" title="Filter" aria-label="Filter" onclick="toggleIssuesFilter(this)">${ICON.filter}</button>
         </div>
@@ -4683,8 +5691,8 @@ function renderProgressIssuesBoard(auditId, a){
           <button type="button" class="card-icon-btn" title="Sort" aria-label="Sort" onclick="toggleIssuesSort(this)">${ICON.sort}</button>
         </div>
       </div>
-      <div class="acc-badge" style="margin-bottom:14px; width:fit-content; font-size:10px; padding:3px 9px;">Total : ${issues.length}</div>
-      ${issues.length ? `<div class="issue-grid">${issues.map(f => reportedIssueCard(auditId, f)).join('')}</div>` : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No reported issues</div><div>Nothing matches these filters.</div></div>`}
+      ${issueSummaryStripHtml(auditId, viewTotal)}
+      ${body}
     </div>
     ${renderTabBar('progress')}
   `;
@@ -4926,7 +5934,7 @@ function render(){
   if (screen === 'login') {
     document.getElementById('screen').innerHTML = wrap(renderLogin());
   } else {
-    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails, settings: renderSettings, zoneAudit: renderZoneAudit };
+    const map = { dashboard: renderDashboard, tasks: renderTasks, auditDetails: renderAuditDetails, countSheet: renderCountSheet, progress: renderProgress, scan: renderQuickScan, auditSummary: renderAuditSummary, rackView: renderRackView, schedule: renderSchedule, issueDetails: renderIssueDetails, settings: renderSettings, warehouseMap: renderWarehouseMap };
     document.getElementById('screen').innerHTML = wrap((map[screen] || renderDashboard)());
   }
   if (screenEl) screenEl.scrollTop = prevScrollTop;
@@ -5009,48 +6017,81 @@ function renderIssuePickerOverlay(){
     `;
   }
 
-  // Plain multi-select checklist filter, one section per real field this
-  // audit's flagged lines actually carry: Rack, Bay, Condition (the app's own
-  // CONDITIONS list — no synthesized "severity" grouping, no facet-switcher).
-  // A single scrollable column, same rvpick-item building block Sort uses.
+  // Floating multi-select filter picker — a Severity quick-list always on
+  // top of the main panel, plus a "Select" list of the real fields this
+  // audit's flagged lines carry (Damage/Rack Name/Bay Name); tapping one
+  // opens a second checklist flyout beside the main panel instead of an
+  // inline accordion, mirroring ReportedAuditsBoard.tsx's two-panel layout.
   let filterPanel = '';
   if (STATE.issuesFilterOpen) {
-    const s = summaryStats(STATE.params.auditId);
+    const auditId = STATE.params.auditId;
+    const s = summaryStats(auditId);
     const optionsByFacet = {
       rack: [...new Set(s.flagged.map(f => f.rack))].sort(),
       bay: [...new Set(s.flagged.map(f => f.bay))].sort(),
       condition: CONDITIONS.filter(c => c !== 'Good' && s.flagged.some(f => f.condition === c)),
     };
-    const previewCount = s.flagged.filter(f => issueMatchesFilters(f, STATE.issuesFilterValues)).length;
-    const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length;
+    const q = STATE.issuesSearch.trim().toLowerCase();
+    const previewCount = reportedAuditsGroups(auditId).filter(g => groupMatchesFilters(g, STATE.issuesFilterValues, q)).length;
+    const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length + STATE.issuesFilterValues.severity.length;
+    const openCategory = STATE.issuesOpenCategory;
 
-    const checklistSection = (facet) => {
-      const options = optionsByFacet[facet];
-      if (!options.length) return '';
-      const checked = STATE.issuesFilterValues[facet];
+    const mainAnchor = STATE.issuesFilterAnchor;
+    const mainWidth = 240;
+    const mainStyle = mainAnchor
+      ? `style="position:fixed; top:${mainAnchor.top}px; left:auto; right:${mainAnchor.right}px; width:${mainWidth}px;"` : `style="width:${mainWidth}px;"`;
+    const categoryStyle = mainAnchor
+      ? `style="position:fixed; top:${mainAnchor.top}px; left:auto; right:${mainAnchor.right + mainWidth + 8}px; width:220px;"` : `style="width:220px;"`;
+
+    const severityChecklist = ['amber','green','red'].map(sev => {
+      const checked = STATE.issuesFilterValues.severity.includes(sev);
       return `
-        <div class="issue-sort-title">${FACET_LABEL[facet]}</div>
-        ${options.map(opt => `
-          <button type="button" class="rvpick-item issue-filter-check ${checked.includes(opt)?'selected':''}" onclick="toggleIssuesFilterValue('${facet}', '${opt}')">
-            <span class="issue-filter-checkbox">${checked.includes(opt)?ICON.checkSm:''}</span>
-            <span>${opt}</span>
-          </button>
-        `).join('')}
+        <button type="button" class="rvpick-item issue-filter-check ${checked?'selected':''}" onclick="toggleIssuesFilterValue('severity', '${sev}')">
+          <span style="display:flex; align-items:center; gap:8px; min-width:0;">
+            <span style="width:8px; height:8px; border-radius:999px; flex-shrink:0; background:var(--rag-${sev}-strong);"></span>
+            <span>${SEVERITY_LABEL[sev]}</span>
+          </span>
+          <span class="issue-filter-checkbox">${checked?ICON.checkSm:''}</span>
+        </button>
       `;
-    };
+    }).join('');
+
+    const categoryButtons = ['condition','rack','bay'].map(facet => `
+      <button type="button" class="rvpick-item" onclick="toggleIssuesFilterCategory('${facet}')">
+        <span style="font-weight:700; ${openCategory===facet?'color:var(--primary);':''}">${FACET_LABEL[facet]}</span>
+        <span class="acc-chevron ${openCategory===facet?'open':''}">${ICON.chevronDown}</span>
+      </button>
+    `).join('');
+
+    let categoryPanel = '';
+    if (openCategory) {
+      const options = optionsByFacet[openCategory];
+      const checked = STATE.issuesFilterValues[openCategory];
+      categoryPanel = `
+        <div class="rvpick-panel issue-filter-panel" ${categoryStyle} onclick="event.stopPropagation()">
+          <div class="issue-sort-title" style="padding-top:0;">${FACET_LABEL[openCategory]}</div>
+          ${options.length ? options.map(opt => `
+            <button type="button" class="rvpick-item issue-filter-check ${checked.includes(opt)?'selected':''}" onclick="toggleIssuesFilterValue('${openCategory}', '${opt}')">
+              <span class="issue-filter-checkbox">${checked.includes(opt)?ICON.checkSm:''}</span>
+              <span>${opt}</span>
+            </button>
+          `).join('') : `<div class="rvpick-empty">No options</div>`}
+        </div>
+      `;
+    }
 
     filterPanel = `
       <button type="button" class="rvpick-backdrop" onclick="toggleIssuesFilter()" aria-label="Close"></button>
-      <div class="rvpick-panel issue-filter-panel" ${anchorStyle(STATE.issuesFilterAnchor)} onclick="event.stopPropagation()">
+      ${categoryPanel}
+      <div class="rvpick-panel issue-filter-panel" ${mainStyle} onclick="event.stopPropagation()">
         <div class="issue-filter-values-head">
           <span class="lbl">Filters</span>
           <span class="count">Total : ${previewCount}</span>
         </div>
-        <div class="issue-filter-checklist">
-          ${checklistSection('rack')}
-          ${checklistSection('bay')}
-          ${checklistSection('condition')}
-        </div>
+        <div class="issue-sort-title" style="padding-top:0;">Severity Type</div>
+        ${severityChecklist}
+        <div class="issue-sort-title" style="margin-top:6px;">Select</div>
+        ${categoryButtons}
         ${activeFilterCount ? `<button type="button" class="rvpick-item" onclick="clearIssuesFilters()"><span>Clear filters</span></button>` : ''}
       </div>
     `;
