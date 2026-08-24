@@ -2004,10 +2004,10 @@ function ScanDirectionToolbar({
   // time, same set of 4 either way, just relabeled to match.
   const fromLabel = from === 'left' ? 'Left' : 'Right';
   const patternButtons: { pattern: ScanPattern; vertical: ScanVertical; corner: 'right-up' | 'left-up' | 'right-down' | 'left-down'; label: string }[] = [
-    { pattern: 'last', vertical: 'up', corner: 'right-up', label: `${fromLabel}-Last-Up` },
     { pattern: 'first', vertical: 'up', corner: 'left-up', label: `${fromLabel}-First-Up` },
-    { pattern: 'last', vertical: 'down', corner: 'right-down', label: `${fromLabel}-Last-Down` },
+    { pattern: 'last', vertical: 'up', corner: 'right-up', label: `${fromLabel}-Last-Up` },
     { pattern: 'first', vertical: 'down', corner: 'left-down', label: `${fromLabel}-First-Down` },
+    { pattern: 'last', vertical: 'down', corner: 'right-down', label: `${fromLabel}-Last-Down` },
   ];
   return (
     <View style={[dirToolbarStyles.row, { borderTopColor: tokens.border }]}>

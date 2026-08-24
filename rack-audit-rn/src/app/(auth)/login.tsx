@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 export default function LoginScreen() {
   const { tokens } = useTheme();
   const signIn = useAuthStore((s) => s.signIn);
+  const devSkipLogin = useAuthStore((s) => s.devSkipLogin);
   const authError = useAuthStore((s) => s.error);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,6 +76,12 @@ export default function LoginScreen() {
             <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Log in</Text>
           )}
         </View>
+        <View
+          style={[styles.button, styles.devButton, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+          onTouchEnd={devSkipLogin}
+        >
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.base }}>Skip Login (Dev)</Text>
+        </View>
         <Text style={[styles.foot, { color: tokens.mutedForeground, fontSize: tokens.text.xs }]}>
           Forgot password? Contact your supervisor
         </Text>
@@ -94,5 +101,6 @@ const styles = StyleSheet.create({
   input: { width: '100%', height: 46, borderWidth: 1, paddingHorizontal: 14 },
   banner: { width: '100%', borderWidth: 1, borderRadius: 8, padding: 10, marginBottom: 12 },
   button: { width: '100%', height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  devButton: { marginTop: 8, borderWidth: 1, borderStyle: 'dashed' },
   foot: { marginTop: 16, textAlign: 'center' },
 });

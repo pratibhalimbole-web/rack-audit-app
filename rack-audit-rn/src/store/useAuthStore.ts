@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { INSPECTOR } from '@/lib/mockData';
-import { sb, supabaseConfigured } from '@/lib/supabase';
+import { disableSupabaseForDevSkip, sb, supabaseConfigured } from '@/lib/supabase';
 import type { Inspector } from '@/lib/types';
 
 // Mirrors rack-audit-app.html's boot/auth flow: `boot()` restores a
@@ -18,6 +18,7 @@ type AuthState = {
   hydrate: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  devSkipLogin: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -67,5 +68,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     if (sb) await sb.auth.signOut();
     set({ status: 'anon', inspector: null });
+  },
+
+  // TEMP DEV-ONLY: skips real Supabase auth entirely and enters with mock
+  // INSPECTOR data, even when supabaseConfigured is true — for previewing
+  // the app without needing real credentials. Remove before this build is
+  // considered production-ready.
+  devSkipLogin: () => {
+    disableSupabaseForDevSkip();
+    set({ status: 'authed', inspector: INSPECTOR, error: null });
   },
 }));

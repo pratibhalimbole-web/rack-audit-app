@@ -14,6 +14,13 @@ type SortDir = 'asc' | 'desc';
 type BoardView = 'issues' | 'mismatches';
 type Severity = 'red' | 'amber' | 'green';
 type FilterCategory = 'rack' | 'bay' | 'condition' | 'audit';
+// A card's origin: 'scan' = the normal Reconciliation Form flow (a
+// location's expected SKU was scanned/checked); 'manual' = Manual Mode's
+// out-of-scope issue report. ScopedIssue (case1/case2) has no `source`
+// field at all — it's only ever reachable through Reconciliation Form, so
+// it's always treated as 'scan' for this filter.
+type SourceType = 'scan' | 'manual';
+const SOURCE_LABEL: Record<SourceType, string> = { scan: 'Reconciliation Form', manual: 'Manual Report' };
 
 // Every card is tagged with the audit it came from — this board merges
 // issues across every audit assigned to the inspector rather than locking
@@ -92,12 +99,6 @@ const SEVERITY_BADGE: Record<Severity, { label: string; ragKey: Severity }> = {
   red: { label: 'Red', ragKey: 'red' },
 };
 
-const SEVERITY_ICON: Record<Severity, keyof typeof Ionicons.glyphMap> = {
-  green: 'shield-checkmark-outline',
-  amber: 'warning-outline',
-  red: 'alert-circle-outline',
-};
-
 const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay: 'Bay Name', condition: 'Damage', audit: 'Audit' };
 
 // Ports renderProgressIssuesBoard() (rack-audit-app.html ~4094-4166) —
@@ -129,7 +130,7 @@ export function ReportedAuditsBoard() {
   const [filterRacks, setFilterRacks] = useState<string[]>([]);
   const [filterBays, setFilterBays] = useState<string[]>([]);
   const [filterConditions, setFilterConditions] = useState<Condition[]>([]);
-  const [filterSeverities, setFilterSeverities] = useState<Severity[]>([]);
+  const [filterSources, setFilterSources] = useState<SourceType[]>([]);
   const [filterAudits, setFilterAudits] = useState<string[]>([]);
 
   // Every audit's flagged lines and scoped issues, each tagged with which
@@ -174,13 +175,13 @@ export function ReportedAuditsBoard() {
       if (filterRacks.length && !filterRacks.includes(f.rack)) return false;
       if (filterBays.length && !filterBays.includes(f.bay)) return false;
       if (filterConditions.length && !filterConditions.includes(f.condition)) return false;
-      if (filterSeverities.length && !filterSeverities.includes(conditionSeverity(f.condition))) return false;
+      if (filterSources.length && !filterSources.includes(f.source === 'manual' ? 'manual' : 'scan')) return false;
       return !q || [f.sku, f.name, f.rack, f.locCode, f.pallet].join(' ').toLowerCase().includes(q);
     });
     const groups = groupByPallet(filtered);
     const qty = (g: PalletIssueGroup) => g.lines.reduce((sum, l) => sum + l.qty, 0);
     return groups.slice().sort((x, y) => (sortDir === 'asc' ? qty(x) - qty(y) : qty(y) - qty(x)));
-  }, [stats, search, filterAudits, filterRacks, filterBays, filterConditions, filterSeverities, sortDir]);
+  }, [stats, search, filterAudits, filterRacks, filterBays, filterConditions, filterSources, sortDir]);
 
   // Manual Mode reports (Case 3) still come from summaryStats/FlaggedLine —
   // every Manual Mode save always carries issueRaised, so it's reliably in
@@ -196,7 +197,9 @@ export function ReportedAuditsBoard() {
       if (filterRacks.length && !filterRacks.includes(s.rack)) return false;
       if (filterBays.length && !filterBays.includes(s.bay)) return false;
       if (filterConditions.length && !filterConditions.includes(s.condition)) return false;
-      if (filterSeverities.length && !filterSeverities.includes(scopedIssueSeverity(s))) return false;
+      // ScopedIssue has no `source` field — it's only ever reachable
+      // through Reconciliation Form, so it's always 'scan' for this filter.
+      if (filterSources.length && !filterSources.includes('scan')) return false;
       return !q || [s.foundSku, s.expectedSku, s.rack, s.locCode, s.pallet].join(' ').toLowerCase().includes(q);
     });
   };
@@ -205,19 +208,19 @@ export function ReportedAuditsBoard() {
   // Case 1 — wrong SKU scanned at an in-scope location.
   const case1Items = useMemo(
     () => sortByQty(filterScoped(scoped.filter((s) => s.kind === 'mismatch'))),
-    [scoped, search, filterAudits, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
+    [scoped, search, filterAudits, filterRacks, filterBays, filterConditions, filterSources, sortDir],
   );
   // Case 2 — right SKU, but a quantity or damage discrepancy.
   const case2Items = useMemo(
     () => sortByQty(filterScoped(scoped.filter((s) => s.kind === 'matched-issue'))),
-    [scoped, search, filterAudits, filterRacks, filterBays, filterConditions, filterSeverities, sortDir],
+    [scoped, search, filterAudits, filterRacks, filterBays, filterConditions, filterSources, sortDir],
   );
   // Toggle OFF (default) — only matched-but-off-on-qty/damage pallets.
   // Toggle ON ("Mismatch SKUs") — wrong-SKU pallets plus Manual Mode reports,
   // since both are location-level discrepancies outside a clean match.
   const viewTotal = view === 'issues' ? case2Items.length : case1Items.length + manualIssueGroups.length;
 
-  const activeFilterCount = filterAudits.length + filterRacks.length + filterBays.length + filterConditions.length + filterSeverities.length;
+  const activeFilterCount = filterAudits.length + filterRacks.length + filterBays.length + filterConditions.length + filterSources.length;
 
   const toggleIn = <T,>(list: T[], value: T, setList: (v: T[]) => void) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -227,7 +230,7 @@ export function ReportedAuditsBoard() {
     setFilterRacks([]);
     setFilterBays([]);
     setFilterConditions([]);
-    setFilterSeverities([]);
+    setFilterSources([]);
   };
 
   if (isLoading) {
@@ -324,14 +327,13 @@ export function ReportedAuditsBoard() {
                   ) : null}
 
                   <View style={[styles.mainPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Severity Type</Text>
-                    {(['amber', 'green', 'red'] as Severity[]).map((sev) => {
-                      const checked = filterSeverities.includes(sev);
-                      const color = tokens.rag[sev].strong;
+                    <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Type</Text>
+                    {(['scan', 'manual'] as SourceType[]).map((src) => {
+                      const checked = filterSources.includes(src);
                       return (
-                        <Pressable key={sev} onPress={() => toggleIn(filterSeverities, sev, setFilterSeverities)} style={styles.checklistRow}>
-                          <Ionicons name={SEVERITY_ICON[sev]} size={16} color={color} />
-                          <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1 }}>{SEVERITY_BADGE[sev].label}</Text>
+                        <Pressable key={src} onPress={() => toggleIn(filterSources, src, setFilterSources)} style={styles.checklistRow}>
+                          <Ionicons name={src === 'manual' ? 'create-outline' : 'document-text-outline'} size={16} color={tokens.foreground} />
+                          <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1 }}>{SOURCE_LABEL[src]}</Text>
                           <Checkbox checked={checked} />
                         </Pressable>
                       );
@@ -411,7 +413,7 @@ export function ReportedAuditsBoard() {
               values={filterAudits.map((id) => auditNameById[id] ?? id)}
               onRemove={(name) => setFilterAudits((l) => l.filter((id) => (auditNameById[id] ?? id) !== name))}
             />
-            <SummaryChips label="Severity" values={filterSeverities.map((s) => SEVERITY_BADGE[s].label)} onRemove={(label) => setFilterSeverities((l) => l.filter((s) => SEVERITY_BADGE[s].label !== label))} />
+            <SummaryChips label="Type" values={filterSources.map((s) => SOURCE_LABEL[s])} onRemove={(label) => setFilterSources((l) => l.filter((s) => SOURCE_LABEL[s] !== label))} />
             <SummaryChips label="Damage" values={filterConditions} onRemove={(v) => setFilterConditions((l) => l.filter((c) => c !== v))} />
             <SummaryChips label="Rack" values={filterRacks} onRemove={(v) => setFilterRacks((l) => l.filter((r) => r !== v))} />
             <SummaryChips label="Bay" values={filterBays} onRemove={(v) => setFilterBays((l) => l.filter((b) => b !== v))} />
