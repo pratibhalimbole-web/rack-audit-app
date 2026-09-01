@@ -1933,7 +1933,13 @@ let STATE = {
   // reuses the Rack View machinery (STATE.params/STATE.rackViewClickedLoc/
   // STATE.rackViewPicker + buildBayDiagram) for its Layout/Rack/Bay/Pallet
   // drill-down and canvas instead of duplicating it — see quickScanSeedRack.
-  quickScan: { mode:'zone', modeMenuOpen:false, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false, activeZoneId:null },
+  quickScan: {
+    mode:'zone', modeMenuOpen:false, items:[], pendingItem:null, scanCount:0, listOpen:false, activeZoneId:null,
+    // Transient Reconciliation Form editing state — same shape as
+    // STATE.scan's own qtyEditing/damageEditing fields, so the form reads
+    // identically to Rack View's regardless of which one is backing it.
+    palletConditionGood:null, qtyEditing:false, qtyInputText:'', damageEditing:false, damagePhaseDraft:null, damageObservationDraft:null,
+  },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
   detailOpenLayout: null, detailOpenRack: null, _auditDetailsSeedKey: null,
@@ -4072,7 +4078,9 @@ function resetImageAnnotations(){
 }
 function saveImageAttachment(){
   const m = STATE.imageAttachmentModal;
-  const target = m.rvField ? rvEnsureFieldEvidence(rfLine(STATE.scan), m.rvField) : ensureEvidence(STATE.scan.lines[m.lineIdx]);
+  const target = m.rvField ? rvEnsureFieldEvidence(rfLine(STATE.scan), m.rvField)
+    : m.qsField ? qsEnsureFieldEvidence(STATE.quickScan.pendingItem, m.qsField)
+    : ensureEvidence(STATE.scan.lines[m.lineIdx]);
   target.images.push({ strokes: m.strokes });
   closeImageAttachmentModal();
 }
@@ -5551,30 +5559,41 @@ function quickScanSimulatedScan(){
 function applyQuickScanSku(sku){
   const qs = STATE.quickScan;
   const inv = INVENTORY_POOL.find(p => p.sku === sku);
+  // Same shape Rack View's scan.lines[0] uses (qty/condition start unset,
+  // independent qty/damage evidence, per-field raise-issue flags) — so the
+  // Reconciliation Form renders identically here, matching the "same
+  // UI/UX everywhere" requirement.
   const base = {
     id: 's' + Date.now() + Math.random().toString(36).slice(2,6),
-    sku, name: inv ? inv.name : sku, qty:1, condition:'Good',
-    evidence: { note:'', noteOpen:false, images:[] }, scannedAt: Date.now(),
+    sku, name: inv ? inv.name : sku,
+    qty: null, condition: null, activityPhase: null, observation: null,
+    qtyEvidence: { note:'', noteOpen:false, audio:null, images:[], videos:[] },
+    damageEvidence: { note:'', noteOpen:false, audio:null, images:[], videos:[] },
+    skuIssueRaised:false, qtyIssueRaised:false, damageIssueRaised:false,
+    scannedAt: Date.now(),
   };
+  qs.palletConditionGood = null;
+  qs.qtyEditing = false; qs.qtyInputText = '';
+  qs.damageEditing = false; qs.damagePhaseDraft = null; qs.damageObservationDraft = null;
 
   if (qs.mode === 'zone') {
     const zone = FLOOR_AREAS.find(z => z.id === qs.activeZoneId);
     if (!zone) return;
     const expectedZone = expectedZoneForSku(sku);
-    qs.pendingItem = { ...base, origin:'zone', pinnedZone: zone.label, pinnedFloorAreaId: zone.id, expectedZone, matched: expectedZone ? expectedZone === zone.label : null, pinnedAt: Date.now() };
+    qs.pendingItem = { ...base, origin:'zone', pinnedZone: zone.label, pinnedFloorAreaId: zone.id, expectedZone, expectedLine:null, matched: expectedZone ? expectedZone === zone.label : null, pinnedAt: Date.now() };
   } else if (qs.mode === 'rack') {
     const { layout, rack, bay } = STATE.params;
     const locCode = STATE.rackViewClickedLoc;
     if (!(layout && rack && bay && locCode)) return;
     const expected = EXPECTED_SKUS[locCode] || [];
     const matched = expected.length ? expected.some(l => l.sku === sku) : null;
-    qs.pendingItem = { ...base, origin:'rack', pinnedZone: layout, pinnedRack: rack, pinnedBay: bay, pinnedLoc: locCode, expectedZone:null, matched, pinnedAt: Date.now() };
+    qs.pendingItem = { ...base, origin:'rack', pinnedZone: layout, pinnedRack: rack, pinnedBay: bay, pinnedLoc: locCode, expectedZone:null, expectedLine: expected[0] || null, matched, pinnedAt: Date.now() };
   } else {
     // Floor — unresolved until pinned; the Reconciliation Form still opens
-    // right away for qty/condition/evidence, same as QuickScanScreen.tsx.
-    qs.pendingItem = { ...base, origin:'floor', expectedZone: expectedZoneForSku(sku), matched:null, pinnedAt:null };
+    // right away for pallet condition/qty/damage/evidence, same as
+    // QuickScanScreen.tsx.
+    qs.pendingItem = { ...base, origin:'floor', expectedZone: expectedZoneForSku(sku), expectedLine:null, matched:null, pinnedAt:null };
   }
-  qs.qtyText = '1';
   render();
 }
 // "Pin Exact Location" — tapping a zone tile while a Floor-mode scan is
@@ -5591,33 +5610,117 @@ function quickScanPinFloor(zoneId){
   it.pinnedAt = Date.now();
   render();
 }
-function quickScanSetQty(v){
-  const n = parseInt(v, 10);
-  STATE.quickScan.qtyText = v;
-  if (STATE.quickScan.pendingItem) STATE.quickScan.pendingItem.qty = Number.isNaN(n) ? 1 : Math.max(1, n);
-  render();
-}
-function quickScanSetCondition(c){
-  if (STATE.quickScan.pendingItem) STATE.quickScan.pendingItem.condition = c;
-  render();
-}
-function quickScanToggleNote(){
+function qsSetPalletCondition(good){ STATE.quickScan.palletConditionGood = good; render(); }
+function qsOpenQtyEdit(){
   const it = STATE.quickScan.pendingItem;
-  if (!it) return;
-  it.evidence.noteOpen = !it.evidence.noteOpen;
+  STATE.quickScan.qtyInputText = it.qty != null ? String(it.qty) : '';
+  STATE.quickScan.qtyEditing = true;
   render();
 }
-function quickScanSetNote(v){
+function qsConfirmQty(){
   const it = STATE.quickScan.pendingItem;
-  if (it) it.evidence.note = v;
-}
-function quickScanAddPhoto(){
-  const it = STATE.quickScan.pendingItem;
-  if (!it) return;
-  it.evidence.images.push({});
-  toast('Photo attached');
+  const n = parseInt(STATE.quickScan.qtyInputText, 10);
+  it.qty = isNaN(n) ? 0 : Math.max(0, n);
+  STATE.quickScan.qtyEditing = false;
   render();
 }
+function qsOpenDamageEdit(){
+  const it = STATE.quickScan.pendingItem;
+  STATE.quickScan.damagePhaseDraft = it.activityPhase || null;
+  STATE.quickScan.damageObservationDraft = it.observation || null;
+  STATE.quickScan.damageEditing = true;
+  render();
+}
+function qsSelectDamagePhase(phase){ STATE.quickScan.damagePhaseDraft = phase; STATE.quickScan.damageObservationDraft = null; render(); }
+function qsSelectDamageObservation(obs){ STATE.quickScan.damageObservationDraft = obs; render(); }
+function qsConfirmDamage(){
+  const it = STATE.quickScan.pendingItem;
+  it.activityPhase = STATE.quickScan.damagePhaseDraft;
+  it.observation = STATE.quickScan.damageObservationDraft;
+  it.condition = 'Damaged';
+  STATE.quickScan.damageEditing = false;
+  render();
+}
+function qsRaiseSkuIssue(){ STATE.quickScan.pendingItem.skuIssueRaised = true; render(); }
+function qsRaiseFieldIssue(field){ STATE.quickScan.pendingItem[field + 'IssueRaised'] = true; render(); }
+
+// Per-field evidence, duplicated from rvEnsureFieldEvidence/renderRvEvidenceBlock
+// rather than shared, since it's keyed to STATE.quickScan.pendingItem instead
+// of STATE.scan — same markup/CSS classes either way, so the two forms stay
+// visually identical.
+function qsEnsureFieldEvidence(line, field){
+  const key = field + 'Evidence';
+  if (!line[key]) line[key] = { note:'', noteOpen:false, audio:null, images:[], videos:[] };
+  return line[key];
+}
+function renderQsEvidenceBlock(field, line){
+  const ev = qsEnsureFieldEvidence(line, field);
+  return `
+    <div class="rv-evidence">
+      <div class="rv-evidence-row">
+        <span class="rv-evidence-label">Write a note or record an audio for the issue</span>
+        <div class="rv-evidence-btns">
+          <button type="button" class="card-icon-btn" title="Add note" aria-label="Add note" onclick="qsFocusEvidenceNote('${field}')">${ICON.pencil}</button>
+          <button type="button" class="card-icon-btn" title="Record audio" aria-label="Record audio" onclick="qsRecordEvidenceAudio('${field}')">${ICON.mic}</button>
+        </div>
+      </div>
+      ${(ev.noteOpen || ev.note) ? `<textarea class="rv-evidence-note" id="qs-evidence-note-${field}" placeholder="Add a note..." onchange="qsSetEvidenceNote('${field}', this.value)">${ev.note}</textarea>` : ''}
+      ${ev.audio ? `
+        <div class="rv-evidence-audio">
+          <button type="button" class="card-icon-btn" onclick="qsToggleEvidenceAudioPlay('${field}')" aria-label="${ev.audio.playing ? 'Pause' : 'Play'}">${ev.audio.playing ? ICON.pauseTri : ICON.playTri}</button>
+          <div class="rv-evidence-waveform">${ev.audio.bars.map(h => `<span style="height:${h}px;"></span>`).join('')}</div>
+          <span class="rv-evidence-duration">${ev.audio.durationSec}s</span>
+          <button type="button" class="card-icon-btn danger" onclick="qsRemoveEvidenceAudio('${field}')" aria-label="Delete audio">${ICON.trash}</button>
+        </div>
+      ` : ''}
+      <div class="rv-evidence-row">
+        <span class="rv-evidence-label">Click on upload image or capture video for the issue</span>
+        <div class="rv-evidence-btns">
+          <button type="button" class="card-icon-btn" title="Add photo" aria-label="Add photo" onclick="qsAddEvidenceImage('${field}')">${ICON.camera}</button>
+          <button type="button" class="card-icon-btn" title="Add video" aria-label="Add video" onclick="qsAddEvidenceVideo('${field}')">${ICON.video}</button>
+        </div>
+      </div>
+      ${ev.images.length ? `
+        <div class="rv-evidence-group">
+          <div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(ev.images.length).padStart(2, '0')}</span></div>
+          <div class="rv-evidence-thumbs">${ev.images.map((img, i) => `<button type="button" class="rv-evidence-thumb" onclick="qsRemoveEvidenceImage('${field}', ${i})" aria-label="Remove image">${ICON.image}</button>`).join('')}</div>
+        </div>
+      ` : ''}
+      ${ev.videos.length ? `
+        <div class="rv-evidence-group">
+          <div class="rv-evidence-group-head">${ICON.video} Video Attachments <span class="acc-badge">${String(ev.videos.length).padStart(2, '0')}</span></div>
+          <div class="rv-evidence-thumbs">${ev.videos.map((v, i) => `<button type="button" class="rv-evidence-thumb" onclick="qsRemoveEvidenceVideo('${field}', ${i})" aria-label="Remove video"><span class="dur">00:${v.durationSec}sec</span>${ICON.playTri}</button>`).join('')}</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+function qsFocusEvidenceNote(field){
+  qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).noteOpen = true;
+  render();
+  const el = document.getElementById(`qs-evidence-note-${field}`);
+  if (el) el.focus();
+}
+function qsSetEvidenceNote(field, val){ qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).note = val; }
+function qsRecordEvidenceAudio(field){
+  qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).audio = { durationSec:20, playing:false, bars: generateWaveformBars() };
+  render();
+}
+function qsToggleEvidenceAudioPlay(field){
+  const ev = qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field);
+  if (!ev.audio) return;
+  ev.audio.playing = !ev.audio.playing;
+  render();
+}
+function qsRemoveEvidenceAudio(field){ qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).audio = null; render(); }
+function qsAddEvidenceImage(field){
+  STATE.imageAttachmentModal = { qsField: field, color: ANNOTATION_COLORS[0], strokes: [], redoStack: [], drawMode: true };
+  render();
+}
+function qsRemoveEvidenceImage(field, i){ qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).images.splice(i, 1); render(); }
+function qsAddEvidenceVideo(field){ qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).videos.push({ durationSec:20 }); render(); }
+function qsRemoveEvidenceVideo(field, i){ qsEnsureFieldEvidence(STATE.quickScan.pendingItem, field).videos.splice(i, 1); render(); }
+
 function quickScanSave(){
   const qs = STATE.quickScan;
   const it = qs.pendingItem;
@@ -5625,7 +5728,6 @@ function quickScanSave(){
   if (it.origin === 'floor' && !it.pinnedAt) { toast('Pin the exact location before saving', 'error'); return; }
   qs.items.unshift(it);
   qs.pendingItem = null;
-  qs.qtyText = '1';
   toast('Record saved');
   render();
 }
@@ -5651,8 +5753,8 @@ function quickScanItemCard(item){
       <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:8px;">${item.name}</div>
       <div class="kv-list">
         <div class="kv-row"><span class="l">Location</span><span class="v">${quickScanLocationLabel(item)}</span></div>
-        <div class="kv-row"><span class="l">Qty</span><span class="v">${item.qty}</span></div>
-        <div class="kv-row" style="border-bottom:none;"><span class="l">Condition</span>${severityPillHtml(item.condition)}</div>
+        <div class="kv-row"><span class="l">Qty</span><span class="v">${item.qty ?? '—'}</span></div>
+        <div class="kv-row" style="border-bottom:none;"><span class="l">Condition</span>${item.condition ? severityPillHtml(item.condition) : '<span class="v">—</span>'}</div>
       </div>
     </div>
   `;
@@ -5687,13 +5789,177 @@ function renderQuickScanList(){
 }
 // Reconciliation Form overlay — same rv-sku-panel pattern Rack View's SKU
 // panel uses (renderRackViewSkuPanel), not a bespoke form.
+// Quick Scan's Reconciliation Form — deliberately built from the exact same
+// pieces as Rack View's (rf-* CSS classes, rfPillHtml/rfDetailRow reused
+// directly, same field-card/evidence/compare structure) so the form is
+// visually and behaviorally identical everywhere it's reached: Rack View
+// (Zone or Rack scope) and all three Quick Scan modes. Only the Location
+// Details content and the "Expected" side of the compare differ, because
+// Rack mode has a real rack/bay/level/position + expected-SKU to show,
+// while Zone/Floor modes only ever resolve to a zone label.
+function renderQuickScanLocationDetails(it){
+  if (it.origin === 'rack') {
+    const { level, position } = locLevelPosition(STATE.params.auditId, it.pinnedZone, it.pinnedRack, it.pinnedBay, it.pinnedLoc);
+    return `
+      ${rfDetailRow('Layout', it.pinnedZone || '—')}
+      ${rfDetailRow('Rack', it.pinnedRack || '—')}
+      ${rfDetailRow('Bay', it.pinnedBay || '—')}
+      ${rfDetailRow('Level', level ? `L${level}` : '—')}
+      ${rfDetailRow('Position', position ? `P${String(position).padStart(2,'0')}` : '—')}
+      ${rfDetailRow('Pallet', it.pinnedLoc || '—')}
+    `;
+  }
+  return `
+    ${rfDetailRow('Mode', it.origin === 'zone' ? 'Zone' : 'Floor')}
+    ${rfDetailRow('Zone', it.pinnedZone || (it.origin === 'floor' ? 'Not pinned yet' : '—'))}
+  `;
+}
+function renderQuickScanScannedSection(it){
+  const rackOrigin = it.origin === 'rack';
+  const misplaced = rackOrigin && it.matched === false;
+  const qtyChecked = it.qty != null;
+  const damageChecked = !!it.condition;
+  let html = '';
+
+  const primary = it.matched === false
+    ? { label: rackOrigin ? 'Mismatch' : 'Location Mismatch', rag: 'red' }
+    : it.matched === true
+    ? { label: 'Matched', rag: 'green' }
+    : { label: 'No Expectation on Record', rag: 'amber' };
+  const qtyMismatch = rackOrigin && !misplaced && qtyChecked && it.expectedLine && it.qty !== it.expectedLine.qty;
+  const conditionFlagged = !misplaced && damageChecked && it.condition !== 'Good';
+  html += `<div class="rf-status-pill-row">
+    ${rfPillHtml(primary.label, primary.rag)}
+    ${qtyMismatch ? rfPillHtml('Quantity Mismatch', 'amber') : ''}
+    ${conditionFlagged ? rfPillHtml('Damage Mismatch', 'amber') : ''}
+  </div>`;
+
+  html += `<div class="rf-compare-row">
+    <div class="rf-compare-col">
+      <div class="cap">${rackOrigin ? 'Expected' : 'Expected Zone'}</div>
+      ${rackOrigin
+        ? (it.expectedLine ? `<div class="sku">${it.expectedLine.sku}</div><div class="name">${it.expectedLine.name}</div><div class="qty">Qty ${it.expectedLine.qty}</div>` : `<div class="name" style="margin-top:4px;">Nothing expected</div>`)
+        : (it.expectedZone ? `<div class="sku">${it.expectedZone}</div>` : `<div class="name" style="margin-top:4px;">No expectation on record</div>`)}
+    </div>
+    <div class="rf-compare-col">
+      <div class="cap">${rackOrigin ? 'Scanned' : 'Found In'}</div>
+      ${rackOrigin
+        ? `<div class="sku">${it.sku}</div><div class="name">${it.name}</div><div class="qty">Qty ${qtyChecked ? it.qty : '-'} · ${damageChecked ? it.condition : '-'}</div>`
+        : `<div class="sku">${it.pinnedZone || '—'}</div><div class="name">${it.sku} · ${it.name}</div>`}
+    </div>
+  </div>`;
+
+  if (misplaced) {
+    const raised = !!it.skuIssueRaised;
+    html += `<button type="button" class="rf-raise-issue" style="background:var(--rag-${raised ? 'green' : 'red'}-soft); border-color:var(--rag-${raised ? 'green' : 'red'}-border); color:var(--rag-${raised ? 'green' : 'red'}-strong);" ${raised ? 'disabled' : ''} onclick="qsRaiseSkuIssue()">
+      ${raised ? ICON.check : ICON.flag}
+      <span class="lbl">${raised ? 'Issue raised for this SKU' : 'Raise Issue — wrong item scanned'}</span>
+      ${!raised ? '<span class="tap">Tap to raise</span>' : ''}
+    </button>`;
+  } else {
+    html += renderQsQtyField(it, rackOrigin);
+    html += renderQsDamageField(it);
+  }
+  return html;
+}
+function renderQsQtyField(it, rackOrigin){
+  const qs = STATE.quickScan;
+  const qtyChecked = it.qty != null;
+  const matchedQty = qtyChecked && it.expectedLine && it.qty === it.expectedLine.qty;
+  const showPill = rackOrigin && qtyChecked && it.expectedLine;
+  const showRaise = rackOrigin && qtyChecked && it.expectedLine && it.qty !== it.expectedLine.qty;
+  const raised = !!it.qtyIssueRaised;
+  return `
+    <div class="rf-field-card">
+      <div class="rf-field-card-head">
+        <span class="title">Issue For 1: Quantity</span>
+        ${showPill ? rfPillHtml(matchedQty ? 'Matched' : 'Mismatched', matchedQty ? 'green' : 'amber') : ''}
+      </div>
+      <div class="rf-field-card-body">
+        ${qs.qtyEditing ? `
+          <div class="rf-qty-edit-row">
+            <input type="number" inputmode="numeric" placeholder="Quantity you found" value="${qs.qtyInputText || ''}" oninput="STATE.quickScan.qtyInputText=this.value" autofocus>
+            <button type="button" class="rf-small-primary-btn" onclick="qsConfirmQty()">Confirm</button>
+          </div>
+        ` : `
+          <button type="button" class="rf-field-value-row" onclick="qsOpenQtyEdit()">
+            <span class="val">Qty found: <strong>${qtyChecked ? it.qty : '-'}</strong></span>
+            <span class="rf-edit-icon-btn">${qtyChecked ? ICON.pencil : ICON.plus}</span>
+          </button>
+        `}
+        ${showRaise ? `
+          <button type="button" class="rf-raise-issue" style="background:var(--rag-${raised ? 'green' : 'red'}-soft); border-color:var(--rag-${raised ? 'green' : 'red'}-border); color:var(--rag-${raised ? 'green' : 'red'}-strong);" ${raised ? 'disabled' : ''} onclick="qsRaiseFieldIssue('qty')">
+            ${raised ? ICON.check : ICON.flag}<span class="lbl">${raised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}</span>
+          </button>
+        ` : ''}
+        <div class="rf-label-caps" style="margin-bottom:0;">Evidence</div>
+        ${renderQsEvidenceBlock('qty', it)}
+      </div>
+    </div>
+  `;
+}
+function renderQsDamageField(it){
+  const qs = STATE.quickScan;
+  const damageChecked = !!it.condition;
+  const matchedDamage = damageChecked && it.condition === 'Good';
+  const showRaise = damageChecked && it.condition !== 'Good';
+  const raised = !!it.damageIssueRaised;
+  return `
+    <div class="rf-field-card">
+      <div class="rf-field-card-head">
+        <span class="title">Issue For 2: Damage</span>
+        ${damageChecked ? rfPillHtml(matchedDamage ? 'Matched' : 'Mismatched', matchedDamage ? 'green' : 'amber') : ''}
+      </div>
+      <div class="rf-field-card-body">
+        ${qs.damageEditing ? `
+          <div class="rf-label-caps" style="margin-bottom:2px;">Activity Phase <span style="color:var(--rag-red-strong);">*</span></div>
+          <div class="rf-cond-grid" style="margin-top:0;">
+            ${ACTIVITY_PHASES.map(phase => {
+              const selected = qs.damagePhaseDraft === phase;
+              return `<button type="button" class="rf-cond-chip" onclick="qsSelectDamagePhase('${phase.replace(/'/g, "\\'")}')">
+                <span class="rf-radio-dot ${selected ? 'on' : ''}">${selected ? '<span class="fill"></span>' : ''}</span>
+                <span class="lbl">${phase}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <div class="rf-label-caps" style="margin-bottom:2px;">Observations <span style="color:var(--rag-red-strong);">*</span></div>
+          ${qs.damagePhaseDraft ? `
+            <div class="rf-cond-grid" style="margin-top:0;">
+              ${OBSERVATIONS_BY_PHASE[qs.damagePhaseDraft].map(obs => {
+                const selected = qs.damageObservationDraft === obs;
+                return `<button type="button" class="rf-cond-chip" onclick="qsSelectDamageObservation('${obs.replace(/'/g, "\\'")}')">
+                  <span class="rf-radio-dot ${selected ? 'on' : ''}">${selected ? '<span class="fill"></span>' : ''}</span>
+                  <span class="lbl">${obs}</span>
+                </button>`;
+              }).join('')}
+            </div>
+          ` : `<div style="font-size:var(--text-xs); color:var(--muted-foreground);">Pick an Activity Phase first.</div>`}
+          <button type="button" class="rf-small-primary-btn" style="align-self:flex-start;" ${(!qs.damagePhaseDraft || !qs.damageObservationDraft) ? 'disabled' : ''} onclick="qsConfirmDamage()">Confirm</button>
+        ` : `
+          <button type="button" class="rf-field-value-row" onclick="qsOpenDamageEdit()">
+            <div style="flex:1;">
+              <div class="val">Damage found: <strong>${damageChecked ? (it.observation || it.condition) : '-'}</strong></div>
+              ${damageChecked && it.activityPhase ? `<div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-top:2px;">${it.activityPhase}</div>` : ''}
+            </div>
+            <span class="rf-edit-icon-btn">${damageChecked ? ICON.pencil : ICON.plus}</span>
+          </button>
+        `}
+        ${showRaise ? `
+          <button type="button" class="rf-raise-issue" style="background:var(--rag-${raised ? 'green' : 'red'}-soft); border-color:var(--rag-${raised ? 'green' : 'red'}-border); color:var(--rag-${raised ? 'green' : 'red'}-strong);" ${raised ? 'disabled' : ''} onclick="qsRaiseFieldIssue('damage')">
+            ${raised ? ICON.check : ICON.flag}<span class="lbl">${raised ? 'Issue raised for damage' : 'Raise Issue — damage'}</span>
+          </button>
+        ` : ''}
+        <div class="rf-label-caps" style="margin-bottom:0;">Evidence</div>
+        ${renderQsEvidenceBlock('damage', it)}
+      </div>
+    </div>
+  `;
+}
 function renderQuickScanForm(){
   const it = STATE.quickScan.pendingItem;
   if (!it) return '';
+  const qs = STATE.quickScan;
   const pinRequired = it.origin === 'floor' && !it.pinnedAt;
-  const tone = pinRequired ? 'amber' : it.matched === false ? 'red' : 'green';
-  const label = pinRequired ? 'Pin Required' : it.matched === false ? 'Location Mismatch' : it.matched === true ? 'Matched' : 'No Expectation on Record';
-  const locLabel = it.origin === 'rack' ? quickScanLocationLabel(it) : (it.pinnedZone || (pinRequired ? 'Not pinned yet' : '—'));
   return `
     <div class="rv-sku-panel">
       <div class="rv-sku-panel-head">
@@ -5704,49 +5970,36 @@ function renderQuickScanForm(){
         <button type="button" class="card-icon-btn" onclick="quickScanCancel()" aria-label="Close">${ICON.close}</button>
       </div>
       <div class="rv-sku-panel-body">
-        <div class="card" style="border-color:var(--rag-${tone}-border); background:var(--rag-${tone}-soft); margin:0;">
-          <div style="margin-bottom:10px;"><span class="pill ${tone==='green'?'s-completed':tone==='red'?'s-overdue':'s-scheduled'}">${label}</span></div>
-          <div style="font-weight:700; color:var(--foreground);">${it.sku}</div>
-          <div style="font-size:var(--text-xs); color:var(--muted-foreground); margin-bottom:8px;">${it.name}</div>
-          <div class="kv-list">
-            <div class="kv-row" style="border-bottom:none;"><span class="l">Location</span><span class="v">${locLabel}</span></div>
-            ${it.expectedZone ? `<div class="kv-row" style="border-bottom:none;"><span class="l">Expected Zone</span><span class="v">${it.expectedZone}</span></div>` : ''}
-          </div>
+        <div class="rf-label-caps">Selected Location Details</div>
+        <div class="rf-loc-box rf-loc-box-grid">
+          ${renderQuickScanLocationDetails(it)}
         </div>
-        ${pinRequired ? `
-          <div class="banner warn"><span class="dot"></span> Tap a zone below to pin this SKU's exact location before saving.</div>
-          <div class="za-zone-row">${FLOOR_AREAS.map(z => `<button type="button" class="za-zone-card" onclick="quickScanPinFloor('${z.id}')">${z.label}</button>`).join('')}</div>
-        ` : ''}
-        <div class="sku-section">
-          <span class="sec-label">Quantity <span style="color:var(--rag-red-strong);">*</span></span>
-          <div class="qty-stepper-row">
-            <input class="qty-input" type="number" inputmode="numeric" min="1" value="${it.qty}" onfocus="this.select()" onchange="quickScanSetQty(this.value)">
-          </div>
-        </div>
-        <div class="sku-section">
-          <span class="sec-label">Condition <span style="color:var(--rag-red-strong);">*</span></span>
-          <div class="cond-radio-grid">${CONDITIONS.map(c => `
-            <label class="cond-radio">
-              <input type="radio" name="qs-cond" ${it.condition===c?'checked':''} onchange="quickScanSetCondition('${c}')">
-              <span>${c}</span>
-            </label>
-          `).join('')}</div>
-        </div>
-        <div class="rv-evidence">
-          <div class="rv-evidence-row">
-            <span class="rv-evidence-label">Write a note for this record</span>
-            <div class="rv-evidence-btns">
-              <button type="button" class="card-icon-btn" title="Add note" onclick="quickScanToggleNote()">${ICON.pencil}</button>
-              <button type="button" class="card-icon-btn" title="Add photo" onclick="quickScanAddPhoto()">${ICON.camera}</button>
+        <div class="rf-divider"></div>
+        <div class="rv-sku-list">
+          <div class="rf-field-card plain">
+            <div class="rf-field-card-body" style="padding:0;">
+              <span style="font-weight:700; font-size:var(--text-sm); color:var(--foreground);">Is the pallet condition at this location good?</span>
+              <div class="rf-cond-grid">
+                ${[['Good', true], ['Not Good', false]].map(([label, val]) => {
+                  const selected = qs.palletConditionGood === val;
+                  return `<button type="button" class="rf-cond-chip" onclick="qsSetPalletCondition(${val})">
+                    <span class="rf-radio-dot ${selected ? 'on' : ''}">${selected ? '<span class="fill"></span>' : ''}</span>
+                    <span class="lbl">${label}</span>
+                  </button>`;
+                }).join('')}
+              </div>
             </div>
           </div>
-          ${it.evidence.noteOpen ? `<textarea class="rv-evidence-note" placeholder="Add a note..." onchange="quickScanSetNote(this.value)">${it.evidence.note}</textarea>` : ''}
-          ${it.evidence.images.length ? `<div class="rv-evidence-group"><div class="rv-evidence-group-head">${ICON.image} Image Attachments <span class="acc-badge">${String(it.evidence.images.length).padStart(2,'0')}</span></div></div>` : ''}
+          ${pinRequired ? `
+            <div class="banner warn"><span class="dot"></span> Tap a zone below to pin this SKU's exact location before saving.</div>
+            <div class="za-zone-row">${FLOOR_AREAS.map(z => `<button type="button" class="za-zone-card" onclick="quickScanPinFloor('${z.id}')">${z.label}</button>`).join('')}</div>
+          ` : ''}
+          ${renderQuickScanScannedSection(it)}
         </div>
       </div>
       <div class="rv-sku-panel-footer">
         <button type="button" class="btn outline" onclick="quickScanCancel()">Cancel</button>
-        <button type="button" class="btn primary" ${pinRequired?'disabled':''} onclick="quickScanSave()">Save &amp; Scan Next</button>
+        <button type="button" class="btn primary" ${pinRequired ? 'disabled' : ''} onclick="quickScanSave()">Save &amp; Scan Next</button>
       </div>
     </div>
   `;
