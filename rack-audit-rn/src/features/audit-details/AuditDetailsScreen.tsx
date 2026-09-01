@@ -297,7 +297,7 @@ export function AuditDetailsScreen() {
           style={styles.linkBtn}
         >
           <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-            View Full Rack/Bay Breakdown
+            View Reported Issues
           </Text>
         </Pressable>
       </ScrollView>
