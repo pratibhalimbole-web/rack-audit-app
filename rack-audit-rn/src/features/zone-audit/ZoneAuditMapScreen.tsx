@@ -14,7 +14,7 @@ import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
 import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
-import { CONDITIONS, type Condition, type Evidence } from '@/lib/types';
+import { ACTIVITY_PHASES, OBSERVATIONS_BY_PHASE, type ActivityPhase, type Condition, type Evidence } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
@@ -30,14 +30,20 @@ type ZoneScanLine = {
   sku: string;
   name: string;
   label: string;
-  qty: number;
-  condition: Condition;
+  // Start unset — a scan only proves identity, same as Rack View's
+  // scan.lines[0] and Quick Scan's pendingItem. Filled in via the
+  // tap-to-edit-then-Confirm Quantity field and the Activity Phase +
+  // Observation Damage field, not pre-populated on scan.
+  qty: number | null;
+  condition: Condition | null;
+  activityPhase?: ActivityPhase | null;
+  observation?: string | null;
   palletConditionGood?: boolean | null;
   qtyIssueRaised?: boolean;
-  conditionIssueRaised?: boolean;
+  damageIssueRaised?: boolean;
   locationIssueRaised?: boolean;
   qtyEvidence?: Evidence;
-  conditionEvidence?: Evidence;
+  damageEvidence?: Evidence;
 };
 type BayCell = { layout: string; rack: string; bay: string };
 type RackGroup = { rack: string; bays: BayCell[] };
@@ -62,7 +68,13 @@ export function ZoneAuditMapScreen() {
   const [zoneField, setZoneField] = useState(false);
   const [scannedByZone, setScannedByZone] = useState<Record<string, ZoneScanLine[]>>({});
   const [currentLine, setCurrentLine] = useState<ZoneScanLine | null>(null);
-  const [qtyText, setQtyText] = useState('1');
+  // Same tap-to-edit-then-Confirm editing state Rack View/Quick Scan use,
+  // instead of an always-editable plain TextInput with no explicit commit.
+  const [qtyEditing, setQtyEditing] = useState(false);
+  const [qtyInputText, setQtyInputText] = useState('');
+  const [damageEditing, setDamageEditing] = useState(false);
+  const [damagePhaseDraft, setDamagePhaseDraft] = useState<ActivityPhase | null>(null);
+  const [damageObservationDraft, setDamageObservationDraft] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   // 'all' = the tabbed Scanned Records page (every zone, opened from the
   // top toolbar); 'zone' = the Reconciliation Form's own list, locked to
@@ -71,7 +83,7 @@ export function ZoneAuditMapScreen() {
   const [listView, setListView] = useState<'all' | 'zone' | null>(null);
   const [skuScanCount, setSkuScanCount] = useState(0);
   const [duplicateLabel, setDuplicateLabel] = useState<string | null>(null);
-  const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'condition' | null>(null);
+  const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'damage' | null>(null);
 
   // Same confirm-before-leaving pattern as Rack View's Reconciliation Form
   // (src/features/rack-view/RackViewScreen.tsx) — refs updated fresh every
@@ -228,8 +240,9 @@ export function ZoneAuditMapScreen() {
   };
 
   const applyScan = (pick: { sku: string; name: string }, label: string) => {
-    setCurrentLine({ sku: pick.sku, name: pick.name, label, qty: 1, condition: 'Good' });
-    setQtyText('1');
+    setCurrentLine({ sku: pick.sku, name: pick.name, label, qty: null, condition: null });
+    setQtyEditing(false); setQtyInputText('');
+    setDamageEditing(false); setDamagePhaseDraft(null); setDamageObservationDraft(null);
   };
   // A real pallet QR is "<sku>::<unique label>" — the sku identifies what
   // it is, the label identifies this one specific physical box. A QR with
@@ -263,11 +276,8 @@ export function ZoneAuditMapScreen() {
   // list instead of moving to a different pallet each time.
   const handleSaveAndScanNext = () => {
     if (!currentLine || !selectedZoneId) return;
-    const n = parseInt(qtyText, 10);
-    const qty = Number.isNaN(n) ? 1 : Math.max(1, n);
-    setScannedByZone((prev) => ({ ...prev, [selectedZoneId]: [...(prev[selectedZoneId] ?? []), { ...currentLine, qty }] }));
+    setScannedByZone((prev) => ({ ...prev, [selectedZoneId]: [...(prev[selectedZoneId] ?? []), currentLine] }));
     setCurrentLine(null);
-    setQtyText('1');
   };
 
   const zoneScans = selectedZoneId ? (scannedByZone[selectedZoneId] ?? []) : [];
@@ -282,15 +292,41 @@ export function ZoneAuditMapScreen() {
   // Quantity and Pallet Condition are independent findings on a box —
   // same split as Rack View's Reconciliation Form (qtyEvidence/
   // damageEvidence kept separately on the live line, not one shared blob).
-  const ensureFieldEvidence = (field: 'qtyEvidence' | 'conditionEvidence'): Evidence =>
+  const ensureFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence'): Evidence =>
     currentLine?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
-  const updateFieldEvidence = (field: 'qtyEvidence' | 'conditionEvidence', patch: Partial<Evidence>) => {
+  const updateFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence', patch: Partial<Evidence>) => {
     if (!currentLine) return;
     setCurrentLine({ ...currentLine, [field]: { ...ensureFieldEvidence(field), ...patch } });
   };
-  const raiseFieldIssue = (field: 'qtyIssueRaised' | 'conditionIssueRaised' | 'locationIssueRaised') => {
+  const raiseFieldIssue = (field: 'qtyIssueRaised' | 'damageIssueRaised' | 'locationIssueRaised') => {
     if (!currentLine) return;
     setCurrentLine({ ...currentLine, [field]: true });
+  };
+  // Same tap-to-edit-then-Confirm flow as Rack View/Quick Scan.
+  const handleOpenQtyEdit = () => {
+    if (!currentLine) return;
+    setQtyInputText(currentLine.qty != null ? String(currentLine.qty) : '');
+    setQtyEditing(true);
+  };
+  const handleConfirmQty = () => {
+    if (!currentLine) return;
+    const n = parseInt(qtyInputText, 10);
+    setCurrentLine({ ...currentLine, qty: Number.isNaN(n) ? 0 : Math.max(0, n) });
+    setQtyEditing(false);
+  };
+  const handleOpenDamageEdit = () => {
+    if (!currentLine) return;
+    setDamagePhaseDraft(currentLine.activityPhase ?? null);
+    setDamageObservationDraft(currentLine.observation ?? null);
+    setDamageEditing(true);
+  };
+  // Same as Rack View's Damage field — confirming always marks the box
+  // Damaged (there's no "mark as Good" path through this field); a box
+  // never flagged here just stays with condition: null.
+  const handleConfirmDamage = () => {
+    if (!currentLine) return;
+    setCurrentLine({ ...currentLine, activityPhase: damagePhaseDraft, observation: damageObservationDraft, condition: 'Damaged' });
+    setDamageEditing(false);
   };
 
   // A full page, not a modal sheet — a zone can genuinely rack up a long
@@ -320,10 +356,10 @@ export function ZoneAuditMapScreen() {
               ? { label: 'Unlisted', ragKey: 'amber' as const }
               : { label: 'No Record', ragKey: 'amber' as const };
       const tag = group === 'Matched' ? 'Belongs Here' : homeZone ? `Belongs in ${homeZone}` : isUnlisted ? 'Unlisted SKU' : 'No Expectation on Record';
-      // Default per box is qty 1 / condition Good — anything else means
-      // the inspector actually typed something in for this specific box.
-      const qtyEntered = line.qty !== 1;
-      const damageEntered = line.condition !== 'Good';
+      // Qty/condition both start null (a scan only proves identity) — a
+      // box only shows these once the inspector actually filled them in.
+      const qtyEntered = line.qty != null;
+      const damageEntered = line.condition != null;
       return { ...line, homeZone, group, badge, tag, qtyEntered, damageEntered };
     });
     const skuGroups: { title: string; ragKey: 'green' | 'amber' | 'red'; rows: typeof foundBoxes }[] = [
@@ -424,8 +460,8 @@ export function ZoneAuditMapScreen() {
                             s.qtyEntered || s.damageEntered ? (
                               <View style={styles.miniBody}>
                                 <View style={styles.miniGrid}>
-                                  {s.qtyEntered ? <MiniField label="Qty" value={String(s.qty)} /> : null}
-                                  {s.damageEntered ? <MiniField label="Damage" value={s.condition} tone={tokens.rag.amber.strong} /> : null}
+                                  {s.qtyEntered ? <MiniField label="Qty" value={String(s.qty ?? '—')} /> : null}
+                                  {s.damageEntered ? <MiniField label="Damage" value={s.condition ?? '—'} tone={tokens.rag.amber.strong} /> : null}
                                 </View>
                               </View>
                             ) : null
@@ -436,8 +472,8 @@ export function ZoneAuditMapScreen() {
                               </Text>
                               <View style={styles.miniGrid}>
                                 <MiniField label="Box" value={s.label} />
-                                <MiniField label="Qty" value={String(s.qty)} />
-                                <MiniField label="Condition" value={s.condition} />
+                                <MiniField label="Qty" value={String(s.qty ?? '—')} />
+                                <MiniField label="Condition" value={s.condition ?? '—'} />
                               </View>
                               {s.group === 'Mismatched' ? (
                                 <View style={[styles.miniLocationRow, { borderTopColor: tokens.border }]}>
@@ -793,31 +829,51 @@ export function ZoneAuditMapScreen() {
                             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 1: Quantity</Text>
                           </View>
                           <View style={styles.fieldCardBody}>
-                            <TextInput
-                              value={qtyText}
-                              onChangeText={setQtyText}
-                              keyboardType="number-pad"
-                              placeholderTextColor={tokens.slate400}
-                              style={[styles.qtyInput, { color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
-                            />
-                            <Pressable
-                              disabled={!!currentLine.qtyIssueRaised}
-                              onPress={() => raiseFieldIssue('qtyIssueRaised')}
-                              style={[
-                                styles.raiseIssueBox,
-                                {
-                                  marginTop: 10,
-                                  backgroundColor: currentLine.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                  borderColor: currentLine.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.amber.border,
-                                  borderRadius: tokens.radius.lg,
-                                },
-                              ]}
-                            >
-                              <Ionicons name={currentLine.qtyIssueRaised ? 'checkmark-circle' : 'flag-outline'} size={16} color={currentLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong} />
-                              <Text style={{ color: currentLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
-                                {currentLine.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
-                              </Text>
-                            </Pressable>
+                            {qtyEditing ? (
+                              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                <TextInput
+                                  value={qtyInputText}
+                                  onChangeText={setQtyInputText}
+                                  placeholder="Quantity you found"
+                                  keyboardType="number-pad"
+                                  placeholderTextColor={tokens.slate400}
+                                  autoFocus
+                                  style={[styles.qtyInput, { flex: 1, color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
+                                />
+                                <Pressable onPress={handleConfirmQty} style={[styles.smallPrimaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                </Pressable>
+                              </View>
+                            ) : (
+                              <Pressable onPress={handleOpenQtyEdit} style={styles.fieldValueRow}>
+                                <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                  Qty found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{currentLine.qty != null ? currentLine.qty : '-'}</Text>
+                                </Text>
+                                <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                  <Ionicons name={currentLine.qty != null ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                </View>
+                              </Pressable>
+                            )}
+                            {currentLine.qty != null ? (
+                              <Pressable
+                                disabled={!!currentLine.qtyIssueRaised}
+                                onPress={() => raiseFieldIssue('qtyIssueRaised')}
+                                style={[
+                                  styles.raiseIssueBox,
+                                  {
+                                    marginTop: 10,
+                                    backgroundColor: currentLine.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                    borderColor: currentLine.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.amber.border,
+                                    borderRadius: tokens.radius.lg,
+                                  },
+                                ]}
+                              >
+                                <Ionicons name={currentLine.qtyIssueRaised ? 'checkmark-circle' : 'flag-outline'} size={16} color={currentLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong} />
+                                <Text style={{ color: currentLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
+                                  {currentLine.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
+                                </Text>
+                              </Pressable>
+                            ) : null}
                             <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginTop: 10 }}>
                               Evidence
                             </Text>
@@ -845,55 +901,110 @@ export function ZoneAuditMapScreen() {
                             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 2: Damage</Text>
                           </View>
                           <View style={styles.fieldCardBody}>
-                            <View style={styles.condGrid}>
-                              {CONDITIONS.map((c) => {
-                                const sel = currentLine.condition === c;
-                                return (
-                                  <Pressable key={c} onPress={() => setCurrentLine((prev) => (prev ? { ...prev, condition: c } : prev))} style={styles.condChip}>
-                                    <View style={[styles.radioDot, { borderColor: sel ? tokens.primary : tokens.slate400 }]}>
-                                      {sel ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
-                                    </View>
-                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{c}</Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                            <Pressable
-                              disabled={!!currentLine.conditionIssueRaised}
-                              onPress={() => raiseFieldIssue('conditionIssueRaised')}
-                              style={[
-                                styles.raiseIssueBox,
-                                {
-                                  marginTop: 10,
-                                  backgroundColor: currentLine.conditionIssueRaised ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                  borderColor: currentLine.conditionIssueRaised ? tokens.rag.green.border : tokens.rag.amber.border,
-                                  borderRadius: tokens.radius.lg,
-                                },
-                              ]}
-                            >
-                              <Ionicons name={currentLine.conditionIssueRaised ? 'checkmark-circle' : 'flag-outline'} size={16} color={currentLine.conditionIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong} />
-                              <Text style={{ color: currentLine.conditionIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
-                                {currentLine.conditionIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
-                              </Text>
-                            </Pressable>
+                            {damageEditing ? (
+                              <>
+                                <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                  Activity Phase <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                </Text>
+                                <View style={styles.condGrid}>
+                                  {ACTIVITY_PHASES.map((phase) => {
+                                    const selected = damagePhaseDraft === phase;
+                                    return (
+                                      <Pressable key={phase} onPress={() => { setDamagePhaseDraft(phase); setDamageObservationDraft(null); }} style={styles.condChip}>
+                                        <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                          {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                        </View>
+                                        <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{phase}</Text>
+                                      </Pressable>
+                                    );
+                                  })}
+                                </View>
+
+                                <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                  Observations <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                </Text>
+                                {damagePhaseDraft ? (
+                                  <View style={styles.condGrid}>
+                                    {OBSERVATIONS_BY_PHASE[damagePhaseDraft].map((obs) => {
+                                      const selected = damageObservationDraft === obs;
+                                      return (
+                                        <Pressable key={obs} onPress={() => setDamageObservationDraft(obs)} style={styles.condChip}>
+                                          <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                            {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                          </View>
+                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{obs}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+                                ) : (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Pick an Activity Phase first.</Text>
+                                )}
+
+                                <Pressable
+                                  disabled={!damagePhaseDraft || !damageObservationDraft}
+                                  onPress={handleConfirmDamage}
+                                  style={[
+                                    styles.smallPrimaryBtn,
+                                    { alignSelf: 'flex-start', backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: damagePhaseDraft && damageObservationDraft ? 1 : 0.5 },
+                                  ]}
+                                >
+                                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                </Pressable>
+                              </>
+                            ) : (
+                              <Pressable onPress={handleOpenDamageEdit} style={styles.fieldValueRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                    Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{currentLine.condition ? (currentLine.observation ?? currentLine.condition) : '-'}</Text>
+                                  </Text>
+                                  {currentLine.condition && currentLine.activityPhase ? (
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{currentLine.activityPhase}</Text>
+                                  ) : null}
+                                </View>
+                                <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                  <Ionicons name={currentLine.condition ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                </View>
+                              </Pressable>
+                            )}
+                            {currentLine.condition && currentLine.condition !== 'Good' ? (
+                              <Pressable
+                                disabled={!!currentLine.damageIssueRaised}
+                                onPress={() => raiseFieldIssue('damageIssueRaised')}
+                                style={[
+                                  styles.raiseIssueBox,
+                                  {
+                                    marginTop: 10,
+                                    backgroundColor: currentLine.damageIssueRaised ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                    borderColor: currentLine.damageIssueRaised ? tokens.rag.green.border : tokens.rag.amber.border,
+                                    borderRadius: tokens.radius.lg,
+                                  },
+                                ]}
+                              >
+                                <Ionicons name={currentLine.damageIssueRaised ? 'checkmark-circle' : 'flag-outline'} size={16} color={currentLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong} />
+                                <Text style={{ color: currentLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
+                                  {currentLine.damageIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
+                                </Text>
+                              </Pressable>
+                            ) : null}
                             <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginTop: 10 }}>
                               Evidence
                             </Text>
                             <EvidenceBlock
-                              evidence={ensureFieldEvidence('conditionEvidence')}
-                              onOpenNote={() => updateFieldEvidence('conditionEvidence', { noteOpen: true })}
-                              onChangeNote={(note) => updateFieldEvidence('conditionEvidence', { note })}
-                              onRecordAudio={() => updateFieldEvidence('conditionEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                              evidence={ensureFieldEvidence('damageEvidence')}
+                              onOpenNote={() => updateFieldEvidence('damageEvidence', { noteOpen: true })}
+                              onChangeNote={(note) => updateFieldEvidence('damageEvidence', { note })}
+                              onRecordAudio={() => updateFieldEvidence('damageEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
                               onToggleAudioPlay={() => {
-                                const ev = ensureFieldEvidence('conditionEvidence');
+                                const ev = ensureFieldEvidence('damageEvidence');
                                 if (!ev.audio) return;
-                                updateFieldEvidence('conditionEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
+                                updateFieldEvidence('damageEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
                               }}
-                              onRemoveAudio={() => updateFieldEvidence('conditionEvidence', { audio: null })}
-                              onAddImage={() => setAttachmentTarget('condition')}
-                              onRemoveImage={(i) => updateFieldEvidence('conditionEvidence', { images: ensureFieldEvidence('conditionEvidence').images.filter((_, ii) => ii !== i) })}
-                              onAddVideo={() => updateFieldEvidence('conditionEvidence', { videos: [...ensureFieldEvidence('conditionEvidence').videos, { durationSec: 20 }] })}
-                              onRemoveVideo={(i) => updateFieldEvidence('conditionEvidence', { videos: ensureFieldEvidence('conditionEvidence').videos.filter((_, ii) => ii !== i) })}
+                              onRemoveAudio={() => updateFieldEvidence('damageEvidence', { audio: null })}
+                              onAddImage={() => setAttachmentTarget('damage')}
+                              onRemoveImage={(i) => updateFieldEvidence('damageEvidence', { images: ensureFieldEvidence('damageEvidence').images.filter((_, ii) => ii !== i) })}
+                              onAddVideo={() => updateFieldEvidence('damageEvidence', { videos: [...ensureFieldEvidence('damageEvidence').videos, { durationSec: 20 }] })}
+                              onRemoveVideo={(i) => updateFieldEvidence('damageEvidence', { videos: ensureFieldEvidence('damageEvidence').videos.filter((_, ii) => ii !== i) })}
                             />
                           </View>
                         </View>
@@ -950,7 +1061,7 @@ export function ZoneAuditMapScreen() {
         onClose={() => setAttachmentTarget(null)}
         onSave={(image) => {
           if (attachmentTarget === null) return;
-          const field = attachmentTarget === 'qty' ? 'qtyEvidence' : 'conditionEvidence';
+          const field = attachmentTarget === 'qty' ? 'qtyEvidence' : 'damageEvidence';
           updateFieldEvidence(field, { images: [...ensureFieldEvidence(field).images, image] });
         }}
       />
@@ -1087,6 +1198,10 @@ const styles = StyleSheet.create({
   compareRow: { flexDirection: 'row', gap: 10 },
   compareCol: { flex: 1, borderWidth: 1, padding: 12 },
   qtyInput: { height: 40, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
+  fieldValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editIconBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  sectionLabel: { fontSize: 12, fontWeight: '700' },
+  smallPrimaryBtn: { height: 40, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
   condGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   condChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
   radioDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
