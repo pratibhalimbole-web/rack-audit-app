@@ -7,6 +7,7 @@ import { mine, scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } 
 import { conditionSeverity } from '@/lib/conditionSeverity';
 import { useLocationsTreeMap } from '@/hooks/useLocationsTree';
 import { CONDITIONS, type Condition } from '@/lib/types';
+import { useZoneAuditStore, type ZoneScanRecord } from '@/store/useZoneAuditStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
@@ -124,6 +125,24 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   }, [audits, auditId]);
   const scopedAudit = auditId ? candidates[0] : null;
   const candidateIds = useMemo(() => candidates.map((a) => a.audit_id), [candidates]);
+
+  // Zone-scoped audits never populate the rack/bay/loc tree — this board's
+  // usual FlaggedLine/ScopedIssue pipeline can't see them at all, so their
+  // issues come straight from useZoneAuditStore instead. Only shown when
+  // this board is locked to one specific (zone-scoped) audit, same as
+  // Audit Details' "View Reported Issues" entry point.
+  const zoneScansByAudit = useZoneAuditStore((s) => s.scansByAudit);
+  const zoneIssueLines = useMemo(() => {
+    if (!scopedAudit || scopedAudit.scope_type !== 'Zone') return [];
+    const byZone = zoneScansByAudit[scopedAudit.audit_id] ?? {};
+    return Object.values(byZone)
+      .flat()
+      .filter((l) => {
+        const mismatch = !!l.expectedZone && l.expectedZone !== l.scannedZone;
+        const noExpectation = !l.expectedZone;
+        return mismatch || noExpectation || l.qtyIssueRaised || l.damageIssueRaised;
+      });
+  }, [scopedAudit, zoneScansByAudit]);
   const { map: treeMap, isLoading } = useLocationsTreeMap(candidateIds);
   const auditNameById = useMemo(() => Object.fromEntries(candidates.map((a) => [a.audit_id, a.audit_name])), [candidates]);
 
@@ -223,7 +242,7 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   // Toggle OFF (default) — only matched-but-off-on-qty/damage pallets.
   // Toggle ON ("Mismatch SKUs") — wrong-SKU pallets plus Manual Mode reports,
   // since both are location-level discrepancies outside a clean match.
-  const viewTotal = case1Items.length + case2Items.length + manualIssueGroups.length;
+  const viewTotal = case1Items.length + case2Items.length + manualIssueGroups.length + zoneIssueLines.length;
 
   const activeFilterCount = filterAudits.length + filterRacks.length + filterBays.length + filterConditions.length + filterSources.length;
 
@@ -429,7 +448,7 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
             <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Total : {viewTotal}</Text>
           </View>
         ) : null}
-        {case1Items.length || case2Items.length || manualIssueGroups.length ? (
+        {case1Items.length || case2Items.length || manualIssueGroups.length || zoneIssueLines.length ? (
           <>
             {case1Items.length ? (
               <ScopedIssueSection
@@ -455,6 +474,7 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
                 groups={manualIssueGroups}
               />
             ) : null}
+            {zoneIssueLines.length ? <ZoneIssueSection lines={zoneIssueLines} /> : null}
           </>
         ) : (
           <View style={styles.empty}>
@@ -644,6 +664,106 @@ function ScopedIssueCard({ item }: { item: WithAudit<ScopedIssue> }) {
   );
 }
 
+// Zone Scan has no rack/bay/loc/pallet identity — its issue cards read the
+// SKU itself plus where it was found vs. where WMS expects it, instead of a
+// location breadcrumb. Not pressable: like ScopedIssueCard, there's no
+// issue-detail screen keyed by a zone scan line's identity.
+function zoneIssueSeverity(l: ZoneScanRecord): Severity {
+  const mismatch = !!l.expectedZone && l.expectedZone !== l.scannedZone;
+  if (mismatch) return 'red';
+  if (l.damageIssueRaised && l.condition) return conditionSeverity(l.condition);
+  return 'amber';
+}
+
+function ZoneIssueSection({ lines }: { lines: ZoneScanRecord[] }) {
+  if (!lines.length) return null;
+  return (
+    <View style={styles.section}>
+      <SectionHead
+        title="Zone Scan Issues"
+        subtitle="SKUs scanned in Zone Scan with a location, quantity, or damage discrepancy"
+        icon="location-outline"
+        count={lines.length}
+      />
+      <View style={styles.grid}>
+        {lines.map((l, i) => (
+          <ZoneIssueCard key={`${l.sku}~${l.label}~${i}`} line={l} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ZoneIssueCard({ line }: { line: ZoneScanRecord }) {
+  const { tokens } = useTheme();
+  const mismatch = !!line.expectedZone && line.expectedZone !== line.scannedZone;
+  const noExpectation = !line.expectedZone;
+  const badge = SEVERITY_BADGE[zoneIssueSeverity(line)];
+
+  const tags: { label: string }[] = [];
+  if (mismatch) tags.push({ label: 'Location Mismatch' });
+  else if (noExpectation) tags.push({ label: 'No Expectation on Record' });
+  if (line.qtyIssueRaised) tags.push({ label: 'Quantity Issue' });
+  if (line.damageIssueRaised) tags.push({ label: 'Damage Issue' });
+
+  return (
+    <View style={[styles.issueCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+      <View style={[styles.issueHeadRow, { backgroundColor: '#EEF3FF', borderTopLeftRadius: tokens.radius.xl, borderTopRightRadius: tokens.radius.xl }]}>
+        <View style={styles.issueHeadLeft}>
+          <Ionicons name="pricetag-outline" size={16} color={tokens.primary} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+            {line.sku}
+          </Text>
+        </View>
+        <StatusBadge label={badge.label} ragKey={badge.ragKey} />
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold, marginBottom: 2 }} numberOfLines={1}>
+          {line.name}
+        </Text>
+        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 8 }} numberOfLines={1}>
+          Label: {line.label}
+        </Text>
+
+        <View style={styles.compareRow}>
+          <View style={[styles.compareCol, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 4 }}>Expected Zone</Text>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+              {line.expectedZone ?? 'None on record'}
+            </Text>
+          </View>
+          <View style={[styles.compareCol, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 4 }}>Scanned Zone</Text>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+              {line.scannedZone}
+            </Text>
+          </View>
+        </View>
+
+        {/* Only shows what the inspector actually entered — a line can be
+            a location mismatch/no-expectation card without ever having its
+            Quantity or Damage fields touched at all. */}
+        {line.qty != null || line.condition != null ? (
+          <View style={styles.issueGrid}>
+            {line.qty != null ? <IssueField label="Qty Entered" value={String(line.qty)} /> : null}
+            {line.condition != null ? <IssueField label="Damage Entered" value={line.condition} /> : null}
+          </View>
+        ) : null}
+
+        {tags.length ? (
+          <View style={[styles.zoneTagRow]}>
+            {tags.map((t) => (
+              <View key={t.label} style={[styles.zoneTag, { backgroundColor: tokens.muted, borderColor: tokens.border }]}>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>{t.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function IssueCard({ auditId, group }: { auditId: string; group: PalletIssueGroup }) {
   const { tokens } = useTheme();
   const badge = SEVERITY_BADGE[worstSeverity(group.lines)];
@@ -759,6 +879,8 @@ const styles = StyleSheet.create({
   issueField: { width: '50%', marginBottom: 10 },
   compareRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   compareCol: { flex: 1, borderWidth: 1, padding: 10 },
+  zoneTagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  zoneTag: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   numChip: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2 },
   skuList: { marginTop: 2, gap: 8 },
   skuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 9 },

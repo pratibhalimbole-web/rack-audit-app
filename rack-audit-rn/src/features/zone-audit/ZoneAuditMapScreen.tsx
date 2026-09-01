@@ -69,14 +69,31 @@ export function ZoneAuditMapScreen() {
   const [zoneField, setZoneField] = useState(false);
   const [scannedByZone, setScannedByZone] = useState<Record<string, ZoneScanLine[]>>({});
   const setZoneScans = useZoneAuditStore((s) => s.setZoneScans);
-  // Mirrors {sku,label} pairs (that's all pick-list progress needs) into the
-  // shared store on every change, so Audit Details' zone pick-list chips —
+  // Mirrors scan lines into the shared store on every change, so Audit
+  // Details' zone pick-list chips and Reported Audits' zone-issue cards —
   // reached BEFORE this screen ever opens, or after backing out of it — can
-  // read live scan counts without owning the full ZoneScanLine shape.
+  // read live scan state without owning the full ZoneScanLine shape
+  // (evidence objects stay screen-local).
   useEffect(() => {
     if (!auditId) return;
     Object.entries(scannedByZone).forEach(([zoneId, lines]) => {
-      setZoneScans(auditId, zoneId, lines.map((l) => ({ sku: l.sku, label: l.label })));
+      const scannedZoneLabel = FLOOR_AREAS.find((f) => f.id === zoneId)?.label ?? zoneId;
+      setZoneScans(
+        auditId,
+        zoneId,
+        lines.map((l) => ({
+          sku: l.sku,
+          name: l.name,
+          label: l.label,
+          qty: l.qty,
+          condition: l.condition,
+          qtyIssueRaised: l.qtyIssueRaised,
+          damageIssueRaised: l.damageIssueRaised,
+          locationIssueRaised: l.locationIssueRaised,
+          expectedZone: expectedZoneForSku(l.sku),
+          scannedZone: scannedZoneLabel,
+        })),
+      );
     });
   }, [auditId, scannedByZone, setZoneScans]);
   const [currentLine, setCurrentLine] = useState<ZoneScanLine | null>(null);
