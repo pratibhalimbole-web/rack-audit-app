@@ -12,12 +12,12 @@ import { NewAttachmentModal } from '@/components/NewAttachmentModal';
 import type { SheetOption } from '@/components/BottomSheetPicker';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { expectedZoneForSku, fillBayLevels, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL, SKU_ZONE_EXPECTATIONS } from '@/lib/mockData';
+import { EXPECTED_SKUS, expectedZoneForSku, fillBayLevels, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL, SKU_ZONE_EXPECTATIONS, type ExpectedSkuLine } from '@/lib/mockData';
 import { useQuickScanPinStore } from '@/store/useQuickScanPinStore';
-import { CONDITIONS, type Condition, type Evidence, type LocationNode, type SkuScanCode } from '@/lib/types';
+import { ACTIVITY_PHASES, type ActivityPhase, type Condition, type Evidence, type LocationNode, OBSERVATIONS_BY_PHASE, type SkuScanCode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
-import { buildBayDiagram } from '../rack-view/buildBayDiagram';
+import { buildBayDiagram, locLevelPosition } from '../rack-view/buildBayDiagram';
 
 // A rack-holding zone's real name IS "Layout X" — no longer relabeled to
 // "Zone X" for display, since "Zone" is now reserved for the separate,
@@ -100,27 +100,39 @@ type ScannedSku = {
   name: string;
   origin: Origin;
   expectedZone: string | null;
-  matched: boolean | null; // null until resolved — either awaiting a Floor pin, or resolved with no WMS expectation on record
+  matched: boolean | null; // null until resolved — either awaiting a Floor pin, or resolved with no WMS/pick-list expectation on record
+  // Rack origin only — the matched EXPECTED_SKUS entry for the pinned
+  // pallet (if any), used for the Expected/Scanned compare column and the
+  // quantity mismatch check, same as Rack View's own expectedSkus[0].
+  expectedLine: ExpectedSkuLine | null;
   pinnedZone?: string;
   pinnedRack?: string;
   pinnedBay?: string;
   pinnedLoc?: string;
   pinnedAisle?: boolean;
   pinnedFloorAreaId?: string;
-  issueRaised?: boolean;
   scannedAt: number; // device clock at the moment the camera scan fired
   pinnedAt?: number; // device clock at the moment the location was resolved
-  // Reconciliation Form fields — same structure as Rack View's and Zone
-  // Scan's own Reconciliation Form (Pallet Condition gate, per-field
-  // Raise Issue, per-field Evidence), filled in on the overlay panel that
-  // opens the moment a scan resolves.
-  qty: number;
-  condition: Condition;
+  // Reconciliation Form fields — same shape as Rack View's scanLines[0]
+  // (Pallet Condition gate, independent Quantity/Damage field-cards each
+  // with their own evidence and Raise Issue flag), so the form renders
+  // identically wherever it's reached. Quantity and damage are unknown at
+  // scan time — a scan only proves SKU identity — so both start unset
+  // ("-" shown instead of a number) until the inspector deliberately
+  // enters what they actually found.
+  qty: number | null;
+  condition: Condition | null;
+  activityPhase: ActivityPhase | null;
+  observation: string | null;
   palletConditionGood?: boolean | null;
+  // Rack origin's "wrong item scanned" issue (the misplaced case) is its
+  // own flag, independent of the two field-level ones below — mirrors
+  // Rack View's Mismatch vs. Quantity/Damage issue split.
+  skuIssueRaised?: boolean;
   qtyIssueRaised?: boolean;
-  conditionIssueRaised?: boolean;
+  damageIssueRaised?: boolean;
   qtyEvidence?: Evidence;
-  conditionEvidence?: Evidence;
+  damageEvidence?: Evidence;
   // Only set for a freeform "tap the open floor" pin — the exact
   // content-space point the inspector tapped, so View Location can drop the
   // same marker back down later instead of only showing text fields.
@@ -188,21 +200,60 @@ export function QuickScanScreen() {
   // scan resolves — same split canvas/form layout Rack View and Zone Scan
   // both use — rather than a scan going straight onto the list unreviewed.
   const [pendingItem, setPendingItem] = useState<ScannedSku | null>(null);
-  const [qtyText, setQtyText] = useState('1');
-  const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'condition' | null>(null);
+  // Quantity/Damage inline edit-in-place state — same shape as Rack View's
+  // own qtyEditing/qtyInputText/damageEditing/damagePhaseDraft/
+  // damageObservationDraft, just living on this screen instead since Quick
+  // Scan's form isn't a shared component (see file header note above).
+  const [qtyEditing, setQtyEditing] = useState(false);
+  const [qtyInputText, setQtyInputText] = useState('');
+  const [damageEditing, setDamageEditing] = useState(false);
+  const [damagePhaseDraft, setDamagePhaseDraft] = useState<ActivityPhase | null>(null);
+  const [damageObservationDraft, setDamageObservationDraft] = useState<string | null>(null);
+  const [attachmentTarget, setAttachmentTarget] = useState<'qty' | 'damage' | null>(null);
   // A Floor-mode item's own read-only recap of where it got pinned — same
   // floor-areas + layout/rack reference grid the live canvas shows, just
   // static, with that one item's pin highlighted/marked instead of the
   // in-progress pendingItem's.
   const [viewLocationItem, setViewLocationItem] = useState<ScannedSku | null>(null);
 
-  const ensureFieldEvidence = (field: 'qtyEvidence' | 'conditionEvidence'): Evidence =>
+  const ensureFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence'): Evidence =>
     pendingItem?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
-  const updateFieldEvidence = (field: 'qtyEvidence' | 'conditionEvidence', patch: Partial<Evidence>) => {
+  const updateFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence', patch: Partial<Evidence>) => {
     setPendingItem((prev) => (prev ? { ...prev, [field]: { ...ensureFieldEvidence(field), ...patch } } : prev));
   };
-  const raiseFieldIssue = (field: 'qtyIssueRaised' | 'conditionIssueRaised') => {
-    setPendingItem((prev) => (prev ? { ...prev, [field]: true } : prev));
+  // Mirrors Rack View's raiseFieldIssue(kind) — the misplaced case (rack
+  // origin, wrong SKU) raises its own skuIssueRaised flag instead.
+  const raiseFieldIssue = (kind: 'qty' | 'damage') => {
+    setPendingItem((prev) => (prev ? { ...prev, [kind === 'qty' ? 'qtyIssueRaised' : 'damageIssueRaised']: true } : prev));
+  };
+  const raiseSkuIssue = () => setPendingItem((prev) => (prev ? { ...prev, skuIssueRaised: true } : prev));
+  const handleSelectPalletCondition = (good: boolean) => setPendingItem((prev) => (prev ? { ...prev, palletConditionGood: good } : prev));
+  const handleOpenQtyEdit = () => {
+    setQtyInputText(pendingItem?.qty != null ? String(pendingItem.qty) : '');
+    setQtyEditing(true);
+  };
+  const handleConfirmQty = () => {
+    const n = parseInt(qtyInputText, 10);
+    const qty = Number.isNaN(n) ? 0 : Math.max(0, n);
+    setPendingItem((prev) => (prev ? { ...prev, qty } : prev));
+    setQtyEditing(false);
+  };
+  const handleOpenDamageEdit = () => {
+    setDamagePhaseDraft(pendingItem?.activityPhase ?? null);
+    setDamageObservationDraft(pendingItem?.observation ?? null);
+    setDamageEditing(true);
+  };
+  const handleSelectDamagePhase = (phase: ActivityPhase) => {
+    setDamagePhaseDraft(phase);
+    setDamageObservationDraft(null);
+  };
+  // Same as Rack View — Damage's confirm flow always sets condition to
+  // 'Damaged' plus the picked Activity Phase + Observation; there's no path
+  // to explicitly mark "Good" via this field.
+  const handleConfirmDamage = () => {
+    if (!damagePhaseDraft || !damageObservationDraft) return;
+    setPendingItem((prev) => (prev ? { ...prev, condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft } : prev));
+    setDamageEditing(false);
   };
 
   const { data: allAudits = [] } = useAudits();
@@ -338,7 +389,7 @@ export function QuickScanScreen() {
     setPendingItem((prev) => {
       if (!prev) return prev;
       const matched = prev.expectedZone ? prev.expectedZone === area.label : null;
-      return { ...prev, pinnedZone: area.label, pinnedFloorAreaId: area.id, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, issueRaised: matched === false, pinnedAt: Date.now() };
+      return { ...prev, pinnedZone: area.label, pinnedFloorAreaId: area.id, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, pinnedAt: Date.now() };
     });
   };
   const pinFloorToLayoutFloor = (layout: string) => {
@@ -346,7 +397,7 @@ export function QuickScanScreen() {
     setPendingItem((prev) => {
       if (!prev) return prev;
       const matched = prev.expectedZone ? prev.expectedZone === layout : null;
-      return { ...prev, pinnedZone: layout, pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, issueRaised: matched === false, pinnedAt: Date.now() };
+      return { ...prev, pinnedZone: layout, pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, pinnedAt: Date.now() };
     });
   };
   const pinFloorToRack = (layout: string, rack: string) => {
@@ -354,7 +405,7 @@ export function QuickScanScreen() {
     setPendingItem((prev) => {
       if (!prev) return prev;
       const matched = prev.expectedZone ? prev.expectedZone === layout : null;
-      return { ...prev, pinnedZone: layout, pinnedRack: rack, pinnedFloorAreaId: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, issueRaised: matched === false, pinnedAt: Date.now() };
+      return { ...prev, pinnedZone: layout, pinnedRack: rack, pinnedFloorAreaId: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched, pinnedAt: Date.now() };
     });
   };
   // Tapping the open floor itself — not a specific zone, rack, or floor
@@ -364,7 +415,7 @@ export function QuickScanScreen() {
     setFloorTapPoint({ x, y });
     setPendingItem((prev) =>
       prev
-        ? { ...prev, pinnedZone: 'Open Floor', pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched: null, issueRaised: false, pinnedAt: Date.now(), pinnedPoint: { x, y } }
+        ? { ...prev, pinnedZone: 'Open Floor', pinnedFloorAreaId: undefined, pinnedRack: undefined, pinnedBay: undefined, pinnedLoc: undefined, pinnedAisle: undefined, matched: null, pinnedAt: Date.now(), pinnedPoint: { x, y } }
         : prev,
     );
   };
@@ -473,66 +524,85 @@ export function QuickScanScreen() {
     setScannerOpen(false);
     if (!code.sku) return;
     const inv = INVENTORY_POOL.find((p) => p.sku === code.sku);
-    const draft = { qty: 1, condition: 'Good' as Condition, palletConditionGood: null };
-    setQtyText('1');
+    // Same base shape Rack View's scanLines[0] starts a fresh scan with —
+    // qty/condition start unset (a scan only proves SKU identity), each
+    // field's own evidence starts empty, no issue raised yet — so the
+    // Reconciliation Form renders identically to Rack View's regardless of
+    // which of the three Quick Scan modes it opened from.
+    const base = {
+      id: nextId(),
+      sku: code.sku!,
+      qty: null,
+      condition: null,
+      activityPhase: null,
+      observation: null,
+      palletConditionGood: null,
+      qtyEvidence: { note: '', noteOpen: false, audio: null, images: [], videos: [] },
+      damageEvidence: { note: '', noteOpen: false, audio: null, images: [], videos: [] },
+      skuIssueRaised: false,
+      qtyIssueRaised: false,
+      damageIssueRaised: false,
+      scannedAt: Date.now(),
+    };
+    setQtyEditing(false);
+    setQtyInputText('');
+    setDamageEditing(false);
+    setDamagePhaseDraft(null);
+    setDamageObservationDraft(null);
 
     if (mode === 'zone' && activeZoneObj) {
       const expectedZone = expectedZoneForSku(code.sku);
       const matched = expectedZone ? expectedZone === activeZoneObj.label : null;
       setPendingItem({
-        id: nextId(),
-        sku: code.sku!,
+        ...base,
         name: inv?.name ?? code.sku!,
         origin: 'zone',
         expectedZone,
+        expectedLine: null,
         matched,
         pinnedZone: activeZoneObj.label,
         pinnedFloorAreaId: activeZoneObj.id,
-        issueRaised: matched === false,
-        scannedAt: Date.now(),
         pinnedAt: Date.now(),
-        ...draft,
       });
       return;
     }
 
-    if (mode === 'rack' && activeLayout && activeRack) {
-      const expectation = SKU_ZONE_EXPECTATIONS.find((e) => e.sku === code.sku);
-      const expectedZone = expectation?.expectedZone ?? null;
-      const matched = expectedZone ? expectedZone === activeLayout : null;
+    if (mode === 'rack' && activeLayout && activeRack && activeBay && activeLoc) {
+      // Rack origin compares against the exact pallet's own pick list
+      // (EXPECTED_SKUS, keyed by location) — same source Rack View's own
+      // Reconciliation Form uses — not a layout-level zone expectation,
+      // since a rack pallet has a real expected SKU/qty to reconcile
+      // against, not just a zone match.
+      const expected = EXPECTED_SKUS[activeLoc] ?? [];
+      const matched = expected.length ? expected.some((l) => l.sku === code.sku) : null;
       setPendingItem({
-        id: nextId(),
-        sku: code.sku!,
-        name: expectation?.name ?? inv?.name ?? code.sku!,
+        ...base,
+        name: expected[0]?.name ?? inv?.name ?? code.sku!,
         origin: 'rack',
-        expectedZone,
+        expectedZone: null,
+        expectedLine: expected[0] ?? null,
         matched,
         pinnedZone: activeLayout,
         pinnedRack: activeRack,
-        pinnedBay: activeBay ?? undefined,
-        pinnedLoc: activeLoc ?? undefined,
-        issueRaised: matched === false,
-        scannedAt: Date.now(),
+        pinnedBay: activeBay,
+        pinnedLoc: activeLoc,
         pinnedAt: Date.now(),
-        ...draft,
       });
       return;
     }
 
     // Floor mode (or Zone/Rack scanned before a location was picked,
     // which canScan already prevents) — unresolved until pinned, but the
-    // Reconciliation Form still opens right away for qty/damage/evidence.
-    const expectation = SKU_ZONE_EXPECTATIONS.find((e) => e.sku === code.sku);
-    const name = expectation?.name ?? inv?.name ?? code.sku!;
+    // Reconciliation Form still opens right away for pallet condition/
+    // qty/damage/evidence.
+    const expectedZone = expectedZoneForSku(code.sku);
     setPendingItem({
-      id: nextId(),
-      sku: code.sku!,
-      name,
+      ...base,
+      name: inv?.name ?? code.sku!,
       origin: 'floor',
-      expectedZone: expectation?.expectedZone ?? null,
+      expectedZone,
+      expectedLine: null,
       matched: null,
-      scannedAt: Date.now(),
-      ...draft,
     });
   };
 
@@ -549,11 +619,14 @@ export function QuickScanScreen() {
 
   const handleSaveAndScanNext = () => {
     if (!pendingItem) return;
-    const n = parseInt(qtyText, 10);
-    const qty = Number.isNaN(n) ? 1 : Math.max(1, n);
-    setItems((prev) => [{ ...pendingItem, qty }, ...prev]);
+    if (pendingItem.origin === 'floor' && !pendingItem.pinnedAt) return;
+    setItems((prev) => [pendingItem, ...prev]);
     setPendingItem(null);
-    setQtyText('1');
+    setQtyEditing(false);
+    setQtyInputText('');
+    setDamageEditing(false);
+    setDamagePhaseDraft(null);
+    setDamageObservationDraft(null);
     // Back to the untouched default page after every save — Mode reset to
     // Zone, nothing picked in any mode — instead of leaving the previous
     // selection standing, so the next scan is a deliberate fresh choice
@@ -572,7 +645,11 @@ export function QuickScanScreen() {
   };
   const handleCancelPending = () => {
     setPendingItem(null);
-    setQtyText('1');
+    setQtyEditing(false);
+    setQtyInputText('');
+    setDamageEditing(false);
+    setDamagePhaseDraft(null);
+    setDamageObservationDraft(null);
   };
 
   useEffect(() => {
@@ -590,7 +667,6 @@ export function QuickScanScreen() {
           pinnedAisle: pinResult.aisle,
           pinnedFloorAreaId: pinResult.floorAreaId,
           matched,
-          issueRaised: matched === false,
           pinnedAt: Date.now(),
         };
       }),
@@ -1001,147 +1077,273 @@ export function QuickScanScreen() {
                 { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, borderTopLeftRadius: tokens.radius.xxl, borderTopRightRadius: tokens.radius.xxl },
               ]}
             >
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Reconciliation Form</Text>
+              <View>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Reconciliation Form</Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
+                  {pendingItem.sku} · {pendingItem.origin === 'zone' ? 'Zone Find' : pendingItem.origin === 'rack' ? 'Rack Find' : 'Floor Find'}
+                </Text>
+              </View>
               <Pressable onPress={handleCancelPending} hitSlop={8}>
                 <Ionicons name="close" size={20} color={tokens.mutedForeground} />
               </Pressable>
             </View>
 
+            {/* Selected Location Details — same rf-loc-box grid Rack View's
+                own panel uses (DetailRow x6 for a real rack pallet); Zone
+                and Floor origins only ever resolve to a Mode + Zone label,
+                never a rack/bay/level/position, so they show a shorter
+                two-row box instead. */}
+            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginBottom: 8 }}>
+              Selected Location Details
+            </Text>
+            <View style={styles.locDetailsBox}>
+              {pendingItem.origin === 'rack'
+                ? (() => {
+                    const bayObj = pendingItem.pinnedZone && pendingItem.pinnedRack && pendingItem.pinnedBay
+                      ? { code: pendingItem.pinnedBay, locations: locationsByBay.get(`${pendingItem.pinnedZone}|${pendingItem.pinnedRack}|${pendingItem.pinnedBay}`) ?? [] }
+                      : undefined;
+                    const { level, position } = locLevelPosition(bayObj, pendingItem.pinnedLoc ?? null);
+                    return (
+                      <>
+                        <QsDetailRow label="Layout" value={pendingItem.pinnedZone || '—'} />
+                        <QsDetailRow label="Rack" value={pendingItem.pinnedRack || '—'} />
+                        <QsDetailRow label="Bay" value={pendingItem.pinnedBay || '—'} />
+                        <QsDetailRow label="Level" value={level ? `L${level}` : '—'} />
+                        <QsDetailRow label="Position" value={position ? `P${String(position).padStart(2, '0')}` : '—'} />
+                        <QsDetailRow label="Pallet" value={pendingItem.pinnedLoc || '—'} />
+                      </>
+                    );
+                  })()
+                : (
+                  <>
+                    <QsDetailRow label="Mode" value={pendingItem.origin === 'zone' ? 'Zone' : 'Floor'} />
+                    <QsDetailRow label="Zone" value={pendingItem.pinnedZone ? zoneLabel(pendingItem.pinnedZone) : pendingItem.origin === 'floor' ? 'Not pinned yet' : '—'} />
+                  </>
+                )}
+            </View>
+            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
               {(() => {
-                const mismatch = pendingItem.matched === false;
+                const rackOrigin = pendingItem.origin === 'rack';
+                // "Misplaced" (a single "wrong item scanned" Raise Issue
+                // button in place of the two field-cards) only applies to
+                // rack origin, where matched===false means the wrong SKU
+                // sits on a known pallet. Zone/Floor's matched===false is a
+                // location mismatch, not a wrong-identity scan — there's no
+                // "expected SKU" to have gotten wrong there, so those still
+                // get the normal qty/damage field-cards.
+                const misplaced = rackOrigin && pendingItem.matched === false;
                 const pinRequired = pendingItem.origin === 'floor' && !pendingItem.pinnedAt;
+                const qtyChecked = pendingItem.qty != null;
+                const damageChecked = !!pendingItem.condition;
+                const primary =
+                  pendingItem.matched === false
+                    ? { label: rackOrigin ? 'Mismatch' : 'Location Mismatch', rag: tokens.rag.red }
+                    : pendingItem.matched === true
+                      ? { label: 'Matched', rag: tokens.rag.green }
+                      : { label: 'No Expectation on Record', rag: tokens.rag.amber };
+                const qtyMismatch = rackOrigin && !misplaced && qtyChecked && !!pendingItem.expectedLine && pendingItem.qty !== pendingItem.expectedLine.qty;
+                const conditionFlagged = !misplaced && damageChecked && pendingItem.condition !== 'Good';
+
                 return (
                   <>
-                    <View style={styles.statusPillRow}>
-                      <View
-                        style={[
-                          styles.editStatusPill,
-                          {
-                            backgroundColor: pinRequired ? tokens.rag.amber.soft : mismatch ? tokens.rag.red.soft : tokens.rag.green.soft,
-                            borderColor: pinRequired ? tokens.rag.amber.border : mismatch ? tokens.rag.red.border : tokens.rag.green.border,
-                            borderRadius: tokens.radius.lg,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={{
-                            color: pinRequired ? tokens.rag.amber.strong : mismatch ? tokens.rag.red.strong : tokens.rag.green.strong,
-                            fontWeight: tokens.fontWeight.bold,
-                            fontSize: tokens.text.xs,
-                          }}
-                        >
-                          {pinRequired ? 'Pin Required' : mismatch ? 'Location Mismatch' : pendingItem.matched ? 'Matched' : 'No Expectation on Record'}
-                        </Text>
+                    {/* Pallet Condition gate — asked for all 3 Quick Scan
+                        modes, same as Rack View's own panel, independent of
+                        whether the SKU/location resolved cleanly. */}
+                    <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderWidth: 0, borderRadius: tokens.radius.xl }]}>
+                      <View style={[styles.fieldCardBody, { paddingHorizontal: 0, paddingVertical: 0 }]}>
+                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Is the pallet condition at this location good?</Text>
+                        <View style={styles.condGrid}>
+                          {(
+                            [
+                              { label: 'Good', value: true },
+                              { label: 'Not Good', value: false },
+                            ] as const
+                          ).map((opt) => {
+                            const selected = pendingItem.palletConditionGood === opt.value;
+                            return (
+                              <Pressable key={opt.label} onPress={() => handleSelectPalletCondition(opt.value)} style={styles.condChip}>
+                                <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                  {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                </View>
+                                <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{opt.label}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
                       </View>
                     </View>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{pendingItem.sku}</Text>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{pendingItem.name}</Text>
-                    {pendingItem.expectedZone ? (
-                      <View style={styles.compareRow}>
-                        <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                          <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected Zone</Text>
-                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{zoneLabel(pendingItem.expectedZone)}</Text>
-                        </View>
-                        <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                          <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Found In</Text>
-                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }} numberOfLines={1}>
-                            {pendingItem.pinnedZone ? zoneLabel(pendingItem.pinnedZone) : pinRequired ? 'Not pinned yet' : '—'}
+
+                    {/* Floor mode's pin-then-resolve flow — unchanged
+                        behavior, just also offered right here in the form
+                        (not only on the canvas behind it) so pinning and
+                        the rest of the form live in one place, same as the
+                        web app's own renderQuickScanForm. */}
+                    {pinRequired ? (
+                      <>
+                        <View style={[styles.banner, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border }]}>
+                          <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>
+                            Tap a zone below to pin this SKU’s exact location before saving.
                           </Text>
                         </View>
-                      </View>
+                        <View style={styles.zoneRow}>
+                          {FLOOR_AREAS.map((z) => (
+                            <Pressable
+                              key={z.id}
+                              onPress={() => pinFloorToZoneArea(z.id)}
+                              style={[styles.zoneCard, { borderColor: tokens.border, borderWidth: 1.5, backgroundColor: tokens.card }]}
+                            >
+                              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{z.label}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </>
                     ) : null}
 
-                    {mismatch ? (
-                      <Pressable
-                        disabled={!!pendingItem.issueRaised && pendingItem.qtyIssueRaised === true}
-                        onPress={() => setPendingItem((prev) => (prev ? { ...prev, qtyIssueRaised: true } : prev))}
-                        style={[
-                          styles.raiseIssueBox,
-                          {
-                            backgroundColor: pendingItem.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                            borderColor: pendingItem.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
-                            borderRadius: tokens.radius.lg,
-                          },
-                        ]}
-                      >
-                        <Ionicons name={pendingItem.qtyIssueRaised ? 'checkmark-circle' : 'flag'} size={18} color={pendingItem.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                        <Text
-                          style={{ color: pendingItem.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}
-                        >
-                          {pendingItem.qtyIssueRaised ? 'Issue raised for this SKU' : 'Raise Issue — wrong location'}
-                        </Text>
-                      </Pressable>
-                    ) : (
-                      <>
-                        <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderWidth: 0, borderRadius: tokens.radius.xl }]}>
-                          <View style={[styles.fieldCardBody, { paddingHorizontal: 0, paddingVertical: 0 }]}>
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Is the pallet condition good?</Text>
-                            <View style={styles.condGrid}>
-                              {(
-                                [
-                                  { label: 'Good', value: true },
-                                  { label: 'Not Good', value: false },
-                                ] as const
-                              ).map((opt) => {
-                                const selected = pendingItem.palletConditionGood === opt.value;
-                                return (
-                                  <Pressable
-                                    key={opt.label}
-                                    onPress={() => setPendingItem((prev) => (prev ? { ...prev, palletConditionGood: opt.value } : prev))}
-                                    style={styles.condChip}
-                                  >
-                                    <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
-                                      {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
-                                    </View>
-                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{opt.label}</Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                          </View>
+                    <View style={styles.statusPillRow}>
+                      <View style={[styles.editStatusPill, { backgroundColor: primary.rag.soft, borderColor: primary.rag.border, borderRadius: tokens.radius.lg }]}>
+                        <Text style={{ color: primary.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{primary.label}</Text>
+                      </View>
+                      {qtyMismatch ? (
+                        <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
+                          <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Quantity Mismatch</Text>
                         </View>
+                      ) : null}
+                      {conditionFlagged ? (
+                        <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
+                          <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Damage Mismatch</Text>
+                        </View>
+                      ) : null}
+                    </View>
 
+                    {/* Expected/Scanned compare — rack origin compares the
+                        full expected SKU/name/qty pick-list line against
+                        what was scanned, exactly like Rack View's own
+                        compare row; Zone/Floor origins only ever resolve to
+                        a zone label, so they compare Expected Zone vs.
+                        Found In instead. */}
+                    <View style={styles.compareRow}>
+                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
+                          {rackOrigin ? 'Expected' : 'Expected Zone'}
+                        </Text>
+                        {rackOrigin ? (
+                          pendingItem.expectedLine ? (
+                            <>
+                              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{pendingItem.expectedLine.sku}</Text>
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{pendingItem.expectedLine.name}</Text>
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Qty {pendingItem.expectedLine.qty}</Text>
+                            </>
+                          ) : (
+                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
+                          )
+                        ) : pendingItem.expectedZone ? (
+                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{zoneLabel(pendingItem.expectedZone)}</Text>
+                        ) : (
+                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>No expectation on record</Text>
+                        )}
+                      </View>
+                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
+                          {rackOrigin ? 'Scanned' : 'Found In'}
+                        </Text>
+                        {rackOrigin ? (
+                          <>
+                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{pendingItem.sku}</Text>
+                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{pendingItem.name}</Text>
+                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
+                              Qty {qtyChecked ? pendingItem.qty : '-'} · {damageChecked ? pendingItem.condition : '-'}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }} numberOfLines={1}>
+                              {pendingItem.pinnedZone ? zoneLabel(pendingItem.pinnedZone) : pinRequired ? 'Not pinned yet' : '—'}
+                            </Text>
+                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>
+                              {pendingItem.sku} · {pendingItem.name}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+
+                    {misplaced ? (
+                      <QsRaiseIssueButton
+                        raised={!!pendingItem.skuIssueRaised}
+                        onPress={raiseSkuIssue}
+                        activeLabel="Raise Issue — wrong item scanned"
+                        raisedLabel="Issue raised for this SKU"
+                        showHint
+                      />
+                    ) : (
+                      // SKU (or zone) matched — quantity and damage are two
+                      // independent findings, each with its own entry
+                      // control, its own Matched/Mismatched status, and its
+                      // own Raise Issue button, same as Rack View.
+                      <>
                         <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                           <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
                             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 1: Quantity</Text>
+                            {rackOrigin && qtyChecked && pendingItem.expectedLine ? (
+                              <View
+                                style={[
+                                  styles.editStatusPill,
+                                  {
+                                    backgroundColor: pendingItem.qty === pendingItem.expectedLine.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                    borderColor: pendingItem.qty === pendingItem.expectedLine.qty ? tokens.rag.green.border : tokens.rag.amber.border,
+                                    borderRadius: tokens.radius.lg,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={{
+                                    color: pendingItem.qty === pendingItem.expectedLine.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
+                                    fontWeight: tokens.fontWeight.bold,
+                                    fontSize: tokens.text.xs,
+                                  }}
+                                >
+                                  {pendingItem.qty === pendingItem.expectedLine.qty ? 'Matched' : 'Mismatched'}
+                                </Text>
+                              </View>
+                            ) : null}
                           </View>
                           <View style={styles.fieldCardBody}>
-                            <TextInput
-                              value={qtyText}
-                              onChangeText={setQtyText}
-                              keyboardType="number-pad"
-                              placeholderTextColor={tokens.slate400}
-                              style={[styles.qtyInput, { color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
-                            />
-                            <Pressable
-                              disabled={!!pendingItem.qtyIssueRaised}
-                              onPress={() => raiseFieldIssue('qtyIssueRaised')}
-                              style={[
-                                styles.raiseIssueBox,
-                                {
-                                  marginTop: 10,
-                                  backgroundColor: pendingItem.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                  borderColor: pendingItem.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.amber.border,
-                                  borderRadius: tokens.radius.lg,
-                                },
-                              ]}
-                            >
-                              <Ionicons name={pendingItem.qtyIssueRaised ? 'checkmark-circle' : 'flag-outline'} size={16} color={pendingItem.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong} />
-                              <Text
-                                style={{
-                                  color: pendingItem.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong,
-                                  fontWeight: tokens.fontWeight.semibold,
-                                  fontSize: tokens.text.xs,
-                                  flex: 1,
-                                }}
-                              >
-                                {pendingItem.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
-                              </Text>
-                            </Pressable>
-                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginTop: 10 }}>
-                              Evidence
-                            </Text>
+                            {qtyEditing ? (
+                              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                <TextInput
+                                  value={qtyInputText}
+                                  onChangeText={setQtyInputText}
+                                  placeholder="Quantity you found"
+                                  keyboardType="number-pad"
+                                  placeholderTextColor={tokens.slate400}
+                                  autoFocus
+                                  style={[styles.qtyInput, { flex: 1, color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
+                                />
+                                <Pressable onPress={handleConfirmQty} style={[styles.smallPrimaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                </Pressable>
+                              </View>
+                            ) : (
+                              <Pressable onPress={handleOpenQtyEdit} style={styles.fieldValueRow}>
+                                <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                  Qty found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{qtyChecked ? pendingItem.qty : '-'}</Text>
+                                </Text>
+                                <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                  <Ionicons name={qtyChecked ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                </View>
+                              </Pressable>
+                            )}
+                            {qtyMismatch ? (
+                              <QsRaiseIssueButton
+                                raised={!!pendingItem.qtyIssueRaised}
+                                onPress={() => raiseFieldIssue('qty')}
+                                activeLabel="Raise Issue — quantity"
+                                raisedLabel="Issue raised for quantity"
+                              />
+                            ) : null}
+                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Evidence</Text>
                             <EvidenceBlock
                               evidence={ensureFieldEvidence('qtyEvidence')}
                               onOpenNote={() => updateFieldEvidence('qtyEvidence', { noteOpen: true })}
@@ -1164,68 +1366,120 @@ export function QuickScanScreen() {
                         <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                           <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
                             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 2: Damage</Text>
+                            {damageChecked ? (
+                              <View
+                                style={[
+                                  styles.editStatusPill,
+                                  {
+                                    backgroundColor: pendingItem.condition === 'Good' ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                    borderColor: pendingItem.condition === 'Good' ? tokens.rag.green.border : tokens.rag.amber.border,
+                                    borderRadius: tokens.radius.lg,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={{
+                                    color: pendingItem.condition === 'Good' ? tokens.rag.green.strong : tokens.rag.amber.strong,
+                                    fontWeight: tokens.fontWeight.bold,
+                                    fontSize: tokens.text.xs,
+                                  }}
+                                >
+                                  {pendingItem.condition === 'Good' ? 'Matched' : 'Mismatched'}
+                                </Text>
+                              </View>
+                            ) : null}
                           </View>
                           <View style={styles.fieldCardBody}>
-                            <View style={styles.condGrid}>
-                              {CONDITIONS.map((c) => {
-                                const sel = pendingItem.condition === c;
-                                return (
-                                  <Pressable key={c} onPress={() => setPendingItem((prev) => (prev ? { ...prev, condition: c } : prev))} style={styles.condChip}>
-                                    <View style={[styles.radioDot, { borderColor: sel ? tokens.primary : tokens.slate400 }]}>
-                                      {sel ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
-                                    </View>
-                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{c}</Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                            <Pressable
-                              disabled={!!pendingItem.conditionIssueRaised}
-                              onPress={() => raiseFieldIssue('conditionIssueRaised')}
-                              style={[
-                                styles.raiseIssueBox,
-                                {
-                                  marginTop: 10,
-                                  backgroundColor: pendingItem.conditionIssueRaised ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                  borderColor: pendingItem.conditionIssueRaised ? tokens.rag.green.border : tokens.rag.amber.border,
-                                  borderRadius: tokens.radius.lg,
-                                },
-                              ]}
-                            >
-                              <Ionicons
-                                name={pendingItem.conditionIssueRaised ? 'checkmark-circle' : 'flag-outline'}
-                                size={16}
-                                color={pendingItem.conditionIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong}
+                            {damageEditing ? (
+                              <>
+                                <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                  Activity Phase <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                </Text>
+                                <View style={styles.condGrid}>
+                                  {ACTIVITY_PHASES.map((phase) => {
+                                    const selected = damagePhaseDraft === phase;
+                                    return (
+                                      <Pressable key={phase} onPress={() => handleSelectDamagePhase(phase)} style={styles.condChip}>
+                                        <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                          {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                        </View>
+                                        <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{phase}</Text>
+                                      </Pressable>
+                                    );
+                                  })}
+                                </View>
+
+                                <Text style={[styles.sectionLabel, { color: tokens.foreground }]}>
+                                  Observations <Text style={{ color: tokens.rag.red.strong }}>*</Text>
+                                </Text>
+                                {damagePhaseDraft ? (
+                                  <View style={styles.condGrid}>
+                                    {OBSERVATIONS_BY_PHASE[damagePhaseDraft].map((obs) => {
+                                      const selected = damageObservationDraft === obs;
+                                      return (
+                                        <Pressable key={obs} onPress={() => setDamageObservationDraft(obs)} style={styles.condChip}>
+                                          <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                                            {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                                          </View>
+                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{obs}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+                                ) : (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Pick an Activity Phase first.</Text>
+                                )}
+
+                                <Pressable
+                                  disabled={!damagePhaseDraft || !damageObservationDraft}
+                                  onPress={handleConfirmDamage}
+                                  style={[
+                                    styles.smallPrimaryBtn,
+                                    { alignSelf: 'flex-start', backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: damagePhaseDraft && damageObservationDraft ? 1 : 0.5 },
+                                  ]}
+                                >
+                                  <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
+                                </Pressable>
+                              </>
+                            ) : (
+                              <Pressable onPress={handleOpenDamageEdit} style={styles.fieldValueRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                    Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{damageChecked ? (pendingItem.observation ?? pendingItem.condition) : '-'}</Text>
+                                  </Text>
+                                  {damageChecked && pendingItem.activityPhase ? (
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{pendingItem.activityPhase}</Text>
+                                  ) : null}
+                                </View>
+                                <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                  <Ionicons name={damageChecked ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                </View>
+                              </Pressable>
+                            )}
+                            {damageChecked && pendingItem.condition !== 'Good' ? (
+                              <QsRaiseIssueButton
+                                raised={!!pendingItem.damageIssueRaised}
+                                onPress={() => raiseFieldIssue('damage')}
+                                activeLabel="Raise Issue — damage"
+                                raisedLabel="Issue raised for damage"
                               />
-                              <Text
-                                style={{
-                                  color: pendingItem.conditionIssueRaised ? tokens.rag.green.strong : tokens.rag.amber.strong,
-                                  fontWeight: tokens.fontWeight.semibold,
-                                  fontSize: tokens.text.xs,
-                                  flex: 1,
-                                }}
-                              >
-                                {pendingItem.conditionIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
-                              </Text>
-                            </Pressable>
-                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginTop: 10 }}>
-                              Evidence
-                            </Text>
+                            ) : null}
+                            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Evidence</Text>
                             <EvidenceBlock
-                              evidence={ensureFieldEvidence('conditionEvidence')}
-                              onOpenNote={() => updateFieldEvidence('conditionEvidence', { noteOpen: true })}
-                              onChangeNote={(note) => updateFieldEvidence('conditionEvidence', { note })}
-                              onRecordAudio={() => updateFieldEvidence('conditionEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                              evidence={ensureFieldEvidence('damageEvidence')}
+                              onOpenNote={() => updateFieldEvidence('damageEvidence', { noteOpen: true })}
+                              onChangeNote={(note) => updateFieldEvidence('damageEvidence', { note })}
+                              onRecordAudio={() => updateFieldEvidence('damageEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
                               onToggleAudioPlay={() => {
-                                const ev = ensureFieldEvidence('conditionEvidence');
+                                const ev = ensureFieldEvidence('damageEvidence');
                                 if (!ev.audio) return;
-                                updateFieldEvidence('conditionEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
+                                updateFieldEvidence('damageEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
                               }}
-                              onRemoveAudio={() => updateFieldEvidence('conditionEvidence', { audio: null })}
-                              onAddImage={() => setAttachmentTarget('condition')}
-                              onRemoveImage={(i) => updateFieldEvidence('conditionEvidence', { images: ensureFieldEvidence('conditionEvidence').images.filter((_, ii) => ii !== i) })}
-                              onAddVideo={() => updateFieldEvidence('conditionEvidence', { videos: [...ensureFieldEvidence('conditionEvidence').videos, { durationSec: 20 }] })}
-                              onRemoveVideo={(i) => updateFieldEvidence('conditionEvidence', { videos: ensureFieldEvidence('conditionEvidence').videos.filter((_, ii) => ii !== i) })}
+                              onRemoveAudio={() => updateFieldEvidence('damageEvidence', { audio: null })}
+                              onAddImage={() => setAttachmentTarget('damage')}
+                              onRemoveImage={(i) => updateFieldEvidence('damageEvidence', { images: ensureFieldEvidence('damageEvidence').images.filter((_, ii) => ii !== i) })}
+                              onAddVideo={() => updateFieldEvidence('damageEvidence', { videos: [...ensureFieldEvidence('damageEvidence').videos, { durationSec: 20 }] })}
+                              onRemoveVideo={(i) => updateFieldEvidence('damageEvidence', { videos: ensureFieldEvidence('damageEvidence').videos.filter((_, ii) => ii !== i) })}
                             />
                           </View>
                         </View>
@@ -1240,7 +1494,11 @@ export function QuickScanScreen() {
               <Pressable onPress={handleCancelPending} style={[styles.outlineBtn, { flex: 1, backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
               </Pressable>
-              <Pressable onPress={handleSaveAndScanNext} style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+              <Pressable
+                disabled={pendingItem.origin === 'floor' && !pendingItem.pinnedAt}
+                onPress={handleSaveAndScanNext}
+                style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: pendingItem.origin === 'floor' && !pendingItem.pinnedAt ? 0.5 : 1 }]}
+              >
                 <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save & Scan Next</Text>
               </Pressable>
             </View>
@@ -1294,7 +1552,7 @@ export function QuickScanScreen() {
         onClose={() => setAttachmentTarget(null)}
         onSave={(image) => {
           if (attachmentTarget === null) return;
-          const field = attachmentTarget === 'qty' ? 'qtyEvidence' : 'conditionEvidence';
+          const field = attachmentTarget === 'qty' ? 'qtyEvidence' : 'damageEvidence';
           updateFieldEvidence(field, { images: [...ensureFieldEvidence(field).images, image] });
         }}
       />
@@ -1309,6 +1567,11 @@ function ScannedSkuCard({ item, onViewLocation }: { item: ScannedSku; onViewLoca
   const tone = !resolved ? tokens.accentBlue : item.matched ? tokens.rag.green : tokens.rag.amber;
   const originLabel = item.origin === 'zone' ? 'Zone Find' : item.origin === 'rack' ? 'Rack Find' : 'Floor Find';
   const originIcon = item.origin === 'zone' ? 'apps-outline' : item.origin === 'rack' ? 'grid-outline' : 'cube-outline';
+  // Quantity/damage start unset until the inspector deliberately enters
+  // what they found (see the ScannedSku type above), so any saved record
+  // may legitimately have neither — same null-guard the web app's
+  // quickScanItemCard added.
+  const anyIssueRaised = !!item.skuIssueRaised || !!item.qtyIssueRaised || !!item.damageIssueRaised;
 
   return (
     <Card>
@@ -1335,6 +1598,8 @@ function ScannedSkuCard({ item, onViewLocation }: { item: ScannedSku; onViewLoca
         {item.pinnedAisle ? <Field label="Pinned Aisle" value={`Near Rack ${item.pinnedRack}`} /> : null}
         {item.pinnedBay ? <Field label="Pinned Bay" value={item.pinnedBay} /> : null}
         {item.pinnedLoc ? <Field label="Pinned Pallet" value={item.pinnedLoc} /> : null}
+        <Field label="Qty" value={item.qty != null ? String(item.qty) : '—'} />
+        <Field label="Condition" value={item.condition ?? '—'} />
       </View>
 
       {/* Only a Floor-mode find ever has a manually-dropped pin worth
@@ -1347,7 +1612,7 @@ function ScannedSkuCard({ item, onViewLocation }: { item: ScannedSku; onViewLoca
         </Pressable>
       ) : null}
 
-      {item.issueRaised && item.pinnedZone ? (
+      {anyIssueRaised && item.pinnedZone ? (
         <View style={[styles.pinnedBanner, { borderColor: tokens.border, marginTop: 10 }]}>
           <Ionicons name="alert-circle" size={16} color={tokens.rag.amber.strong} />
           <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, flex: 1 }}>
@@ -1461,6 +1726,65 @@ function LocationViewModal({ item, layoutZones, onClose }: { item: ScannedSku; l
   );
 }
 
+// Selected Location Details row — same look as Rack View's own DetailRow
+// (src/features/rack-view/RackViewScreen.tsx), duplicated rather than
+// imported since this screen's Reconciliation Form is deliberately its own
+// independently-maintainable set of pieces (only genuinely shared bits —
+// EvidenceBlock, locLevelPosition, ACTIVITY_PHASES/OBSERVATIONS_BY_PHASE —
+// are actually imported).
+function QsDetailRow({ label, value }: { label: string; value: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.detailRow}>
+      <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</Text>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 3 }}>{value}</Text>
+    </View>
+  );
+}
+
+// Raise Issue button — same red/green soft-fill pattern as Rack View's own
+// (inlined 3x there rather than factored out, to match this codebase's
+// "duplicated markup, shared where genuinely reusable" convention); this
+// screen factors it out locally since it's reused 3x here too (misplaced,
+// quantity, damage) and isn't shared across files either way.
+function QsRaiseIssueButton({
+  raised,
+  disabled,
+  onPress,
+  activeLabel,
+  raisedLabel,
+  showHint,
+}: {
+  raised: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  activeLabel: string;
+  raisedLabel: string;
+  showHint?: boolean;
+}) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      disabled={disabled ?? raised}
+      onPress={onPress}
+      style={[
+        styles.raiseIssueBox,
+        {
+          backgroundColor: raised ? tokens.rag.green.soft : tokens.rag.red.soft,
+          borderColor: raised ? tokens.rag.green.border : tokens.rag.red.border,
+          borderRadius: tokens.radius.lg,
+        },
+      ]}
+    >
+      <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={16} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
+      <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
+        {raised ? raisedLabel : activeLabel}
+      </Text>
+      {showHint && !raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
+    </Pressable>
+  );
+}
+
 function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
   const { tokens } = useTheme();
   return (
@@ -1519,6 +1843,17 @@ const styles = StyleSheet.create({
   radioDotFill: { width: 7, height: 7, borderRadius: 3.5 },
   qtyInput: { height: 40, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
   primaryBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
+  // Selected Location Details grid + divider, and the field-card's own
+  // inline edit-in-place row/button — same styling as Rack View's
+  // equivalents (src/features/rack-view/RackViewScreen.tsx), duplicated
+  // here rather than shared (see QsDetailRow's own comment above).
+  locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
+  detailRow: { flexBasis: '28%', flexGrow: 1 },
+  fieldValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editIconBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  sectionLabel: { fontSize: 12, fontWeight: '700' },
+  smallPrimaryBtn: { height: 40, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
   canvasWrap: { flex: 1, padding: 16, position: 'relative' },
   canvasToolbarRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   stage: { flex: 1, overflow: 'hidden' },
