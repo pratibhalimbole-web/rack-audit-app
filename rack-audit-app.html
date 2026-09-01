@@ -740,8 +740,9 @@
      pill, inline edit, Raise Issue, and evidence. ---- */
   .rf-label-caps{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px;}
   .rf-loc-box{display:flex; flex-direction:column; gap:6px; border:1px solid var(--border); border-radius:var(--radius-xl); padding:12px 14px; background:var(--card);}
-  .rf-detail-row{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:var(--text-sm);}
-  .rf-detail-row .lbl{color:var(--muted-foreground);}
+  .rf-loc-box.rf-loc-box-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 20px;}
+  .rf-detail-row{display:flex; flex-direction:column; gap:3px; font-size:var(--text-sm);}
+  .rf-detail-row .cap{font-size:var(--text-2xs); font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.4px;}
   .rf-detail-row .val{color:var(--foreground); font-weight:700;}
   .rf-divider{height:1px; background:var(--border); margin:2px 0;}
   .rf-field-card{border:1px solid var(--border); border-radius:var(--radius-xl); background:var(--card); overflow:hidden;}
@@ -3621,6 +3622,22 @@ function buildBayDiagramRows(bayObj){
   return rows;
 }
 
+// A location's physical Level (which row in the bay elevation) and Position
+// (which slot within that row, 1-based) — reuses the exact same row/cell
+// layout buildBayDiagramRows already computes for the canvas, so these
+// numbers always agree with what's drawn there.
+function locLevelPosition(auditId, layout, rackCode, bayCode, locCode){
+  const rackObj = findRackIn(auditId, layout, rackCode);
+  const bayObj = rackObj && rackObj.bays.find(b => b.code === bayCode);
+  if (!bayObj) return { level: null, position: null };
+  const rows = buildBayDiagramRows(bayObj);
+  for (const row of rows) {
+    const idx = row.cells.findIndex(c => c && c.code === locCode);
+    if (idx !== -1) return { level: row.level, position: idx + 1 };
+  }
+  return { level: null, position: null };
+}
+
 // Which side of a level's 3 slots to start from ('left'|'right'). 'first'
 // (raster) = every level restarts from `from` (Left-First-Up/Down). 'last'
 // (snake) = each new level continues from whichever slot the previous level
@@ -4216,7 +4233,7 @@ function rfPillHtml(label, rag){
   return `<span class="rf-pill" style="background:var(--rag-${rag}-soft); border-color:var(--rag-${rag}-border); color:var(--rag-${rag}-strong);">${label}</span>`;
 }
 function rfDetailRow(label, value){
-  return `<div class="rf-detail-row"><span class="lbl">${label}</span><span class="val mono">${value}</span></div>`;
+  return `<div class="rf-detail-row"><span class="cap">${label}</span><span class="val mono">${value}</span></div>`;
 }
 
 function renderRackViewSkuPanel(){
@@ -4236,10 +4253,14 @@ function renderRackViewSkuPanel(){
       </div>
       <div class="rv-sku-panel-body">
         <div class="rf-label-caps">Selected Location Details</div>
-        <div class="rf-loc-box">
-          ${rfDetailRow('Location Code', scan.loc || '—')}
+        <div class="rf-loc-box rf-loc-box-grid">
+          ${rfDetailRow('Layout', scan.layout || '—')}
           ${rfDetailRow('Rack', scan.rack || '—')}
           ${rfDetailRow('Bay', scan.bay || '—')}
+          ${(() => { const { level, position } = locLevelPosition(scan.auditId, scan.layout, scan.rack, scan.bay, scan.loc); return `
+          ${rfDetailRow('Level', level ? `L${level}` : '—')}
+          ${rfDetailRow('Position', position ? `P${String(position).padStart(2,'0')}` : '—')}
+          `; })()}
           ${rfDetailRow('Pallet', scan.pallet || '—')}
         </div>
         <div class="rf-divider"></div>

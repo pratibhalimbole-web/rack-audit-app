@@ -21,7 +21,7 @@ import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase,
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 import { useCountSheetMutations } from '../count-sheet/mutations';
-import { buildBayDiagram, buildScanOrder, type ScanFrom, type ScanPattern, type ScanScope, type ScanVertical } from './buildBayDiagram';
+import { buildBayDiagram, buildScanOrder, locLevelPosition, type ScanFrom, type ScanPattern, type ScanScope, type ScanVertical } from './buildBayDiagram';
 
 // `source: 'bay-chip'` marks arriving from an Audit Details bay chip
 // specifically — the one entry point where the bay lock is meant to stay
@@ -1215,10 +1215,20 @@ export function RackViewScreen() {
               Selected Location Details
             </Text>
             <View style={styles.locDetailsBox}>
-              <DetailRow label="Location Code" value={selectedLocObj?.code ?? '—'} tokens={tokens} />
-              <DetailRow label="Rack" value={rackObj.code} tokens={tokens} />
-              <DetailRow label="Bay" value={selectedLocObj ? bayCodeForLoc(selectedLocObj.code) : '—'} tokens={tokens} />
-              <DetailRow label="Pallet" value={selectedLocObj ? palletIdFor(selectedLocObj) : '—'} tokens={tokens} />
+              {(() => {
+                const bayForLoc = selectedLocObj ? rackObj.bays.find((b) => b.locations.some((l) => l.code === selectedLocObj.code)) : undefined;
+                const { level, position } = locLevelPosition(bayForLoc, selectedLocObj?.code);
+                return (
+                  <>
+                    <DetailRow label="Layout" value={layoutObj.name} tokens={tokens} />
+                    <DetailRow label="Rack" value={rackObj.code} tokens={tokens} />
+                    <DetailRow label="Bay" value={selectedLocObj ? bayCodeForLoc(selectedLocObj.code) : '—'} tokens={tokens} />
+                    <DetailRow label="Level" value={level ? `L${level}` : '—'} tokens={tokens} />
+                    <DetailRow label="Position" value={position ? `P${String(position).padStart(2, '0')}` : '—'} tokens={tokens} />
+                    <DetailRow label="Pallet" value={selectedLocObj ? palletIdFor(selectedLocObj) : '—'} tokens={tokens} />
+                  </>
+                );
+              })()}
             </View>
             <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
@@ -2129,10 +2139,10 @@ function ManualModeToggle({ value, onToggle }: { value: boolean; onToggle: () =>
 function DetailRow({ label, value, tokens }: { label: string; value: string; tokens: ReturnType<typeof useTheme>['tokens'] }) {
   return (
     <View style={styles.detailRow}>
-      <Text style={{ fontSize: tokens.text.sm }}>
-        <Text style={{ color: tokens.mutedForeground }}>{label}: </Text>
-        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{value}</Text>
+      <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+        {label}
       </Text>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 3 }}>{value}</Text>
     </View>
   );
 }

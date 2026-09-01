@@ -38,6 +38,19 @@ export function buildBayDiagram(bayObj: BayNode | undefined): DiagramRow[] {
   return rows;
 }
 
+// A location's physical Level (which row in the bay elevation) and Position
+// (which slot within that row, 1-based) — reuses buildBayDiagram's own
+// row/cell layout, so these numbers always agree with what's drawn on the
+// canvas, whether or not the location carries explicit level/slot metadata.
+export function locLevelPosition(bayObj: BayNode | undefined, locCode: string | null | undefined): { level: number | null; position: number | null } {
+  if (!locCode) return { level: null, position: null };
+  for (const row of buildBayDiagram(bayObj)) {
+    const idx = row.cells.findIndex((c) => c?.code === locCode);
+    if (idx !== -1) return { level: row.level, position: idx + 1 };
+  }
+  return { level: null, position: null };
+}
+
 // Which side of a level's 3 slots to start from.
 export type ScanFrom = 'left' | 'right';
 // 'first' = raster — every level restarts from `from` (Left-First-Up/Down).
