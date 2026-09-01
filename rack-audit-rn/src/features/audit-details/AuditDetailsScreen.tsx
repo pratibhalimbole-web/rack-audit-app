@@ -8,7 +8,9 @@ import { Pill } from '@/components/Pill';
 import { flattenBays, fmtDate, priorityFor, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
+import { FLOOR_AREAS, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useZoneAuditStore } from '@/store/useZoneAuditStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
@@ -31,6 +33,7 @@ export function AuditDetailsScreen() {
   const [openRack, setOpenRack] = useState<string | null>(null);
 
   const audit = audits?.find((a) => a.audit_id === auditId);
+  const zoneScansByAudit = useZoneAuditStore((s) => s.scansByAudit);
   const r = useMemo(() => rollup(tree), [tree]);
   const layouts = tree?.layouts ?? [];
   const flatBays = useMemo(() => flattenBays(tree), [tree]);
@@ -128,29 +131,64 @@ export function AuditDetailsScreen() {
     </Pressable>
   );
 
-  // Zone chips — one per zone this audit is scoped to. These zones are the
-  // rack-less FLOOR_AREAS kind (see PinLocationScreen/WarehouseMapScreen),
-  // not Layouts — there's no rack/bay breakdown or per-location rollup to
-  // show under them at all, just the zone itself.
-  const renderZonePill = (zoneName: string) => (
-    <Pressable
-      key={zoneName}
-      disabled={isSubmitted}
-      onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never)}
-      style={[styles.zonePill, { backgroundColor: tokens.muted, borderColor: tokens.border }]}
-    >
-      <Ionicons name="ellipse-outline" size={16} color={tokens.accentBlue.base} />
-      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zoneName}</Text>
-    </Pressable>
-  );
-  const zoneBody = (
-    <View style={styles.bayGrid}>
-      {audit.scope_values.length ? (
-        audit.scope_values.map(renderZonePill)
-      ) : (
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
-      )}
-    </View>
+  // Zone-scoped audits have no rack/bay breakdown, so the bay-chip grid's
+  // job here goes one level down: WMS's per-zone pick list (ZONE_EXPECTED_SKUS)
+  // is "how many DISTINCT pallets of this SKU should turn up here" — same
+  // shape as a bay chip (pending until its own count of work is actually
+  // done). Progress comes from useZoneAuditStore, mirrored live from
+  // ZoneAuditMapScreen's scan session — so these chips reflect real scan
+  // counts whether reached before that screen ever opened or after backing
+  // out of it. Counts unique labels, not raw scan events, so re-scanning the
+  // same physical box (already refused at intake anyway) can't inflate it.
+  const renderZoneGroup = (zoneName: string) => {
+    const zoneId = FLOOR_AREAS.find((f) => f.label === zoneName)?.id;
+    const pickList = ZONE_EXPECTED_SKUS[zoneName] ?? [];
+    const zoneScans = (zoneId && zoneScansByAudit[audit.audit_id]?.[zoneId]) || [];
+    const skuFoundCount = (sku: string) => new Set(zoneScans.filter((s) => s.sku === sku).map((s) => s.label)).size;
+
+    return (
+      <View key={zoneName} style={{ marginBottom: 14 }}>
+        <Pressable
+          disabled={isSubmitted}
+          onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never)}
+          style={[styles.zonePill, { backgroundColor: tokens.muted, borderColor: tokens.border, marginBottom: pickList.length ? 8 : 0 }]}
+        >
+          <Ionicons name="ellipse-outline" size={16} color={tokens.accentBlue.base} />
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zoneName}</Text>
+        </Pressable>
+        {pickList.length ? (
+          <View style={styles.bayGrid}>
+            {pickList.map((entry) => {
+              const found = skuFoundCount(entry.sku);
+              const done = found >= entry.expectedCount;
+              return (
+                <Pressable
+                  key={entry.sku}
+                  disabled={isSubmitted}
+                  onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never)}
+                  style={[
+                    styles.skuChip,
+                    { backgroundColor: done ? tokens.rag.green.soft : tokens.muted, borderColor: done ? tokens.rag.green.border : tokens.border },
+                  ]}
+                >
+                  <Text style={{ color: done ? tokens.rag.green.strong : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: 12.5 }}>
+                    {entry.sku}
+                  </Text>
+                  <Text style={{ color: done ? tokens.rag.green.strong : tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>
+                    {found} of {entry.expectedCount} scanned · {done ? 'Complete' : 'Pending'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+  const zoneBody = audit.scope_values.length ? (
+    <View>{audit.scope_values.map(renderZoneGroup)}</View>
+  ) : (
+    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
   );
 
   const bayBody =
@@ -335,7 +373,8 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
   bayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   bayPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
-  zonePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  zonePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
+  skuChip: { minWidth: 108, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
   accSection: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 14 },
   accSubSection: { marginTop: 10, marginLeft: 4 },
   accHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },

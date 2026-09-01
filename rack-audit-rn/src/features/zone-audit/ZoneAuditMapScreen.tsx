@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -17,6 +17,7 @@ import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL }
 import { ACTIVITY_PHASES, OBSERVATIONS_BY_PHASE, type ActivityPhase, type Condition, type Evidence } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
+import { useZoneAuditStore } from '@/store/useZoneAuditStore';
 
 // Every physical pallet's QR carries its own unique label (a real print
 // job never puts the exact same code on two different boxes) even though
@@ -67,6 +68,17 @@ export function ZoneAuditMapScreen() {
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [zoneField, setZoneField] = useState(false);
   const [scannedByZone, setScannedByZone] = useState<Record<string, ZoneScanLine[]>>({});
+  const setZoneScans = useZoneAuditStore((s) => s.setZoneScans);
+  // Mirrors {sku,label} pairs (that's all pick-list progress needs) into the
+  // shared store on every change, so Audit Details' zone pick-list chips —
+  // reached BEFORE this screen ever opens, or after backing out of it — can
+  // read live scan counts without owning the full ZoneScanLine shape.
+  useEffect(() => {
+    if (!auditId) return;
+    Object.entries(scannedByZone).forEach(([zoneId, lines]) => {
+      setZoneScans(auditId, zoneId, lines.map((l) => ({ sku: l.sku, label: l.label })));
+    });
+  }, [auditId, scannedByZone, setZoneScans]);
   const [currentLine, setCurrentLine] = useState<ZoneScanLine | null>(null);
   // Same tap-to-edit-then-Confirm editing state Rack View/Quick Scan use,
   // instead of an always-editable plain TextInput with no explicit commit.
