@@ -110,13 +110,20 @@ const CATEGORY_LABEL: Record<FilterCategory, string> = { rack: 'Rack Name', bay:
 // category checklists), a persistent strip below the toolbar summarizes
 // active selections as removable chips ("Close all" clears them), and cards
 // get a due-date-style header with a colored status badge.
-export function ReportedAuditsBoard() {
+export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   const { tokens } = useTheme();
   const { data: audits } = useAudits();
   // Every audit assigned to the inspector, not just whichever one this
   // screen happened to be reached from — the board merges issues across
-  // all of them into one list rather than locking to a single audit.
-  const candidates = useMemo(() => (audits ? mine(audits) : []), [audits]);
+  // all of them into one list, UNLESS a specific auditId was passed in
+  // (Audit Details' "View Full Rack/Bay Breakdown"), in which case it locks
+  // to that single task instead of the universal cross-audit view.
+  const candidates = useMemo(() => {
+    if (!audits) return [];
+    if (auditId) return audits.filter((a) => a.audit_id === auditId);
+    return mine(audits);
+  }, [audits, auditId]);
+  const scopedAudit = auditId ? candidates[0] : null;
   const candidateIds = useMemo(() => candidates.map((a) => a.audit_id), [candidates]);
   const { map: treeMap, isLoading } = useLocationsTreeMap(candidateIds);
   const auditNameById = useMemo(() => Object.fromEntries(candidates.map((a) => [a.audit_id, a.audit_name])), [candidates]);
@@ -245,7 +252,7 @@ export function ReportedAuditsBoard() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader
         title="Reported Audits"
-        sub={`${candidates.length} Assigned Audit${candidates.length === 1 ? '' : 's'} · Issue overview`}
+        sub={scopedAudit ? `${scopedAudit.audit_id} · ${scopedAudit.audit_name}` : `${candidates.length} Assigned Audit${candidates.length === 1 ? '' : 's'} · Issue overview`}
         showBack
         menuItems={[{ label: 'Sync Now', onPress: () => {} }]}
       />
@@ -340,7 +347,8 @@ export function ReportedAuditsBoard() {
                     })}
 
                     <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border, marginTop: 8 }]}>Select</Text>
-                    {(['audit', 'condition', 'rack', 'bay'] as FilterCategory[]).map((cat) => (
+                    {/* Filtering by Audit is meaningless once already locked to one task's breakdown. */}
+                    {((scopedAudit ? ['condition', 'rack', 'bay'] : ['audit', 'condition', 'rack', 'bay']) as FilterCategory[]).map((cat) => (
                       <Pressable key={cat} onPress={() => setOpenCategory(openCategory === cat ? null : cat)} style={styles.checklistRow}>
                         <Text style={{ color: openCategory === cat ? tokens.primary : tokens.popoverForeground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold, flex: 1 }}>
                           {CATEGORY_LABEL[cat]}
