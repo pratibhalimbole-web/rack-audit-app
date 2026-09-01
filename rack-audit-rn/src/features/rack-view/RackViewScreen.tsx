@@ -2193,7 +2193,7 @@ const styles = StyleSheet.create({
   skuPanelHead: { minHeight: 60, justifyContent: 'center', marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
-  detailRow: { flexBasis: '45%', flexGrow: 1 },
+  detailRow: { flexBasis: '28%', flexGrow: 1 },
   scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
   scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   compareRow: { flexDirection: 'row', gap: 10 },
