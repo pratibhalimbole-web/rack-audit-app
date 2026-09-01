@@ -13,6 +13,10 @@ import { useAudits } from '../dashboard/hooks';
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low'];
 const STATUS_TOKEN: Record<MaintenanceStatusColor, 'red' | 'amber' | 'green'> = { Red: 'red', Amber: 'amber', Green: 'green' };
 
+type FilterCategory = 'priority' | 'location';
+const CATEGORY_LABEL: Record<FilterCategory, string> = { priority: 'Priority', location: 'Location Details' };
+type SortOrder = 'newest' | 'oldest';
+
 // Ports the "Pallet" admin web's Maintenance board (UI reference screenshot)
 // down to a field inspector's own assigned-task list — see src/lib/
 // maintenance.ts for how a card's action/status is derived from the same
@@ -28,22 +32,32 @@ export function MaintenanceScreen() {
   const { map: treeMap, isLoading } = useLocationsTreeMap(candidateIds);
 
   const [search, setSearch] = useState('');
-  const [priority, setPriority] = useState<Priority | null>(null);
-  const [sortDesc, setSortDesc] = useState(true);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [openCategory, setOpenCategory] = useState<FilterCategory | null>(null);
+  const [filterPriorities, setFilterPriorities] = useState<Priority[]>([]);
+  const [filterLocations, setFilterLocations] = useState<string[]>([]);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   const tasks = useMemo(() => buildMaintenanceTasks(candidates, treeMap), [candidates, treeMap]);
+  const openTasks = useMemo(() => tasks.filter((t) => t.boardStatus !== 'Closed'), [tasks]);
+  const locationOptions = useMemo(() => [...new Set(openTasks.map((t) => maintenanceLocationLabel(t)))].sort(), [openTasks]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return tasks
+    return openTasks
       // Closed tasks are considered resolved and tracked in the web
       // (admin) app's Action Board — Maintenance only ever shows open work.
-      .filter((t) => t.boardStatus !== 'Closed')
-      .filter((t) => !priority || t.priority === priority)
+      .filter((t) => !filterPriorities.length || filterPriorities.includes(t.priority))
+      .filter((t) => !filterLocations.length || filterLocations.includes(maintenanceLocationLabel(t)))
       .filter((t) => !q || [t.sku, t.name, t.rack, t.locCode, t.action, t.issueType].join(' ').toLowerCase().includes(q))
       .slice()
-      .sort((a, b) => (sortDesc ? b.dueDate.localeCompare(a.dueDate) : a.dueDate.localeCompare(b.dueDate)));
-  }, [tasks, search, priority, sortDesc]);
+      .sort((a, b) => (sortOrder === 'newest' ? b.dueDate.localeCompare(a.dueDate) : a.dueDate.localeCompare(b.dueDate)));
+  }, [openTasks, search, filterPriorities, filterLocations, sortOrder]);
+
+  const activeFilterCount = filterPriorities.length + filterLocations.length;
+  const toggleIn = <T,>(list: T[], value: T, setList: (v: T[]) => void) =>
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
   if (isLoading) {
     return (
@@ -68,25 +82,94 @@ export function MaintenanceScreen() {
             style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 8 }}
           />
         </View>
-        <Pressable onPress={() => setSortDesc((d) => !d)} style={[styles.iconBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-          <Ionicons name="swap-vertical-outline" size={18} color={tokens.foreground} />
-        </Pressable>
-      </View>
-
-      <View style={styles.priorityRow}>
-        {PRIORITIES.map((p) => {
-          const active = priority === p;
-          return (
+        <View style={styles.toolbarIcons}>
+          <View>
             <Pressable
-              key={p}
-              onPress={() => setPriority(active ? null : p)}
-              style={[styles.priorityChip, { backgroundColor: active ? tokens.accentBlue.soft : tokens.card, borderColor: active ? tokens.accentBlue.border : tokens.border }]}
+              onPress={() => {
+                setPickerOpen((o) => !o);
+                setOpenCategory(null);
+                setSortOpen(false);
+              }}
+              style={[styles.iconBtn, { backgroundColor: activeFilterCount || pickerOpen ? tokens.accentBlue.soft : tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
             >
-              <Text style={{ color: active ? tokens.accentBlue.strong : tokens.mutedForeground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>{p}</Text>
-              {active ? <Ionicons name="close" size={13} color={tokens.accentBlue.strong} style={{ marginLeft: 4 }} /> : null}
+              <Ionicons name="filter-outline" size={18} color={activeFilterCount || pickerOpen ? tokens.accentBlue.strong : tokens.foreground} />
             </Pressable>
-          );
-        })}
+
+            {pickerOpen ? (
+              <>
+                {openCategory ? (
+                  <View style={[styles.categoryPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                    <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>{CATEGORY_LABEL[openCategory]}</Text>
+                    <ScrollView style={{ maxHeight: 260 }}>
+                      {(openCategory === 'priority' ? PRIORITIES : locationOptions).map((opt) => {
+                        const checked = openCategory === 'priority' ? filterPriorities.includes(opt as Priority) : filterLocations.includes(opt);
+                        return (
+                          <Pressable
+                            key={opt}
+                            onPress={() =>
+                              openCategory === 'priority'
+                                ? toggleIn(filterPriorities, opt as Priority, setFilterPriorities)
+                                : toggleIn(filterLocations, opt, setFilterLocations)
+                            }
+                            style={styles.checklistRow}
+                          >
+                            <Checkbox checked={checked} />
+                            <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }} numberOfLines={1}>
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
+                <View style={[styles.mainPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                  <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Filter By</Text>
+                  {(['priority', 'location'] as FilterCategory[]).map((cat) => (
+                    <Pressable key={cat} onPress={() => setOpenCategory(openCategory === cat ? null : cat)} style={styles.checklistRow}>
+                      <Text style={{ color: openCategory === cat ? tokens.primary : tokens.popoverForeground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold, flex: 1 }}>
+                        {CATEGORY_LABEL[cat]}
+                      </Text>
+                      <Ionicons name={openCategory === cat ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </View>
+
+          <View>
+            <Pressable
+              onPress={() => {
+                setSortOpen((o) => !o);
+                setPickerOpen(false);
+                setOpenCategory(null);
+              }}
+              style={[styles.iconBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
+            >
+              <Ionicons name="swap-vertical-outline" size={18} color={tokens.foreground} />
+            </Pressable>
+            {sortOpen ? (
+              <View style={[styles.sortDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                <Text style={[styles.panelTitle, { color: tokens.mutedForeground, borderBottomColor: tokens.border }]}>Sort by Due Date</Text>
+                {(['newest', 'oldest'] as SortOrder[]).map((order) => (
+                  <Pressable
+                    key={order}
+                    onPress={() => {
+                      setSortOrder(order);
+                      setSortOpen(false);
+                    }}
+                    style={styles.checklistRow}
+                  >
+                    <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1, textTransform: 'capitalize' }}>{order}</Text>
+                    {sortOrder === order ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -108,6 +191,20 @@ export function MaintenanceScreen() {
           </View>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function Checkbox({ checked }: { checked: boolean }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      style={[
+        styles.checkbox,
+        { borderRadius: tokens.radius.sm, borderColor: checked ? tokens.primary : tokens.border, backgroundColor: checked ? tokens.primary : 'transparent' },
+      ]}
+    >
+      {checked ? <Ionicons name="checkmark" size={13} color={tokens.primaryForeground} /> : null}
     </View>
   );
 }
@@ -171,11 +268,16 @@ function MaintenanceCard({ task }: { task: MaintenanceTask }) {
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, zIndex: 30 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
+  toolbarIcons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  priorityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
-  priorityChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  mainPanel: { position: 'absolute', top: 44, right: 0, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
+  categoryPanel: { position: 'absolute', top: 44, right: 212, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
+  sortDropdown: { position: 'absolute', top: 44, right: 0, width: 180, borderWidth: 1, padding: 10, zIndex: 21 },
+  panelTitle: { fontSize: 12, fontWeight: '700', paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1 },
+  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 2 },
+  checkbox: { width: 18, height: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 16, paddingTop: 4, paddingBottom: 40 },
   totalBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14 },
   empty: { alignItems: 'center', gap: 6, paddingVertical: 40 },
