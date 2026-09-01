@@ -8,6 +8,7 @@ const ICON_MAP: Record<NavItem['icon'], keyof typeof Ionicons.glyphMap> = {
   tasks: 'checkbox-outline',
   scan: 'scan-outline',
   progress: 'bar-chart-outline',
+  maintenance: 'construct-outline',
 };
 
 export function NavIcon({ icon, color, size = 20 }: { icon: NavItem['icon']; color: ColorValue; size?: number }) {

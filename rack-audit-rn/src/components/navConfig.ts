@@ -3,10 +3,10 @@
 // that the rail simply mirrors the phone tabs rather than inventing a
 // separate nav concept. Mirrors renderTabBar (rack-audit-app.html ~1693).
 export type NavItem = {
-  key: 'index' | 'schedule' | 'tasks' | 'scan' | 'progress';
+  key: 'index' | 'schedule' | 'tasks' | 'scan' | 'progress' | 'maintenance';
   label: string;
   tabletLabel?: string; // Progress tab reads "Reported Audits" on tablet — source line ~1704
-  icon: 'home' | 'calendar' | 'tasks' | 'scan' | 'progress';
+  icon: 'home' | 'calendar' | 'tasks' | 'scan' | 'progress' | 'maintenance';
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -15,4 +15,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'tasks', label: 'Tasks', icon: 'tasks' },
   { key: 'scan', label: 'Scan', icon: 'scan' },
   { key: 'progress', label: 'Progress', tabletLabel: 'Reported Audits', icon: 'progress' },
+  // Ports the "Pallet" admin web's Maintenance board (UI reference
+  // screenshot) down to the inspector's own assigned-task list — see
+  // src/lib/maintenance.ts.
+  { key: 'maintenance', label: 'Maintenance', icon: 'maintenance' },
 ];
