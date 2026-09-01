@@ -37,6 +37,21 @@ export type Audit = {
   // iPhone boxes) rather than every pallet — drives which pallets Rack View
   // highlights as relevant to scan.
   target_sku?: string;
+
+  // ---- Fields mirrored from the admin planner's Create Audit Plan form
+  // (display-only here — Audit Details shows them, nothing else reads them
+  // yet). eventScopeType gates which of the two field groups below applies,
+  // exactly like the admin form's own field dependency: Location Wise uses
+  // scope_type/scope_values (already above); SKU Wise uses sku_types/
+  // batch_lot instead, and neither applies to Full Warehouse.
+  event_scope_type?: 'Full Warehouse' | 'Location Wise' | 'SKU Wise';
+  // The checks this audit actually performs — the admin form's separate
+  // "Work Scope" multi-select, independent of event_scope_type.
+  work_scope?: ('Location Verification' | 'SKU Condition' | 'SKU Quantity Verification')[];
+  // SKU Wise only: 'All SKUs' or a specific list of SKU codes.
+  sku_types?: string[];
+  // SKU Wise only: 'All batches' or a specific batch/lot code.
+  batch_lot?: string;
 };
 
 export type EvidenceStroke = { color: string; points: { x: number; y: number }[] };

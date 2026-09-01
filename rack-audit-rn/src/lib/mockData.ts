@@ -61,31 +61,37 @@ export const AUDITS: Audit[] = [
     scope_type: 'Rack', scope_values: ['Rack A-05', 'Rack A-06'],
     team_members: ['Arjun Sharma', 'Meera Kulkarni', 'Priya Singh'],
     start_date: '2026-06-20', end_date: '2026-07-10', status: 'In Progress', target_sku: 'SKU-1042',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
     audit_id: 'AUD-0233', audit_name: 'Spot Check — Layout C & E', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout C', 'Layout E'], team_members: ['Arjun Sharma'],
     start_date: '2026-07-09', end_date: '2026-07-09', status: 'Scheduled', target_sku: 'SKU-2218',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
     audit_id: 'AUD-0234', audit_name: 'Cycle — Fast Movers, Layout B', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
     start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
     audit_id: 'AUD-0225', audit_name: 'Zone C Damaged Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Rack', scope_values: ['Rack C-04'], team_members: ['Arjun Sharma', 'Sanjay Patil'],
     start_date: '2026-06-24', end_date: '2026-06-30', status: 'Submitted',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
     audit_id: 'AUD-0219', audit_name: 'Bay Recount — 01', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Bay', scope_values: ['Bay 03'], team_members: ['Arjun Sharma'],
     start_date: '2026-06-28', end_date: '2026-07-05', status: 'In Progress', target_sku: 'SKU-9011',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
     audit_id: 'AUD-0240', audit_name: 'Full Count — Layouts A & B', audit_type: 'Full', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout A', 'Layout B'], team_members: ['Arjun Sharma', 'Meera Kulkarni'],
     start_date: '2026-07-08', end_date: '2026-07-22', status: 'Scheduled', target_sku: 'SKU-1001',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   // 'Zone' scope — coarser than 'Layout': Audit Details shows zone chips
   // instead of drilling to bays, and Resume Audit opens the whole-warehouse
@@ -98,6 +104,7 @@ export const AUDITS: Audit[] = [
     audit_id: 'AUD-0241', audit_name: 'Zone Sweep — Zone A & Staging', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
     scope_type: 'Zone', scope_values: ['Zone A', 'Staging Area'], team_members: ['Arjun Sharma'],
     start_date: '2026-07-10', end_date: '2026-07-20', status: 'Scheduled',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
 ];
 

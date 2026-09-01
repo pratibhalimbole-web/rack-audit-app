@@ -1446,25 +1446,40 @@ function severityPillHtml(condition){
   return `<span class="severity-pill sev-${conditionSeverity(condition)}">${condition}</span>`;
 }
 
+// event_scope_type/work_scope mirror the admin planner's Create Audit Plan
+// form (Event Scope Type gates Scope Type/Values vs SKU Types/Batch-Lot,
+// same dependency the admin form itself enforces; Work Scope is the
+// separate multi-select of checks the audit performs). Display-only in
+// Audit Details for now — every audit here uses 'Location Wise' since
+// that's what their real scope_type/scope_values/location trees already
+// represent, and all three Work Scope checks since that's what the
+// Reconciliation Form already performs uniformly today.
+const DEFAULT_WORK_SCOPE = ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'];
 const AUDITS = [
   { audit_id:'AUD-0231', audit_name:'Zone A Full Count', audit_type:'Full', count_method:'Blind (Enforced)',
     scope_type:'Rack', scope_values:['Rack A-05','Rack A-06'], team_members:['Arjun Sharma','Meera Kulkarni','Priya Singh'],
-    start_date:'2026-06-20', end_date:'2026-07-10', status:'In Progress' },
+    start_date:'2026-06-20', end_date:'2026-07-10', status:'In Progress',
+    event_scope_type:'Location Wise', work_scope: DEFAULT_WORK_SCOPE },
   { audit_id:'AUD-0233', audit_name:'Spot Check — Layout C & E', audit_type:'Spot Check', count_method:'Blind (Enforced)',
     scope_type:'Layout', scope_values:['Layout C','Layout E'], team_members:['Arjun Sharma'],
-    start_date:'2026-07-09', end_date:'2026-07-09', status:'Scheduled' },
+    start_date:'2026-07-09', end_date:'2026-07-09', status:'Scheduled',
+    event_scope_type:'Location Wise', work_scope: DEFAULT_WORK_SCOPE },
   { audit_id:'AUD-0234', audit_name:'Cycle — Fast Movers, Layout B', audit_type:'Cycle Count', count_method:'Blind (Enforced)',
     scope_type:'Layout', scope_values:['Layout B'], team_members:['Arjun Sharma','Rohan Kumar'],
-    start_date:'2026-07-11', end_date:'2026-07-15', status:'Scheduled' },
+    start_date:'2026-07-11', end_date:'2026-07-15', status:'Scheduled',
+    event_scope_type:'Location Wise', work_scope: DEFAULT_WORK_SCOPE },
   { audit_id:'AUD-0225', audit_name:'Zone C Damaged Recheck', audit_type:'Cycle Count', count_method:'Blind (Enforced)',
     scope_type:'Rack', scope_values:['Rack C-04'], team_members:['Arjun Sharma','Sanjay Patil'],
-    start_date:'2026-06-24', end_date:'2026-06-30', status:'Submitted' },
+    start_date:'2026-06-24', end_date:'2026-06-30', status:'Submitted',
+    event_scope_type:'Location Wise', work_scope: DEFAULT_WORK_SCOPE },
   { audit_id:'AUD-0219', audit_name:'Bay Recount — 01', audit_type:'Spot Check', count_method:'Blind (Enforced)',
     scope_type:'Bay', scope_values:['Bay 03'], team_members:['Arjun Sharma'],
-    start_date:'2026-06-28', end_date:'2026-07-05', status:'In Progress' },
+    start_date:'2026-06-28', end_date:'2026-07-05', status:'In Progress',
+    event_scope_type:'Location Wise', work_scope: DEFAULT_WORK_SCOPE },
   { audit_id:'AUD-0240', audit_name:'Full Count — Layouts A & B', audit_type:'Full', count_method:'Blind (Enforced)',
     scope_type:'Layout', scope_values:['Layout A','Layout B'], team_members:['Arjun Sharma','Meera Kulkarni'],
-    start_date:'2026-07-08', end_date:'2026-07-22', status:'Scheduled' },
+    start_date:'2026-07-08', end_date:'2026-07-22', status:'Scheduled',
+    event_scope_type:'Location Wise', work_scope: DEFAULT_WORK_SCOPE },
 ];
 
 // Physical rack shape used to lay out the Rack View diagram (see
@@ -3138,6 +3153,14 @@ function renderAuditDetails(){
   const bayPendingCount = flatBays.length - bayDoneCount;
   const totalRackCount = layouts.reduce((n, ly) => n + ly.racks.length, 0);
 
+  const eventScopeType = a.event_scope_type || 'Location Wise';
+  const scopeFieldsHtml = eventScopeType === 'Location Wise'
+    ? `<div><div class="l">Scope Type</div><div class="v">${a.scope_type}</div></div>
+       <div><div class="l">Scope Values</div><div class="v">${a.scope_values.length ? a.scope_values.join(', ') : 'Not narrowed'}</div></div>`
+    : eventScopeType === 'SKU Wise'
+    ? `<div><div class="l">SKU Types</div><div class="v">${(a.sku_types && a.sku_types.length) ? a.sku_types.join(', ') : 'All SKUs'}</div></div>
+       <div><div class="l">Batch / Lot</div><div class="v">${a.batch_lot || 'All batches'}</div></div>`
+    : '';
   const scheduleBlock = `
     <div class="card">
       <div class="insp-section-label"><span class="icon-box">${ICON.search}</span>Audit Schedule Details</div>
@@ -3146,6 +3169,9 @@ function renderAuditDetails(){
         <div><div class="l">Audit Date</div><div class="v">${fmtDate(a.start_date)}</div></div>
         <div><div class="l">Total Bay</div><div class="v">${r.bayTotal}</div></div>
         <div><div class="l">Priority</div><div class="v"><span class="pill p-${priorityFor(a).toLowerCase()}">${priorityFor(a)}</span></div></div>
+        <div><div class="l">Event Scope Type</div><div class="v">${eventScopeType}</div></div>
+        <div><div class="l">Work Scope</div><div class="v">${(a.work_scope && a.work_scope.length) ? a.work_scope.join(', ') : 'Not selected'}</div></div>
+        ${scopeFieldsHtml}
       </div>
     </div>
   `;

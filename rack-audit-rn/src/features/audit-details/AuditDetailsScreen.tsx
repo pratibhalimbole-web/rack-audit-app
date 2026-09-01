@@ -228,6 +228,19 @@ export function AuditDetailsScreen() {
             </View>
             <InspField label="Total Racks" value={String(totalRackCount)} />
             <InspField label="Total Locations" value={String(r.locTotal)} />
+            <InspField label="Event Scope Type" value={audit.event_scope_type ?? 'Location Wise'} />
+            <InspField label="Work Scope" value={audit.work_scope?.length ? audit.work_scope.join(', ') : 'Not selected'} />
+            {(audit.event_scope_type ?? 'Location Wise') === 'Location Wise' ? (
+              <>
+                <InspField label="Scope Type" value={audit.scope_type} />
+                <InspField label="Scope Values" value={audit.scope_values.length ? audit.scope_values.join(', ') : 'Not narrowed'} />
+              </>
+            ) : audit.event_scope_type === 'SKU Wise' ? (
+              <>
+                <InspField label="SKU Types" value={audit.sku_types?.length ? audit.sku_types.join(', ') : 'All SKUs'} />
+                <InspField label="Batch / Lot" value={audit.batch_lot ?? 'All batches'} />
+              </>
+            ) : null}
           </View>
         </Card>
 
