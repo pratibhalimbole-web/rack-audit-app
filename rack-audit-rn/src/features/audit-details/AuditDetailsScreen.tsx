@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
@@ -24,7 +24,11 @@ export function AuditDetailsScreen() {
   const isTablet = device === 'tablet';
   const { data: audits } = useAudits();
   const { data: tree, isLoading } = useLocationsTree(auditId);
-  const [closedSections, setClosedSections] = useState<Record<string, boolean>>({});
+  // True accordion at each level, not independent per-key toggles: only one
+  // layout open at a time, and only one rack open at a time within it.
+  // Opening a different layout always resets the rack accordion inside it.
+  const [openLayout, setOpenLayout] = useState<string | null>(null);
+  const [openRack, setOpenRack] = useState<string | null>(null);
 
   const audit = audits?.find((a) => a.audit_id === auditId);
   const r = useMemo(() => rollup(tree), [tree]);
@@ -33,6 +37,22 @@ export function AuditDetailsScreen() {
   const bayDoneCount = flatBays.filter((b) => b.done).length;
   const bayPendingCount = flatBays.length - bayDoneCount;
   const totalRackCount = layouts.reduce((n, ly) => n + ly.racks.length, 0);
+
+  // Auto-opens the first layout when landing on a (new) audit, rather than
+  // starting fully collapsed or with every layout open at once.
+  useEffect(() => {
+    setOpenLayout(layouts.length ? `layout:${layouts[0].name}` : null);
+    setOpenRack(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-seed on a different audit, not every layouts re-render
+  }, [auditId]);
+
+  const toggleLayout = (key: string) => {
+    setOpenLayout((prev) => (prev === key ? null : key));
+    setOpenRack(null);
+  };
+  const toggleRack = (key: string) => {
+    setOpenRack((prev) => (prev === key ? null : key));
+  };
 
   if (!audit || isLoading) {
     return (
@@ -50,9 +70,6 @@ export function AuditDetailsScreen() {
   // at the whole-zone grain, never drilled down to a specific bay, so the
   // usual bay-chip grid and Rack View entry point don't apply here at all.
   const isZoneScope = audit.scope_type === 'Zone';
-
-  const toggleSection = (key: string) => setClosedSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  const isOpen = (key: string) => !closedSections[key];
 
   // Same destination on phone and tablet — the Rack View canvas, with its
   // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
@@ -141,10 +158,10 @@ export function AuditDetailsScreen() {
       <View>
         {layouts.map((ly) => {
           const layoutKey = `layout:${ly.name}`;
-          const layoutOpen = isOpen(layoutKey);
+          const layoutOpen = openLayout === layoutKey;
           return (
             <View key={ly.name} style={[styles.accSection, { borderBottomColor: tokens.border }]}>
-              <Pressable onPress={() => toggleSection(layoutKey)} style={styles.accHeader}>
+              <Pressable onPress={() => toggleLayout(layoutKey)} style={styles.accHeader}>
                 <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
                   <Ionicons name="grid-outline" size={18} color={tokens.accentBlue.base} />
                 </View>
@@ -161,11 +178,11 @@ export function AuditDetailsScreen() {
               {layoutOpen
                 ? ly.racks.map((rack) => {
                     const rackKey = `rack:${ly.name}|${rack.code}`;
-                    const rackOpen = isOpen(rackKey);
+                    const rackOpen = openRack === rackKey;
                     const bays = flatBays.filter((b) => b.layout === ly.name && b.rack === rack.code);
                     return (
                       <View key={rack.code} style={styles.accSubSection}>
-                        <Pressable onPress={() => toggleSection(rackKey)} style={styles.accHeader}>
+                        <Pressable onPress={() => toggleRack(rackKey)} style={styles.accHeader}>
                           <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
                             <Ionicons name="server-outline" size={18} color={tokens.accentBlue.base} />
                           </View>

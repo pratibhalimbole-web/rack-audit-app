@@ -1945,7 +1945,7 @@ let STATE = {
   quickScan: { mode:'zone', modeMenuOpen:false, items:[], pendingItem:null, qtyText:'1', scanCount:0, listOpen:false, activeZoneId:null },
   _countSheetSeedKey: null, locMode: 'manual', confirmModal: null,
   loginEmail: '', loginPassword: '', loginError: null, authBusy: false,
-  auditDetailsClosed: {},
+  detailOpenLayout: null, detailOpenRack: null, _auditDetailsSeedKey: null,
   scheduleCal: null, scheduleModal: null,
   rackViewPicker: null, rackViewClickedLoc: null, _rackViewSeedKey: null,
   // Scan Direction (from/pattern/vertical/scope, independent axes — see
@@ -1963,8 +1963,19 @@ let STATE = {
 // Accordion sections on Audit Details default open — this just tracks the
 // ones a user has explicitly collapsed, keyed by a layout/rack path so state
 // doesn't bleed between different audits or racks with the same code.
-function toggleDetailSection(key){ STATE.auditDetailsClosed[key] = !STATE.auditDetailsClosed[key]; render(); }
-function isDetailSectionOpen(key){ return !STATE.auditDetailsClosed[key]; }
+// True accordion at each level — opening a layout closes whichever other
+// layout was open (and always resets the rack accordion inside it, since a
+// rack key only makes sense within its own layout); opening a rack closes
+// whichever other rack was open, within the same layout.
+function toggleDetailLayout(layoutKey){
+  STATE.detailOpenLayout = STATE.detailOpenLayout === layoutKey ? null : layoutKey;
+  STATE.detailOpenRack = null;
+  render();
+}
+function toggleDetailRack(rackKey){
+  STATE.detailOpenRack = STATE.detailOpenRack === rackKey ? null : rackKey;
+  render();
+}
 
 // Remembers where you were across a page refresh (only while an actual
 // logged-in Supabase session exists — see boot() below) so a reload lands
@@ -3188,17 +3199,30 @@ function renderAuditDetails(){
   // Below one rack in scope, an accordion is just extra chrome around a
   // single always-open grid — so only layouts/racks with >1 rack total get
   // the collapsible Layout > Rack structure from the reference; a
-  // single-rack audit keeps the flat pill grid.
+  // single-rack audit keeps the flat pill grid. True accordion at each
+  // level: opening a layout closes whatever other layout was open (and
+  // always resets the rack accordion inside it), opening a rack closes
+  // whatever other rack was open. Landing on a fresh audit auto-opens its
+  // first layout (nothing auto-opens below it) rather than starting fully
+  // collapsed or with everything open at once.
+  if (totalRackCount > 1) {
+    const seedKey = `auditDetails:${a.audit_id}`;
+    if (STATE._auditDetailsSeedKey !== seedKey) {
+      STATE._auditDetailsSeedKey = seedKey;
+      STATE.detailOpenLayout = layouts.length ? `layout:${layouts[0].name}` : null;
+      STATE.detailOpenRack = null;
+    }
+  }
   const bayBody = totalRackCount > 1 ? layouts.map(ly => {
     const layoutKey = `layout:${ly.name}`;
-    const layoutOpen = isDetailSectionOpen(layoutKey);
+    const layoutOpen = STATE.detailOpenLayout === layoutKey;
     const rackSections = ly.racks.map(rack => {
       const rackKey = `rack:${ly.name}|${rack.code}`;
-      const rackOpen = isDetailSectionOpen(rackKey);
+      const rackOpen = STATE.detailOpenRack === rackKey;
       const bays = flatBays.filter(b => b.layout === ly.name && b.rack === rack.code);
       return `
         <div class="acc-section">
-          <button class="acc-header" onclick="toggleDetailSection('${rackKey}')">
+          <button class="acc-header" onclick="toggleDetailRack('${rackKey}')">
             <span class="icon-box">${ICON.rack}</span>
             <span class="lbl">Rack ${rack.code}</span>
             <span class="acc-badge">Total Bays: ${String(bays.length).padStart(2,'0')}</span>
@@ -3210,7 +3234,7 @@ function renderAuditDetails(){
     }).join('');
     return `
       <div class="acc-section acc-layout">
-        <button class="acc-header" onclick="toggleDetailSection('${layoutKey}')">
+        <button class="acc-header" onclick="toggleDetailLayout('${layoutKey}')">
           <span class="icon-box">${ICON.layout}</span>
           <span class="lbl">${ly.name}</span>
           <span class="acc-badge">Total Racks: ${String(ly.racks.length).padStart(2,'0')}</span>

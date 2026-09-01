@@ -84,7 +84,10 @@ export default function PhoneTabsLayout() {
           there's no single "audit" node to exclude), so each of the 6
           actual nested route names needs its own exclusion. */}
       <Tabs.Screen name="settings" options={{ href: null }} />
-      <Tabs.Screen name="audit/[auditId]/index" options={{ href: null }} />
+      {/* Audit Details already has its own back button (AppHeader) and is a
+          drill-down destination, not one of the 5 nav tabs — the bottom bar
+          offers no benefit here and just eats into the page. */}
+      <Tabs.Screen name="audit/[auditId]/index" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/count-sheet" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/progress" options={{ href: null }} />
       <Tabs.Screen name="audit/[auditId]/summary" options={{ href: null }} />
