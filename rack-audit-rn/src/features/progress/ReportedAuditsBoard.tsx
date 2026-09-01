@@ -11,7 +11,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
 type SortDir = 'asc' | 'desc';
-type BoardView = 'issues' | 'mismatches';
 type Severity = 'red' | 'amber' | 'green';
 type FilterCategory = 'rack' | 'bay' | 'condition' | 'audit';
 // A card's origin: 'scan' = the normal Reconciliation Form flow (a
@@ -128,7 +127,6 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   const { map: treeMap, isLoading } = useLocationsTreeMap(candidateIds);
   const auditNameById = useMemo(() => Object.fromEntries(candidates.map((a) => [a.audit_id, a.audit_name])), [candidates]);
 
-  const [view, setView] = useState<BoardView>('issues');
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [sortOpen, setSortOpen] = useState(false);
@@ -225,7 +223,7 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   // Toggle OFF (default) — only matched-but-off-on-qty/damage pallets.
   // Toggle ON ("Mismatch SKUs") — wrong-SKU pallets plus Manual Mode reports,
   // since both are location-level discrepancies outside a clean match.
-  const viewTotal = view === 'issues' ? case2Items.length : case1Items.length + manualIssueGroups.length;
+  const viewTotal = case1Items.length + case2Items.length + manualIssueGroups.length;
 
   const activeFilterCount = filterAudits.length + filterRacks.length + filterBays.length + filterConditions.length + filterSources.length;
 
@@ -267,14 +265,6 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
             placeholderTextColor={tokens.slate400}
             style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 8 }}
           />
-        </View>
-
-        {/* Issues vs Mismatches was a segmented control; a labeled switch
-            reads closer to the reference design's toolbar and the choice is
-            genuinely binary. */}
-        <View style={styles.switchGroup}>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Mismatch SKUs</Text>
-          <PillToggle value={view === 'mismatches'} onValueChange={(v) => setView(v ? 'mismatches' : 'issues')} />
         </View>
 
         <View style={styles.toolbarIcons}>
@@ -439,65 +429,42 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
             <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Total : {viewTotal}</Text>
           </View>
         ) : null}
-        {view === 'issues' ? (
-          // Toggle OFF (default) — only the right SKU found, but a
-          // quantity or damage discrepancy against what's expected.
-          case2Items.length ? (
-            <ScopedIssueSection
-              title="Matched SKUs — Quantity/Damage"
-              subtitle="Right item found, but the quantity or damage doesn't match what's expected"
-              icon="clipboard-outline"
-              items={case2Items}
-            />
-          ) : (
-            <View style={styles.empty}>
-              <Ionicons name="checkmark-circle-outline" size={28} color="#667085" />
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No quantity/damage issues</Text>
-              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Nothing matches these filters.</Text>
-            </View>
-          )
-        ) : // Toggle ON ("Mismatch SKUs") — wrong SKU scanned at an
-        // in-scope location, plus Manual Mode reports (also location-level
-        // discrepancies, just outside the audit's assigned scope).
-        case1Items.length || manualIssueGroups.length ? (
+        {case1Items.length || case2Items.length || manualIssueGroups.length ? (
           <>
-            <ScopedIssueSection
-              title="Mismatch SKUs"
-              subtitle="Wrong SKU scanned at a location this audit expected a specific item"
-              icon="swap-horizontal-outline"
-              items={case1Items}
-            />
-            <IssueSection
-              title="Manually Reported"
-              subtitle="Raised via Manual Mode, outside its audit's assigned scope"
-              icon="hand-left-outline"
-              groups={manualIssueGroups}
-            />
+            {case1Items.length ? (
+              <ScopedIssueSection
+                title="Mismatch SKUs"
+                subtitle="Wrong SKU scanned at a location this audit expected a specific item"
+                icon="swap-horizontal-outline"
+                items={case1Items}
+              />
+            ) : null}
+            {case2Items.length ? (
+              <ScopedIssueSection
+                title="Matched SKUs — Quantity/Damage"
+                subtitle="Right item found, but the quantity or damage doesn't match what's expected"
+                icon="clipboard-outline"
+                items={case2Items}
+              />
+            ) : null}
+            {manualIssueGroups.length ? (
+              <IssueSection
+                title="Manually Reported"
+                subtitle="Raised via Manual Mode, outside its audit's assigned scope"
+                icon="hand-left-outline"
+                groups={manualIssueGroups}
+              />
+            ) : null}
           </>
         ) : (
           <View style={styles.empty}>
-            <Ionicons name="cube-outline" size={28} color="#667085" />
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No SKU mismatches</Text>
+            <Ionicons name="checkmark-circle-outline" size={28} color="#667085" />
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No reported issues</Text>
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Nothing matches these filters.</Text>
           </View>
         )}
       </ScrollView>
     </View>
-  );
-}
-
-// Custom pill track + circular knob (rather than the platform Switch, which
-// renders as a Material toggle on Android) so it visually matches the
-// reference design's oval toggle on every device.
-function PillToggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
-  const { tokens } = useTheme();
-  return (
-    <Pressable
-      onPress={() => onValueChange(!value)}
-      style={[styles.pillTrack, { backgroundColor: value ? tokens.primary : tokens.border }]}
-    >
-      <View style={[styles.pillKnob, { backgroundColor: tokens.card, alignSelf: value ? 'flex-end' : 'flex-start' }]} />
-    </Pressable>
   );
 }
 
@@ -755,10 +722,7 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, zIndex: 30 },
   dismissBackdrop: { zIndex: 15 },
   searchBox: { flexGrow: 0, flexBasis: 220, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
-  switchGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 16 },
   toolbarIcons: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
-  pillTrack: { width: 42, height: 24, borderRadius: 12, padding: 2, justifyContent: 'center' },
-  pillKnob: { width: 20, height: 20, borderRadius: 10 },
   iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   // Two floating panels: the main picker (Severity + category list) anchored
   // under the filter icon, and — when a category is expanded — a second

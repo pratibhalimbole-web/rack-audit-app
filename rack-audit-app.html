@@ -470,12 +470,6 @@
      with its own "on" color/position rules since it isn't a
      .rv-manual-toggle. OFF = Matched SKUs (Qty/Damage) view, ON = Mismatch
      SKUs + Manually Reported view. */
-  .issue-view-toggle-wrap{display:flex; align-items:center; gap:8px; margin-left:14px; flex-shrink:0;}
-  .issue-view-toggle-wrap .lbl{font-weight:700; font-size:var(--text-sm); color:var(--foreground); white-space:nowrap;}
-  .issue-view-toggle{background:none; border:none; padding:0; cursor:pointer; display:flex; flex-shrink:0;}
-  .issue-view-toggle .rv-switch-track{background:var(--slate-300);}
-  .issue-view-toggle.on .rv-switch-track{background:var(--primary);}
-  .issue-view-toggle.on .rv-switch-thumb{left:16px;}
 
   /* ============ TABLET DASHBOARD (web-dashboard reference layout) ============ */
   .audit-banner{display:flex; align-items:center; gap:20px; flex-wrap:wrap; border:1.5px dashed var(--primary); border-radius:var(--radius-xl); background:var(--accent-blue-soft); padding:20px 24px;}
@@ -1929,10 +1923,6 @@ let STATE = {
   tasksSearch: '', scan: null, menuOpen: false,
   issuesSearch: '', issuesSortDir: 'desc', issuesSortOpen: false, issuesSortAnchor: null,
   issuesFilterOpen: false, issuesFilterAnchor: null, issuesOpenCategory: null,
-  // 'issues' (default) = Matched SKUs with a quantity/damage discrepancy;
-  // 'mismatches' = wrong-SKU pallets + Manual Mode reports — mirrors
-  // ReportedAuditsBoard.tsx's BoardView toggle.
-  issuesView: 'issues',
   issuesFilterValues: { rack: [], bay: [], condition: [], severity: [] },
   imageAttachmentModal: null,
   // Quick Scan — 3-mode canvas (Zone / Rack / Floor), ported from
@@ -5920,8 +5910,6 @@ function toggleIssuesFilterCategory(facet){
   STATE.issuesOpenCategory = STATE.issuesOpenCategory === facet ? null : facet;
   render();
 }
-function setIssuesView(view){ STATE.issuesView = view; render(); }
-
 // A location outside the audit's expected-SKU scope (Manual Mode-only, see
 // isRackViewManualOnly) has nothing to reconcile a scanned SKU against, so a
 // flagged line there is never itself a "wrong SKU" — it's a Case 3 report
@@ -6157,31 +6145,25 @@ function renderProgressIssuesBoard(auditId, a){
   const case1Groups = sorted.filter(g => !g.manual && g.hasMismatch);
   // Case 3 — raised via Rack View's Manual Mode, outside the audit's scope.
   const case3Groups = sorted.filter(g => g.manual);
-  const mismatchView = STATE.issuesView === 'mismatches';
-  const viewTotal = mismatchView ? case1Groups.length + case3Groups.length : case2Groups.length;
+  const viewTotal = case1Groups.length + case2Groups.length + case3Groups.length;
 
   const activeFilterCount = STATE.issuesFilterValues.rack.length + STATE.issuesFilterValues.bay.length + STATE.issuesFilterValues.condition.length + STATE.issuesFilterValues.severity.length;
 
-  const body = mismatchView
-    ? (case1Groups.length || case3Groups.length
-        ? issueSectionHtml(auditId, { title:'Mismatch SKUs', subtitle:'Wrong SKU scanned at a location this audit expected a specific item', icon:ICON.sort, groups:case1Groups })
-          + issueSectionHtml(auditId, { title:'Manually Reported', subtitle:"Raised via Manual Mode, outside its audit's assigned scope", icon:ICON.wrench, groups:case3Groups })
-        : `<div class="empty-state"><div class="glyph">${ICON.box}</div><div style="font-weight:700; color:var(--foreground);">No SKU mismatches</div><div>Nothing matches these filters.</div></div>`)
-    : (case2Groups.length
-        ? issueSectionHtml(auditId, { title:'Matched SKUs — Quantity/Damage', subtitle:"Right item found, but the quantity or damage doesn't match what's expected", icon:ICON.box, groups:case2Groups })
-        : `<div class="empty-state"><div class="glyph">${ICON.check}</div><div style="font-weight:700; color:var(--foreground);">No quantity/damage issues</div><div>Nothing matches these filters.</div></div>`);
+  // All three cases shown together now (no Mismatch SKUs toggle gating
+  // which ones render) — each section just omits itself when empty.
+  const body = viewTotal
+    ? [
+        case1Groups.length ? issueSectionHtml(auditId, { title:'Mismatch SKUs', subtitle:'Wrong SKU scanned at a location this audit expected a specific item', icon:ICON.sort, groups:case1Groups }) : '',
+        case2Groups.length ? issueSectionHtml(auditId, { title:'Matched SKUs — Quantity/Damage', subtitle:"Right item found, but the quantity or damage doesn't match what's expected", icon:ICON.box, groups:case2Groups }) : '',
+        case3Groups.length ? issueSectionHtml(auditId, { title:'Manually Reported', subtitle:"Raised via Manual Mode, outside its audit's assigned scope", icon:ICON.wrench, groups:case3Groups }) : '',
+      ].join('')
+    : `<div class="empty-state"><div class="glyph">${ICON.check}</div><div style="font-weight:700; color:var(--foreground);">No reported issues</div><div>Nothing matches these filters.</div></div>`;
 
   return `
     ${headerBlock({ title:'Reported Audits', sub:`${a.audit_id} · ${a.scope_type} overview`, showBack: true, menuItems:[{label:'Sync Now', action:"toast('Synced')"}] })}
     <div class="body-pad">
       <div class="issue-toolbar">
         <div class="search-wrap" style="flex:1;">${ICON.search}<input placeholder="Search SKU, rack, location..." value="${STATE.issuesSearch}" oninput="STATE.issuesSearch=this.value; render()" /></div>
-        <div class="issue-view-toggle-wrap">
-          <span class="lbl">Mismatch SKUs</span>
-          <button type="button" class="issue-view-toggle ${mismatchView ? 'on' : ''}" aria-pressed="${mismatchView}" onclick="setIssuesView('${mismatchView ? 'issues' : 'mismatches'}')">
-            <span class="rv-switch-track"><span class="rv-switch-thumb"></span></span>
-          </button>
-        </div>
         <div class="issue-toolbar-spacer"></div>
         <div class="issue-sort-chip">
           <span class="dot"></span>
