@@ -13,7 +13,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
+import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
 import { ACTIVITY_PHASES, OBSERVATIONS_BY_PHASE, type ActivityPhase, type Condition, type Evidence } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -281,17 +281,6 @@ export function ZoneAuditMapScreen() {
   };
 
   const zoneScans = selectedZoneId ? (scannedByZone[selectedZoneId] ?? []) : [];
-
-  // The admin app's per-zone pick list (ZONE_EXPECTED_SKUS) is "how many
-  // DISTINCT pallets of this SKU should turn up here" — same shape as
-  // Audit Details' bay-chip grid (each chip pending until its own count of
-  // work is actually done). Counts unique labels, not raw scan events, so
-  // re-scanning the same physical box (already refused at intake anyway)
-  // could never inflate progress.
-  const zonePickList = selectedZone ? (ZONE_EXPECTED_SKUS[selectedZone.label] ?? []) : [];
-  const skuFoundCount = (sku: string) => new Set(zoneScans.filter((l) => l.sku === sku).map((l) => l.label)).size;
-  const zonePickListProgress = zonePickList.map((entry) => ({ ...entry, found: skuFoundCount(entry.sku), done: skuFoundCount(entry.sku) >= entry.expectedCount }));
-  const currentLineExpectedEntry = currentLine ? zonePickList.find((e) => e.sku === currentLine.sku) : undefined;
 
   // Where this scanned SKU is actually supposed to be, per the admin app's
   // per-zone pick list — a scan that doesn't match the zone currently
@@ -591,11 +580,6 @@ export function ZoneAuditMapScreen() {
                           const active = inScope(zone.label);
                           const selected = selectedZoneId === zone.id;
                           const count = scannedByZone[zone.id]?.length ?? 0;
-                          const zonePick = ZONE_EXPECTED_SKUS[zone.label] ?? [];
-                          const zoneCardScans = scannedByZone[zone.id] ?? [];
-                          const zonePickDone =
-                            zonePick.length > 0 &&
-                            zonePick.every((e) => new Set(zoneCardScans.filter((l) => l.sku === e.sku).map((l) => l.label)).size >= e.expectedCount);
                           return (
                             <Pressable
                               key={zone.id}
@@ -625,14 +609,6 @@ export function ZoneAuditMapScreen() {
                                   <Ionicons name="scan-outline" size={11} color={count ? tokens.rag.green.strong : tokens.mutedForeground} />
                                   <Text style={{ color: count ? tokens.rag.green.strong : tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>
                                     {count} scanned
-                                  </Text>
-                                </View>
-                              ) : null}
-                              {active && zonePick.length ? (
-                                <View style={[styles.scanCountBadge, { backgroundColor: zonePickDone ? tokens.rag.green.strong : tokens.rag.amber.soft, marginTop: 4 }]}>
-                                  {zonePickDone ? <Ionicons name="checkmark" size={10} color={tokens.primaryForeground} /> : <Ionicons name="time-outline" size={10} color={tokens.rag.amber.strong} />}
-                                  <Text style={{ color: zonePickDone ? tokens.primaryForeground : tokens.rag.amber.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>
-                                    {zonePickDone ? 'Pick List Complete' : 'Pick List Pending'}
                                   </Text>
                                 </View>
                               ) : null}
@@ -715,62 +691,6 @@ export function ZoneAuditMapScreen() {
                 </Pressable>
               </View>
 
-              {/* WMS pick list for this zone — same pending/done chip
-                  language as Audit Details' bay chips. A chip counts
-                  DISTINCT scanned labels (not raw scan events) against
-                  ZONE_EXPECTED_SKUS' expectedCount, so it can only flip
-                  to Complete once that many unique pallets of the SKU
-                  have actually been seen here. */}
-              {zonePickList.length ? (
-                <>
-                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginBottom: 8 }}>
-                    Zone Pick List (WMS)
-                  </Text>
-                  <View style={styles.pickListRow}>
-                    {zonePickListProgress.map((entry) => (
-                      <View
-                        key={entry.sku}
-                        style={[
-                          styles.pickListChip,
-                          {
-                            backgroundColor: entry.done ? tokens.rag.green.soft : tokens.card,
-                            borderColor: entry.done ? tokens.rag.green.border : tokens.border,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }} numberOfLines={1}>
-                          {entry.sku}
-                        </Text>
-                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }} numberOfLines={1}>
-                          {entry.name}
-                        </Text>
-                        <View
-                          style={[
-                            styles.pickListCountBadge,
-                            { backgroundColor: entry.done ? tokens.rag.green.strong : tokens.muted },
-                          ]}
-                        >
-                          <Text style={{ color: entry.done ? tokens.primaryForeground : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: 11 }}>
-                            {entry.found} of {entry.expectedCount} scanned
-                          </Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.pickListStatusPill,
-                            { backgroundColor: entry.done ? tokens.rag.green.strong : tokens.rag.amber.soft },
-                          ]}
-                        >
-                          {entry.done ? <Ionicons name="checkmark" size={10} color={tokens.primaryForeground} /> : null}
-                          <Text style={{ color: entry.done ? tokens.primaryForeground : tokens.rag.amber.strong, fontSize: 10, fontWeight: tokens.fontWeight.bold }}>
-                            {entry.done ? 'Complete' : 'Pending'}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </>
-              ) : null}
-
               {/* Same "Selected Location Details" block as Rack View —
                   inline Label: Value rows, just one field here since a
                   zone (unlike a rack pallet) has no bay/pallet identity of
@@ -826,25 +746,6 @@ export function ZoneAuditMapScreen() {
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{currentLine.sku}</Text>
                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>{currentLine.name}</Text>
                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>Label: {currentLine.label}</Text>
-                    {currentLineExpectedEntry ? (
-                      <View style={styles.currentLineProgressRow}>
-                        <Ionicons
-                          name={skuFoundCount(currentLine.sku) >= currentLineExpectedEntry.expectedCount ? 'checkmark-circle' : 'time-outline'}
-                          size={14}
-                          color={skuFoundCount(currentLine.sku) >= currentLineExpectedEntry.expectedCount ? tokens.rag.green.strong : tokens.rag.amber.strong}
-                        />
-                        <Text
-                          style={{
-                            color: skuFoundCount(currentLine.sku) >= currentLineExpectedEntry.expectedCount ? tokens.rag.green.strong : tokens.rag.amber.strong,
-                            fontWeight: tokens.fontWeight.bold,
-                            fontSize: tokens.text.xs,
-                          }}
-                        >
-                          Zone pick list: {skuFoundCount(currentLine.sku)} of {currentLineExpectedEntry.expectedCount} unique pallets scanned
-                          {skuFoundCount(currentLine.sku) >= currentLineExpectedEntry.expectedCount ? ' — Complete' : ' — Pending'}
-                        </Text>
-                      </View>
-                    ) : null}
                     <View style={styles.compareRow}>
                       <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                         <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>
@@ -1284,11 +1185,6 @@ const styles = StyleSheet.create({
   listIconBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 10, borderWidth: 1 },
   listCountDot: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
-  pickListRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  pickListChip: { minWidth: 108, borderWidth: 1, borderRadius: 12, padding: 10 },
-  pickListCountBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 8 },
-  pickListStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 6 },
-  currentLineProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   detailRow: { minWidth: '40%' },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
   scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
