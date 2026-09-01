@@ -36,6 +36,9 @@ export function MaintenanceScreen() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tasks
+      // Closed tasks are considered resolved and tracked in the web
+      // (admin) app's Action Board — Maintenance only ever shows open work.
+      .filter((t) => t.boardStatus !== 'Closed')
       .filter((t) => !priority || t.priority === priority)
       .filter((t) => !q || [t.sku, t.name, t.rack, t.locCode, t.action, t.issueType].join(' ').toLowerCase().includes(q))
       .slice()
