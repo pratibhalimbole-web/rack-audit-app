@@ -157,27 +157,46 @@ export function AuditDetailsScreen() {
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zoneName}</Text>
         </Pressable>
         {pickList.length ? (
-          <View style={styles.bayGrid}>
+          <View style={{ gap: 8 }}>
             {pickList.map((entry) => {
               const found = skuFoundCount(entry.sku);
               const done = found >= entry.expectedCount;
+              const pct = Math.min(1, entry.expectedCount > 0 ? found / entry.expectedCount : 0);
               return (
-                <Pressable
+                <View
                   key={entry.sku}
-                  disabled={isSubmitted}
-                  onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never)}
-                  style={[
-                    styles.skuChip,
-                    { backgroundColor: done ? tokens.rag.green.soft : tokens.muted, borderColor: done ? tokens.rag.green.border : tokens.border },
-                  ]}
+                  style={[styles.skuRow, { backgroundColor: tokens.card, borderColor: done ? tokens.rag.green.border : tokens.border }]}
                 >
-                  <Text style={{ color: done ? tokens.rag.green.strong : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: 12.5 }}>
-                    {entry.sku}
-                  </Text>
-                  <Text style={{ color: done ? tokens.rag.green.strong : tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 2 }}>
-                    {found} of {entry.expectedCount} scanned · {done ? 'Complete' : 'Pending'}
-                  </Text>
-                </Pressable>
+                  <View style={[styles.skuIconWrap, { backgroundColor: done ? tokens.rag.green.soft : tokens.rag.amber.soft }]}>
+                    <Ionicons
+                      name={done ? 'checkmark-circle' : 'time-outline'}
+                      size={18}
+                      color={done ? tokens.rag.green.strong : tokens.rag.amber.strong}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: 12.5 }}>{entry.sku}</Text>
+                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
+                        {found}/{entry.expectedCount}
+                      </Text>
+                    </View>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>{entry.name}</Text>
+                    <View style={[styles.skuProgressTrack, { backgroundColor: tokens.muted }]}>
+                      <View
+                        style={[
+                          styles.skuProgressFill,
+                          { width: `${pct * 100}%`, backgroundColor: done ? tokens.rag.green.strong : tokens.rag.amber.strong },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={[styles.skuStatusBadge, { backgroundColor: done ? tokens.rag.green.strong : tokens.rag.amber.soft }]}>
+                    <Text style={{ color: done ? tokens.primaryForeground : tokens.rag.amber.strong, fontSize: 10, fontWeight: tokens.fontWeight.bold }}>
+                      {done ? 'Complete' : 'Pending'}
+                    </Text>
+                  </View>
+                </View>
               );
             })}
           </View>
@@ -374,7 +393,11 @@ const styles = StyleSheet.create({
   bayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   bayPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
   zonePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
-  skuChip: { minWidth: 108, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
+  skuRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 10 },
+  skuIconWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  skuProgressTrack: { height: 5, borderRadius: 3, overflow: 'hidden', marginTop: 6 },
+  skuProgressFill: { height: '100%', borderRadius: 3 },
+  skuStatusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   accSection: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 14 },
   accSubSection: { marginTop: 10, marginLeft: 4 },
   accHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
