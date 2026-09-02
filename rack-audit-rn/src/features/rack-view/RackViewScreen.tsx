@@ -144,7 +144,7 @@ export function RackViewScreen() {
   const [pickerField, setPickerField] = useState<'layout' | 'rack' | 'bay' | 'pallet' | null>(null);
   // How "Scan Next SKU" walks the rack — matches how the audit is actually
   // being physically worked (see buildScanOrder). Defaults mirror the
-  // reference toolbar's own defaults (From Left, Left-Last-Up, Bay wise).
+  // reference toolbar's own defaults (From Left, Current Up, Bay wise).
   const [scanFrom, setScanFrom] = useState<ScanFrom>('left');
   const [scanPattern, setScanPattern] = useState<ScanPattern>('last');
   const [scanVertical, setScanVertical] = useState<ScanVertical>('up');
@@ -410,9 +410,17 @@ export function RackViewScreen() {
   // the chip's own bay is highlighted/selectable, and reaching any other
   // bay's SKUs requires picking it from the Bay dropdown first (which
   // re-scopes bayFilter, same as ever).
+  // Under scanScope 'rack' (Bay wise) the bay-filter gate is skipped
+  // entirely: selectLocation re-syncs bayFilter to whichever bay was just
+  // selected, so a rack-wide snake walk would otherwise lock every OTHER
+  // bay's next step back out the moment it enters a new bay — falling
+  // through to the isLocPending fallback below only rescued locations that
+  // happen to carry an EXPECTED_SKUS entry, not every location has one.
+  // 'bay' scope keeps the gate (confining selection to the filtered bay is
+  // the whole point there); Manual Mode already bypasses this line.
   const isLocSelectable = (locCode: string) =>
     manualMode ||
-    (inBayFilter(locCode) && (!audit.target_sku || matchesTargetSku(locCode))) ||
+    ((scanScope === 'rack' || inBayFilter(locCode)) && (!audit.target_sku || matchesTargetSku(locCode))) ||
     (params.source !== 'bay-chip' && isLocPending(locCode));
 
   // Picking a bay from the toolbar dropdown also jumps the canvas selection
@@ -1040,7 +1048,7 @@ export function RackViewScreen() {
               {/* Purely informational recap of the active pattern. */}
               <View style={[styles.directionBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.xl }]}>
                 <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                  {scanScope === 'bay' ? "Bay's Level" : 'Bay wise'} · {scanFrom === 'left' ? 'Left' : 'Right'}-{scanPattern === 'last' ? 'Last' : 'First'}-
+                  {scanScope === 'bay' ? "Bay's Level" : 'Bay wise'} · {scanFrom === 'left' ? 'Left' : 'Right'}-{scanPattern === 'last' ? 'Current' : 'Initial'}-
                   {scanVertical === 'up' ? 'Up' : 'Down'}
                 </Text>
               </View>
@@ -2009,18 +2017,22 @@ function ScanDirectionToolbar({
   // Each pattern icon is a hooked return arrow — Last (snake) hooks
   // FORWARD (continues in the direction of travel), First (raster) hooks
   // BACK (returns to the starting side) — matching the reference exactly.
-  // The label's leading word tracks whichever main direction (Left/Right)
-  // is currently selected — only one sub-direction can be active at a
-  // time, same set of 4 either way, just relabeled to match.
-  const fromLabel = from === 'left' ? 'Left' : 'Right';
+  // No Left/Right prefix here — the From buttons directly to the left of
+  // this group already convey that, so repeating it in every pattern
+  // label would just be redundant.
   const patternButtons: { pattern: ScanPattern; vertical: ScanVertical; corner: 'right-up' | 'left-up' | 'right-down' | 'left-down'; label: string }[] = [
-    { pattern: 'first', vertical: 'up', corner: 'left-up', label: `${fromLabel}-First-Up` },
-    { pattern: 'last', vertical: 'up', corner: 'right-up', label: `${fromLabel}-Last-Up` },
-    { pattern: 'first', vertical: 'down', corner: 'left-down', label: `${fromLabel}-First-Down` },
-    { pattern: 'last', vertical: 'down', corner: 'right-down', label: `${fromLabel}-Last-Down` },
+    { pattern: 'first', vertical: 'up', corner: 'left-up', label: 'Initial Up' },
+    { pattern: 'last', vertical: 'up', corner: 'right-up', label: 'Current Up' },
+    { pattern: 'first', vertical: 'down', corner: 'left-down', label: 'Initial Down' },
+    { pattern: 'last', vertical: 'down', corner: 'right-down', label: 'Current Down' },
   ];
   return (
-    <View style={[dirToolbarStyles.row, { borderTopColor: tokens.border }]}>
+    // Negative margins cancel out diagramBody's own 14px padding (this
+    // toolbar renders as diagramBody's last child) so the bar bleeds all
+    // the way to the canvas Card's actual border on the left, right, and
+    // bottom — Card's overflow:hidden clips it cleanly to its rounded
+    // corners rather than the bar floating inset inside the canvas frame.
+    <View style={[dirToolbarStyles.row, { backgroundColor: '#F7F8FA', borderTopColor: tokens.border, marginHorizontal: -14, marginBottom: -14 }]}>
       <DirToolbarBtn customIcon={<BarArrowIcon pointing="left" color={from === 'right' ? tokens.primary : tokens.foreground} />} label="Right" active={from === 'right'} onPress={() => onSetFrom('right')} />
       <DirToolbarBtn customIcon={<BarArrowIcon pointing="right" color={from === 'left' ? tokens.primary : tokens.foreground} />} label="Left" active={from === 'left'} onPress={() => onSetFrom('left')} />
       <View style={[dirToolbarStyles.divider, { backgroundColor: tokens.border }]} />
@@ -2105,7 +2117,7 @@ function DirToolbarBtn({
       {/* No numberOfLines/truncation — the wrap is wide enough (and the
           font small enough) that every label fits on one line, same as
           the reference; clipping it to an ellipsis was the actual bug. */}
-      <Text style={{ color: active ? tokens.primary : tokens.mutedForeground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: 10, textAlign: 'center' }}>
+      <Text style={{ color: active ? tokens.primary : tokens.mutedForeground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.medium, fontSize: 9, textAlign: 'center' }}>
         {label}
       </Text>
     </Pressable>
@@ -2159,7 +2171,12 @@ const styles = StyleSheet.create({
   splitRow: { flex: 1, flexDirection: 'row', gap: 16 },
   diagramHeadRow: { minHeight: 60, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   directionBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12 },
-  diagramBody: { flex: 1, padding: 14 },
+  // overflow: 'hidden' clips the pan/zoom transform to THIS box specifically
+  // — without it, only the outer Card's overflow:hidden applied, which
+  // clips to the Card's full bounds (header row included), so panning/
+  // zooming the canvas could paint transformed content up over the
+  // diagramHeadRow above it instead of staying confined to the canvas area.
+  diagramBody: { flex: 1, padding: 14, overflow: 'hidden' },
   diagramCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   bayColumnsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
   bayColumnWrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
@@ -2241,9 +2258,15 @@ const styles = StyleSheet.create({
 });
 
 const dirToolbarStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 14, marginTop: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  // Same #F7F8FA band + border as the canvas' own diagramHeadRow, and no
+  // left/right padding — content is centered within a minHeight matched to
+  // that header's own 60, so it bookends the canvas as a true header/footer
+  // pair. Stays pinned to the bottom of the card since it's the last child
+  // in that fixed-height flex column (outside the pan/zoom GestureDetector,
+  // so it never moves with canvas gestures).
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, minHeight: 60, paddingHorizontal: 0, paddingVertical: 12, borderTopWidth: 1 },
   divider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 4, marginHorizontal: 2 },
-  btnWrap: { alignItems: 'center', gap: 6, width: 76 },
-  btn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  btnWrap: { alignItems: 'center', gap: 4, width: 76 },
+  btn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   scopeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12, borderWidth: 1 },
 });
