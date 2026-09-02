@@ -62,10 +62,10 @@ export type ScanVertical = 'up' | 'down';
 // 'bay' ("Bay's Level") — confined to whichever single bay the current
 // selection is in: level by level within that one bay only (Bay 1 → L1,
 // L2, L3…), never advancing into another bay on its own. 'rack' ("Bay
-// wise") — level-major across the WHOLE rack instead: clear a level across
-// every bay (Bay 1, Bay 2, Bay 3… all at L1) before moving to the next
-// level, same as a real inspector/MHE working one elevation at a time
-// instead of one bay at a time.
+// wise") — bay-major across the WHOLE rack instead: fully climb one bay
+// (all its levels, snaking side to side) before moving to the next bay,
+// same as a real inspector/MHE walking over and clearing one whole bay
+// at a time instead of one elevation at a time.
 export type ScanScope = 'bay' | 'rack';
 
 export type ScanSettings = { from: ScanFrom; pattern: ScanPattern; vertical: ScanVertical; scope: ScanScope };
@@ -104,34 +104,17 @@ export function buildScanOrder(
     return buildOneBayOrder(settings.from, settings.pattern, settings.vertical, current.rows).order;
   }
 
-  // 'rack' ("Bay wise") — level is the outer loop, bays are the inner
-  // loop: every bay's row at this level gets pushed (in bay-array order,
-  // or reversed under 'last'), then the level advances. Under 'last' both
-  // the bay-sweep direction and the within-bay starting side flip after
-  // each level, so the whole rack reads as one continuous snake instead of
-  // resetting to the top-left corner every level.
-  const maxLevel = bayDiagrams.reduce((max, { rows }) => Math.max(max, ...rows.map((r) => r.level)), 0);
-  const levels: number[] = [];
-  for (let l = 1; l <= maxLevel; l++) levels.push(l);
-  const orderedLevels = settings.vertical === 'up' ? levels : levels.slice().reverse();
-
+  // 'rack' ("Bay wise") — bay-major: fully walk ONE bay (its own complete
+  // vertical climb, snaking sides level-to-level exactly like scope 'bay')
+  // before moving on to the next bay — matching how an inspector/MHE
+  // actually works a rack physically: finish everything reachable in this
+  // bay, then walk over and climb the next one, rather than clearing a
+  // single level across every bay before climbing higher. Bay sweep order
+  // follows From (left: array order B-01→B-04, right: reversed).
+  const orderedBays = settings.from === 'left' ? bayDiagrams : bayDiagrams.slice().reverse();
   const order: LocationNode[] = [];
-  let side = settings.from;
-  let bayForward = true;
-  orderedLevels.forEach((level) => {
-    const bays = bayForward ? bayDiagrams : bayDiagrams.slice().reverse();
-    bays.forEach(({ rows }) => {
-      const row = rows.find((r) => r.level === level);
-      if (!row) return;
-      const cells = side === 'left' ? row.cells : row.cells.slice().reverse();
-      cells.forEach((cell) => {
-        if (cell) order.push(cell);
-      });
-    });
-    if (settings.pattern === 'last') {
-      side = side === 'left' ? 'right' : 'left';
-      bayForward = !bayForward;
-    }
+  orderedBays.forEach(({ rows }) => {
+    order.push(...buildOneBayOrder(settings.from, settings.pattern, settings.vertical, rows).order);
   });
   return order;
 }
