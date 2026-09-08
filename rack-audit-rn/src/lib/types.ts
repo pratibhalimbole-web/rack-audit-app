@@ -97,6 +97,14 @@ export type CountLine = {
   damageEvidence?: Evidence;
   qtyIssueRaised?: boolean;
   damageIssueRaised?: boolean;
+  // Whether the inspector has actually entered/confirmed a found value for
+  // this line yet — a scan only proves SKU identity, so the Matched/
+  // Mismatched status for Units and Damage stays hidden until each is
+  // explicitly confirmed, even though the line already exists on the
+  // pallet. Tracked per line (not a single screen-wide flag) since a
+  // pallet can now hold several scanned lines, each at its own stage.
+  qtyConfirmed?: boolean;
+  damageConfirmed?: boolean;
   // Damage's own cascading detail: which phase of the pallet's lifecycle the
   // damage relates to, and what was actually observed — the Observation
   // options offered depend on which Activity Phase is selected.

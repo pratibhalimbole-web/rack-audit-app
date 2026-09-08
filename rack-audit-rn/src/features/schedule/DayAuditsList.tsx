@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { fmtDate } from '@/lib/auditLogic';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { dayAuditGroups, scheduleTypeKey } from './scheduleLogic';
@@ -37,6 +38,12 @@ export function DayAuditsList({ dateISO, auditPool }: { dateISO: string; auditPo
               >
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{a.audit_name}</Text>
                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{a.scope_values.join(', ')}</Text>
+                <View style={styles.metaRow}>
+                  <Ionicons name="calendar-outline" size={12} color={tokens.mutedForeground} />
+                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>
+                    {fmtDate(a.start_date)} – {fmtDate(a.end_date)}
+                  </Text>
+                </View>
                 <View style={styles.metaRow}>
                   <Ionicons name="person-outline" size={12} color={tokens.mutedForeground} />
                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>

@@ -157,11 +157,37 @@ export function RackViewScreen() {
   // should already be open, not just that pallet highlighted on the
   // canvas requiring an extra tap to reopen the form.
   const [skuPanelOpen, setSkuPanelOpen] = useState(!!params.loc);
+  // A pallet can now carry more than one distinct SKU (multiple boxes of
+  // the same SKU, or several different SKUs stacked together) — scanLines
+  // holds one CountLine per distinct SKU found this session, its `qty`
+  // tallied up from repeat scans of that SKU rather than typed in by hand.
+  // activeLineIndex is whichever line the detail editor below (qty/damage/
+  // evidence/raise-issue) is currently showing — defaults to the
+  // just-scanned line, but tapping an earlier row in the Scanned SKUs list
+  // switches it.
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
+  const [activeLineIndex, setActiveLineIndex] = useState(0);
+  // "Sku Units" / "Sku Damage conditions" collapse independently of each
+  // other within the active line's expanded accordion — the "-"/"+" toggle
+  // in each section's own header, not tied to qtyEditing/damageEditing.
+  const [unitSectionOpen, setUnitSectionOpen] = useState(true);
+  const [damageSectionOpen, setDamageSectionOpen] = useState(true);
+  // Every box's unique label already scanned onto the CURRENT pallet this
+  // session — a real pallet QR is "<sku>::<label>" (same convention as
+  // Zone Audit's scanner), so two different boxes of the same SKU carry
+  // different labels and both count, while a repeat of the same label (the
+  // same physical box scanned twice) is rejected as a duplicate.
+  const [scannedLabels, setScannedLabels] = useState<Set<string>>(new Set());
+  const [duplicateScanLabel, setDuplicateScanLabel] = useState<string | null>(null);
   const [scanPallet, setScanPallet] = useState<string | null>(null);
   const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
   const [skuScanCount, setSkuScanCount] = useState(0);
   const [scannerOpen, setScannerOpen] = useState<'sku' | null>(null);
+  // Location Details moved out of the form's always-visible body into a
+  // tap-to-open popup from the header's own pin icon — the form itself
+  // stays focused on scanning/reconciling, not repeating identity details
+  // the inspector already knows from picking this pallet on the canvas.
+  const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
   // Quantity and damage are unknown at scan time — a scan only proves SKU
   // identity — so each starts unchecked ("-" shown instead of a number)
   // until the inspector deliberately enters what they actually found.
@@ -219,9 +245,9 @@ export function RackViewScreen() {
       return;
     }
     setScanLines((prev) => {
-      if (!prev[0]) return prev;
+      if (!prev[activeLineIndex]) return prev;
       const next = prev.slice();
-      next[0] = { ...next[0], ...(typeof patch === 'function' ? patch(next[0]) : patch) };
+      next[activeLineIndex] = { ...next[activeLineIndex], ...(typeof patch === 'function' ? patch(next[activeLineIndex]) : patch) };
       return next;
     });
   };
@@ -383,8 +409,14 @@ export function RackViewScreen() {
   // an out-of-scope pallet, so expectedSku always stays null there —
   // skuMatched/misplaced fall out false automatically as a result, and the
   // form itself skips rendering anything that depends on a comparison.
-  const expectedSku = formIsManual ? null : (expectedSkus[0] ?? null);
-  const scannedLine = formIsManual ? (manualScanned ? manualLine : null) : (scanLines[0] ?? null);
+  const activeLine = scanLines[activeLineIndex] ?? null;
+  const scannedLine = formIsManual ? (manualScanned ? manualLine : null) : activeLine;
+  // Per-SKU-line matching: the active line is checked against whichever
+  // expected SKU it actually matches (a pallet can carry more than one
+  // expected SKU now), falling back to the first expected entry so the
+  // "Expected" compare column still has something to show before anything's
+  // been scanned yet.
+  const expectedSku = formIsManual ? null : (expectedSkus.find((e) => e.sku === activeLine?.sku) ?? expectedSkus[0] ?? null);
   const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
   const misplaced = !!scannedLine && !skuMatched && !formIsManual;
 
@@ -410,7 +442,7 @@ export function RackViewScreen() {
   // the chip's own bay is highlighted/selectable, and reaching any other
   // bay's SKUs requires picking it from the Bay dropdown first (which
   // re-scopes bayFilter, same as ever).
-  // Under scanScope 'rack' (Bay wise) the bay-filter gate is skipped
+  // Under scanScope 'rack' (Bay's Level) the bay-filter gate is skipped
   // entirely: selectLocation re-syncs bayFilter to whichever bay was just
   // selected, so a rack-wide snake walk would otherwise lock every OTHER
   // bay's next step back out the moment it enters a new bay — falling
@@ -530,24 +562,28 @@ export function RackViewScreen() {
   // that disagrees with what's expected counts toward the amber "issue"
   // status. Both default true for a prior saved record, which is already
   // real data the moment it's loaded.
-  const applyLocationStatus = (
-    locCode: string,
-    line: CountLine | null,
-    expected: ExpectedSkuLine | null,
-    qtyChecked = true,
-    damageChecked = true,
-  ) => {
+  // Aggregates every scanned line at this location into one canvas-cell
+  // status — worst case wins: any line scanned that isn't among the
+  // expected SKUs makes the whole pallet 'mismatch'; otherwise any line
+  // whose unit count or condition is off makes it 'issue'; only when every
+  // line matches cleanly is it 'matched'.
+  const applyLocationStatus = (locCode: string, lines: CountLine[], expected: ExpectedSkuLine[]) => {
     setLocationStatus((prev) => {
-      if (!line) {
+      if (!lines.length) {
         if (!(locCode in prev)) return prev;
         const next = { ...prev };
         delete next[locCode];
         return next;
       }
-      const skuMatches = !!expected && line.sku === expected.sku;
-      const qtyOff = qtyChecked && line.qty !== expected?.qty;
-      const damageOff = damageChecked && line.condition !== 'Good';
-      const status: 'matched' | 'issue' | 'mismatch' = !skuMatches ? 'mismatch' : qtyOff || damageOff ? 'issue' : 'matched';
+      let status: 'matched' | 'issue' | 'mismatch' = 'matched';
+      for (const line of lines) {
+        const exp = expected.find((e) => e.sku === line.sku);
+        if (!exp) {
+          status = 'mismatch';
+          break;
+        }
+        if (line.qty !== exp.qty || line.condition !== 'Good') status = 'issue';
+      }
       return prev[locCode] === status ? prev : { ...prev, [locCode]: status };
     });
   };
@@ -565,13 +601,15 @@ export function RackViewScreen() {
     if (!selectedLocObj) return;
     if (checked) {
       setScanLines([]);
+      setScannedLabels(new Set());
+      setActiveLineIndex(0);
       setQtyChecked(false);
       setDamageChecked(false);
       setQtyEditing(false);
       setDamageEditing(false);
       setLocationStatus((prev) => ({ ...prev, [selectedLocObj.code]: 'missing' }));
     } else {
-      applyLocationStatus(selectedLocObj.code, scanLines[0] ?? null, expectedSkus[0] ?? null, qtyChecked, damageChecked);
+      applyLocationStatus(selectedLocObj.code, scanLines, expectedSkus);
     }
   };
 
@@ -585,10 +623,10 @@ export function RackViewScreen() {
       setManualLine((prev) => ({ ...prev, palletConditionGood: good }));
       return;
     }
-    if (!scanLines[0]) return;
-    const next = scanLines.slice();
-    next[0] = { ...next[0], palletConditionGood: good };
-    setScanLines(next);
+    // Pallet condition is about the physical pallet at this location, not
+    // any one SKU on it — carries onto every line scanned here, present or
+    // future, not just whichever one is currently active.
+    setScanLines((prev) => prev.map((l) => ({ ...l, palletConditionGood: good })));
   };
 
   // Shared by "Start Audit" (from the canvas) and "Scan Next SKU" (from
@@ -629,15 +667,23 @@ export function RackViewScreen() {
       return;
     }
     const existing = loc.pallets.find((p) => p.saved) ?? null;
-    // Single-SKU pallet: only the first line of any prior saved scan applies.
-    const base = existing ? existing.lines.slice(0, 1).map((l) => ({ ...l })) : [];
-    const expected = (EXPECTED_SKUS[loc.code] ?? []).slice(0, 1);
+    // A pallet can carry more than one distinct SKU now — every previously
+    // saved line applies, not just the first. A line that was already
+    // saved this audit already has real, confirmed qty/condition values —
+    // unlike a fresh scan, it doesn't need the inspector to re-enter them
+    // before its Matched/Mismatched status shows.
+    const base = existing ? existing.lines.map((l) => ({ ...l, qtyConfirmed: true, damageConfirmed: true })) : [];
+    const expected = EXPECTED_SKUS[loc.code] ?? [];
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
-    if (base[0]?.issueRaised) {
-      setIssuesRaised((prev) => new Set(prev).add(base[0].sku));
-      setFlaggedLocs((prev) => new Set(prev).add(loc.code));
-    }
+    setScannedLabels(new Set());
+    setActiveLineIndex(Math.max(0, base.length - 1));
+    base.forEach((line) => {
+      if (line.issueRaised) {
+        setIssuesRaised((prev) => new Set(prev).add(line.sku));
+        setFlaggedLocs((prev) => new Set(prev).add(loc.code));
+      }
+    });
     // A pallet already saved this audit shows its real qty/damage right
     // away; a fresh one starts unchecked ("-") until the inspector enters
     // what they actually found.
@@ -648,7 +694,7 @@ export function RackViewScreen() {
     setExpectedSkus(expected);
     setNoScannerFound(false);
     setPalletConditionGood(base[0]?.palletConditionGood ?? null);
-    applyLocationStatus(loc.code, base[0] ?? null, expected[0] ?? null, !!base.length, !!base.length);
+    applyLocationStatus(loc.code, base, expected);
   };
 
   // Loads whichever pallet is currently selected into the panel — covers
@@ -731,34 +777,68 @@ export function RackViewScreen() {
     selectLocation(next.code);
   };
 
-  // One scan per pallet — a new scan replaces whatever was scanned before,
-  // it doesn't accumulate into a list. The SKU identity check decides what
-  // happens next: right SKU opens the qty/condition form, wrong SKU is
-  // "Misplaced" with nothing further to fill in.
-  const applySkuScan = (pick: { sku: string; name: string; lot: string }) => {
-    // Scanning only ever confirms SKU identity — quantity and damage are
-    // NOT known from the scan itself. These placeholder values never reach
-    // the screen: the compare view shows "-" and the two field cards stay
-    // unchecked until the inspector deliberately enters what they actually
-    // found for each.
-    const line: CountLine = {
-      sku: pick.sku,
-      name: pick.name,
-      lot: pick.lot,
-      qty: 0,
-      condition: 'Good',
-      source: 'scan',
-      // Carries forward whatever was already answered before this scan —
-      // the pallet condition question doesn't depend on the SKU scan at all.
-      palletConditionGood: palletConditionGood ?? undefined,
-    };
-    setScanLines([line]);
+  // Every scan adds a unit, not a fresh single line — one box, one scan.
+  // Two cases: another box of a SKU already on this pallet just bumps that
+  // line's unit count; a SKU that hasn't shown up yet on this pallet starts
+  // a new line. A real pallet QR is "<sku>::<unique label>" (same
+  // convention as Zone Audit's scanner) — the label identifies this one
+  // physical box, so two different boxes of the same SKU carry different
+  // labels and both count as separate units, while a repeat of a label
+  // already scanned onto this pallet (the same box scanned twice) is
+  // caught and refused before it ever reaches the list, same as Zone
+  // Audit's own "Already Scanned" prompt. A code with no "::" (an older
+  // single-sku code) falls back to the raw scanned text as its own label.
+  // Unlike the old single-scan model, the unit count and condition are
+  // both immediately known the moment a line exists (they come from the
+  // scan itself), so qty/damage start "checked" right away instead of
+  // waiting on a separate manual entry.
+  const applyMultiSkuScan = (raw: string) => {
+    const trimmed = raw.trim();
+    const [skuCode, labelPart] = trimmed.includes('::') ? trimmed.split('::') : [trimmed, trimmed];
+    if (scannedLabels.has(labelPart)) {
+      setDuplicateScanLabel(labelPart);
+      return;
+    }
+    const pick = INVENTORY_POOL.find((p) => p.sku === skuCode) ?? { sku: skuCode, name: 'Unlisted SKU', lot: '—' };
+    setScannedLabels((prev) => new Set(prev).add(labelPart));
+    setScanLines((prev) => {
+      const idx = prev.findIndex((l) => l.sku === pick.sku);
+      let next: CountLine[];
+      let landedIndex: number;
+      if (idx !== -1) {
+        next = prev.slice();
+        // The tally just changed, so whatever was previously entered as
+        // "found units" is stale — back to unconfirmed until the inspector
+        // re-enters it.
+        next[idx] = { ...next[idx], qty: next[idx].qty + 1, qtyConfirmed: false };
+        landedIndex = idx;
+      } else {
+        const line: CountLine = {
+          sku: pick.sku,
+          name: pick.name,
+          lot: pick.lot,
+          qty: 1,
+          condition: 'Good',
+          source: 'scan',
+          // Carries forward whatever was already answered before this scan —
+          // the pallet condition question doesn't depend on the SKU scan.
+          palletConditionGood: palletConditionGood ?? undefined,
+        };
+        next = [...prev, line];
+        landedIndex = next.length - 1;
+      }
+      setActiveLineIndex(landedIndex);
+      // A scan only proves SKU identity — the inspector still has to enter
+      // the units they actually found and confirm the pallet's condition
+      // before either one's Matched/Mismatched status shows.
+      setQtyChecked(!!next[landedIndex].qtyConfirmed);
+      setDamageChecked(!!next[landedIndex].damageConfirmed);
+      if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next, expectedSkus);
+      return next;
+    });
     setNoScannerFound(false);
-    setQtyChecked(false);
-    setDamageChecked(false);
     setQtyEditing(false);
     setDamageEditing(false);
-    if (selectedLocObj) applyLocationStatus(selectedLocObj.code, line, expectedSkus[0] ?? null, false, false);
   };
 
   // Manual Mode's scan just identifies what's on the pallet — there's no
@@ -777,13 +857,13 @@ export function RackViewScreen() {
   };
 
   const handleSkuScanned = (data: string) => {
-    const code = data.trim();
-    const pick = INVENTORY_POOL.find((p) => p.sku === code) ?? { sku: code, name: 'Unlisted SKU', lot: '—' };
     if (formIsManual) {
+      const code = data.trim();
+      const pick = INVENTORY_POOL.find((p) => p.sku === code) ?? { sku: code, name: 'Unlisted SKU', lot: '—' };
       applyManualSkuScan(pick);
       return;
     }
-    applySkuScan(pick);
+    applyMultiSkuScan(data);
   };
 
   const handleSkuSimulated = () => {
@@ -793,10 +873,13 @@ export function RackViewScreen() {
       return;
     }
     // Mostly scan the expected SKU (the common case), occasionally
-    // simulate a misplaced item to demo that path too.
+    // simulate a genuinely different/unexpected item to demo that path too
+    // — each tap gets its own synthetic suffix so repeated taps add fresh
+    // units instead of tripping the duplicate-scan check.
     const expected = expectedSkus[0];
     const useExpected = expected && skuScanCount % 3 !== 0;
-    applySkuScan(useExpected ? expected : INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length]);
+    const pick = useExpected ? expected : INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length];
+    applyMultiSkuScan(`${pick.sku}::SIM-${skuScanCount}`);
     setSkuScanCount((c) => c + 1);
   };
 
@@ -807,8 +890,9 @@ export function RackViewScreen() {
 
   // Quantity and damage are independent findings on a pallet — each gets
   // its own evidence, kept on whichever line is live right now (manualLine
-  // in Manual Mode, scanLines[0] otherwise — this screen's flow never has
-  // more than one line open at a time in either mode).
+  // in Manual Mode, scanLines[activeLineIndex] otherwise — a pallet can
+  // hold several scanned lines now, but only one is ever open for detail
+  // editing at a time in either mode).
   const ensureFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence'): Evidence =>
     scannedLine?.[field] ?? { note: '', noteOpen: false, audio: null, images: [], videos: [] };
 
@@ -838,10 +922,14 @@ export function RackViewScreen() {
     if (!scannedLine || !selectedLocObj) return;
     const n = parseInt(qtyInputText, 10);
     const qty = Number.isNaN(n) ? 0 : Math.max(0, n);
-    updateCurrentLine({ qty });
+    updateCurrentLine({ qty, qtyConfirmed: true });
     setQtyChecked(true);
     setQtyEditing(false);
-    if (!formIsManual) applyLocationStatus(selectedLocObj.code, { ...scannedLine, qty }, expectedSkus[0] ?? null, true, damageChecked);
+    if (!formIsManual) {
+      const nextLines = scanLines.slice();
+      if (nextLines[activeLineIndex]) nextLines[activeLineIndex] = { ...nextLines[activeLineIndex], qty };
+      applyLocationStatus(selectedLocObj.code, nextLines, expectedSkus);
+    }
   };
 
   // Same as quantity, but damage is chosen from the chip picker rather than
@@ -860,11 +948,15 @@ export function RackViewScreen() {
   // "checked" once both are picked and confirmed.
   const handleConfirmDamage = () => {
     if (!scannedLine || !selectedLocObj || !damagePhaseDraft || !damageObservationDraft) return;
-    updateCurrentLine({ condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft });
+    updateCurrentLine({ condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft, damageConfirmed: true });
     setDamageChecked(true);
     setDamageEditing(false);
     if (!formIsManual) {
-      applyLocationStatus(selectedLocObj.code, { ...scannedLine, condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft }, expectedSkus[0] ?? null, qtyChecked, true);
+      const nextLines = scanLines.slice();
+      if (nextLines[activeLineIndex]) {
+        nextLines[activeLineIndex] = { ...nextLines[activeLineIndex], condition: 'Damaged', activityPhase: damagePhaseDraft, observation: damageObservationDraft };
+      }
+      applyLocationStatus(selectedLocObj.code, nextLines, expectedSkus);
     }
   };
 
@@ -1028,14 +1120,14 @@ export function RackViewScreen() {
                   onPress={() => setScopeMenuOpen((v) => !v)}
                   style={[dirToolbarStyles.scopeBtn, { borderColor: scopeMenuOpen ? tokens.primary : tokens.border, backgroundColor: tokens.card, borderRadius: tokens.radius.lg }]}
                 >
-                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{scanScope === 'bay' ? "Bay's Level" : 'Bay wise'}</Text>
+                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{scanScope === 'bay' ? 'Bay wise' : "Bay's Level"}</Text>
                   <Ionicons name={scopeMenuOpen ? 'chevron-up' : 'chevron-down'} size={14} color={tokens.mutedForeground} />
                 </Pressable>
                 {scopeMenuOpen ? (
                   <InlineDropdown
                     options={[
-                      { value: 'bay', label: "Bay's Level" },
-                      { value: 'rack', label: 'Bay wise' },
+                      { value: 'bay', label: 'Bay wise' },
+                      { value: 'rack', label: "Bay's Level" },
                     ]}
                     selectedValue={scanScope}
                     onSelect={(v) => {
@@ -1048,7 +1140,7 @@ export function RackViewScreen() {
               {/* Purely informational recap of the active pattern. */}
               <View style={[styles.directionBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.xl }]}>
                 <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                  {scanScope === 'bay' ? "Bay's Level" : 'Bay wise'} · {scanFrom === 'left' ? 'Left' : 'Right'}-{scanPattern === 'last' ? 'Current' : 'Initial'}-
+                  {scanScope === 'bay' ? 'Bay wise' : "Bay's Level"} · {scanFrom === 'left' ? 'Right' : 'Left'}-{scanPattern === 'last' ? 'Current' : 'Initial'}-
                   {scanVertical === 'up' ? 'Up' : 'Down'}
                 </Text>
               </View>
@@ -1199,11 +1291,12 @@ export function RackViewScreen() {
 
         {skuPanelOpen ? (
           <Card style={styles.skuPanel}>
-            {/* Header carries only the form name, banded the same way as
-                the canvas card's "Front View" header — location/pallet
-                identity is its own precise detail block below, and
-                scanning happens from the dotted scan target further down,
-                not a header icon. */}
+            {/* Header carries the form name plus, in normal mode, a scan
+                icon — the entry point into scanning multiple SKUs onto this
+                pallet (each scan adds a unit; the dotted target further
+                down offers the same action once the list is empty).
+                Manual Mode keeps its old single-scan flow, so it gets no
+                header icon here. */}
             {/* This Card (unlike the canvas one) isn't overflow:'hidden',
                 so the header's negative-margin bleed needs its own top
                 corner radius — otherwise it'd sit square against the
@@ -1217,28 +1310,43 @@ export function RackViewScreen() {
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
                 {formIsManual ? 'Manual Issue Report' : 'Reconciliation Form'}
               </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Pressable
+                  onPress={() => setLocationDetailsOpen(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.headerScanBtn,
+                    {
+                      backgroundColor: pressed ? tokens.primary : tokens.card,
+                      borderColor: pressed ? tokens.primary : tokens.border,
+                      borderRadius: tokens.radius.lg,
+                    },
+                  ]}
+                >
+                  {({ pressed }) => <Ionicons name="location-outline" size={16} color={pressed ? tokens.primaryForeground : tokens.foreground} />}
+                </Pressable>
+                {!formIsManual && !noScannerFound ? (
+                  // The one way to scan, from the very first SKU onward — the
+                  // dashed box below is just an instructional note before
+                  // anything's scanned, not a second trigger into the same
+                  // action.
+                  <Pressable
+                    onPress={() => setScannerOpen('sku')}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.headerScanBtn,
+                      {
+                        backgroundColor: pressed ? tokens.primary : tokens.muted,
+                        borderColor: pressed ? tokens.primary : tokens.border,
+                        borderRadius: tokens.radius.lg,
+                      },
+                    ]}
+                  >
+                    {({ pressed }) => <Ionicons name="qr-code-outline" size={16} color={pressed ? tokens.primaryForeground : tokens.foreground} />}
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
-
-            <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginBottom: 8 }}>
-              Selected Location Details
-            </Text>
-            <View style={styles.locDetailsBox}>
-              {(() => {
-                const bayForLoc = selectedLocObj ? rackObj.bays.find((b) => b.locations.some((l) => l.code === selectedLocObj.code)) : undefined;
-                const { level, position } = locLevelPosition(bayForLoc, selectedLocObj?.code);
-                return (
-                  <>
-                    <DetailRow label="Layout" value={layoutObj.name} tokens={tokens} />
-                    <DetailRow label="Rack" value={rackObj.code} tokens={tokens} />
-                    <DetailRow label="Bay" value={selectedLocObj ? bayCodeForLoc(selectedLocObj.code) : '—'} tokens={tokens} />
-                    <DetailRow label="Level" value={level ? `L${level}` : '—'} tokens={tokens} />
-                    <DetailRow label="Position" value={position ? `P${String(position).padStart(2, '0')}` : '—'} tokens={tokens} />
-                    <DetailRow label="Pallet" value={selectedLocObj ? palletIdFor(selectedLocObj) : '—'} tokens={tokens} />
-                  </>
-                );
-              })()}
-            </View>
-            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: 10, paddingBottom: 10 }}>
               {formIsManual && manualRaised && !manualReviewExpanded ? (
@@ -1261,28 +1369,6 @@ export function RackViewScreen() {
                 </Pressable>
               ) : (
                 <>
-                <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderWidth: 0, borderRadius: tokens.radius.xl }]}>
-                  <View style={[styles.fieldCardBody, { paddingHorizontal: 0, paddingVertical: 0 }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Is the pallet condition at this location good?</Text>
-                    <View style={styles.condGrid}>
-                      {([
-                        { label: 'Good', value: true },
-                        { label: 'Not Good', value: false },
-                      ] as const).map((opt) => {
-                        const selected = palletConditionGood === opt.value;
-                        return (
-                          <Pressable key={opt.label} onPress={() => handleSelectPalletCondition(opt.value)} style={styles.condChip}>
-                            <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
-                              {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
-                            </View>
-                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{opt.label}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                </View>
-
                 {noScannerFound ? (
                   <View style={[styles.noScannerRow, { backgroundColor: tokens.slate300, borderColor: tokens.mutedForeground, borderRadius: tokens.radius.lg }]}>
                     <Ionicons name="alert-circle" size={20} color={tokens.mutedForeground} />
@@ -1292,89 +1378,149 @@ export function RackViewScreen() {
                   </View>
                 ) : null}
 
-                {!scannedLine && !noScannerFound ? (
-                  // The one way into a scan — a dotted target, not a corner
-                  // icon, so it reads as "this is the thing to do next"
-                  // rather than a secondary action. Stretches to fill the
-                  // empty space below the location details instead of
-                  // leaving it blank, and explains itself below rather than
-                  // assuming the icon alone is self-evident.
-                  <>
-                    <Pressable
-                      onPress={() => setScannerOpen('sku')}
-                      style={[styles.scanDottedBox, { borderColor: tokens.mutedForeground, borderRadius: tokens.radius.xl }]}
-                    >
-                      <View style={[styles.scanDottedIconWrap, { backgroundColor: tokens.primary }]}>
-                        <Ionicons name="qr-code-outline" size={26} color={tokens.primaryForeground} />
-                      </View>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
-                    </Pressable>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center' }}>
-                      {formIsManual
-                        ? 'Scans the SKU code on this pallet so you can report what you actually found here.'
-                        : "Scans the SKU code on the pallet at this location, then checks it against what's expected here."}
-                    </Text>
-                  </>
+                {!noScannerFound && !formIsManual && scanLines.length === 0 ? (
+                  // Normal mode's only way to scan is the header icon — this
+                  // is just an info note pointing at it, not a second
+                  // trigger into the same action. A badge icon + heading +
+                  // supporting line reads more like guidance than a wall of
+                  // text in one paragraph.
+                  <View style={[styles.scanNoteBox, { backgroundColor: tokens.accentBlue.soft, borderColor: tokens.accentBlue.border, borderRadius: tokens.radius.xl }]}>
+                    <View style={[styles.scanNoteIconWrap, { backgroundColor: tokens.card, borderColor: tokens.accentBlue.border }]}>
+                      <Ionicons name="qr-code-outline" size={20} color={tokens.accentBlue.strong} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan to Continue</Text>
+                      <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, lineHeight: 17, marginTop: 3, opacity: 0.9 }}>
+                        Tap the scan icon above to scan the SKU.
+                      </Text>
+                    </View>
+                  </View>
                 ) : null}
 
-                {scannedLine ? (
-                  (() => {
-                    // Primary status is SKU identity only: Matched or
-                    // Misplaced. Quantity/condition issues only matter once
-                    // the SKU itself is right, so they render as smaller
-                    // secondary pills alongside "Matched", never in place of it.
-                    const primary = misplaced ? { label: 'Mismatch', rag: tokens.rag.red } : { label: 'Matched', rag: tokens.rag.green };
-                    const qtyMismatch = !misplaced && qtyChecked && scannedLine.qty !== expectedSku?.qty;
-                    const conditionFlagged = !misplaced && damageChecked && scannedLine.condition !== 'Good';
+                {!formIsManual && !noScannerFound ? (
+                  // Persistent running tally — visible from 00 through
+                  // however many SKUs have been scanned onto this pallet,
+                  // not just once the list actually has rows.
+                  <View style={styles.scanCountRow}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scanned SKUS:</Text>
+                    <View style={[styles.scanCountBadge, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
+                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{String(scanLines.length).padStart(2, '0')}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {!formIsManual && !noScannerFound && scanLines.length ? (
+                  // Every distinct SKU scanned onto this pallet so far, in
+                  // the order it was first scanned — a true accordion, one
+                  // open at a time: tapping a collapsed row expands it in
+                  // place into the full qty/damage/evidence/raise-issue
+                  // editor; tapping the open row (or a different one)
+                  // collapses it back to a summary line. Repeat scans of a
+                  // SKU already here don't add a new row, they bump that
+                  // row's own unit count.
+                  <View style={styles.scannedListWrap}>
+                    {scanLines.map((line, i) => {
+                      const isActive = i === activeLineIndex;
+                      // SKU identity only — same definition the "Sku
+                      // status" pill inside the expanded body uses — so the
+                      // collapsed row and the opened detail never disagree.
+                      const lineMatched = expectedSkus.some((e) => e.sku === line.sku);
+                      const lineRag = lineMatched ? tokens.rag.green : tokens.rag.red;
+                      return (
+                        <View key={`${line.sku}-${i}`}>
+                          <Pressable
+                            onPress={() => {
+                              setActiveLineIndex((prev) => (prev === i ? -1 : i));
+                              // Each line carries its own confirmed state —
+                              // switching to one only shows Matched/
+                              // Mismatched if it was actually confirmed.
+                              setQtyChecked(!!line.qtyConfirmed);
+                              setDamageChecked(!!line.damageConfirmed);
+                              setQtyEditing(false);
+                              setDamageEditing(false);
+                              setUnitSectionOpen(true);
+                              setDamageSectionOpen(true);
+                            }}
+                            style={[
+                              styles.scannedRow,
+                              { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: isActive ? 0 : tokens.radius.lg, borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg, borderBottomWidth: isActive ? 0 : 1 },
+                            ]}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
+                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{line.name}</Text>
+                            </View>
+                            <View style={[styles.editStatusPill, { backgroundColor: lineRag.soft, borderColor: lineRag.border, borderRadius: tokens.radius.lg }]}>
+                              <Text style={{ color: lineRag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{lineMatched ? 'Matched' : 'Mismatched'}</Text>
+                            </View>
+                            <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                          </Pressable>
+
+                          {isActive && scannedLine ? (
+                            <View style={[styles.accordionBody, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                              {(() => {
+                    // SKU identity status (Matched/Mismatched) is already
+                    // shown on the collapsed accordion row above — no need
+                    // to repeat it here as its own header.
                     const raised = issuesRaised.has(scannedLine.sku);
                     return (
                       <>
                         {!formIsManual ? (
-                          <>
-                            <View style={styles.statusPillRow}>
-                              <View style={[styles.editStatusPill, { backgroundColor: primary.rag.soft, borderColor: primary.rag.border, borderRadius: tokens.radius.lg }]}>
-                                <Text style={{ color: primary.rag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{primary.label}</Text>
-                              </View>
-                              {qtyMismatch ? (
-                                <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                                  <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Quantity Mismatch</Text>
+                          <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                            {expectedSkus.length <= 1 ? (
+                              // This location only ever expects one SKU —
+                              // pairing the scan against it is unambiguous,
+                              // so show the Expected/Scanned comparison.
+                              // Based on how many SKUs are EXPECTED here,
+                              // not how many have been scanned so far — a
+                              // multi-SKU pallet must look the same way
+                              // from its very first scan, not flip styles
+                              // once a second SKU shows up.
+                              <View style={[styles.fieldCardBody, { flexDirection: 'row', gap: 10 }]}>
+                                <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
+                                  {expectedSku ? (
+                                    <>
+                                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku.sku}</Text>
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
+                                    </>
+                                  ) : (
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
+                                  )}
                                 </View>
-                              ) : null}
-                              {conditionFlagged ? (
-                                <View style={[styles.editStatusPill, { backgroundColor: tokens.rag.amber.soft, borderColor: tokens.rag.amber.border, borderRadius: tokens.radius.lg }]}>
-                                  <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Damage Mismatch</Text>
+                                <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
+                                  {scannedLine ? (
+                                    <>
+                                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
+                                    </>
+                                  ) : (
+                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
+                                  )}
                                 </View>
-                              ) : null}
-                            </View>
-                            <View style={styles.compareRow}>
-                              <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
-                                {expectedSku ? (
-                                  <>
-                                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku.sku}</Text>
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>Qty {expectedSku.qty}</Text>
-                                  </>
-                                ) : (
-                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
-                                )}
                               </View>
-                              <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                            ) : (
+                              // This location expects more than one SKU —
+                              // the expected list can be in any order, so
+                              // there's no reliable way to pair a specific
+                              // expected entry to this specific scanned
+                              // line. Show only what was scanned; the row's
+                              // own Matched/Mismatch pill already says
+                              // whether it belongs.
+                              <View style={styles.fieldCardBody}>
                                 <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
                                 {scannedLine ? (
                                   <>
                                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
                                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                      Qty {qtyChecked ? scannedLine.qty : '-'} · {damageChecked ? scannedLine.condition : '-'}
-                                    </Text>
                                   </>
                                 ) : (
                                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
                                 )}
                               </View>
-                            </View>
-                          </>
+                            )}
+                          </View>
                         ) : null}
                         {misplaced ? (
                           // Wrong SKU is known the instant the scan resolves
@@ -1383,9 +1529,7 @@ export function RackViewScreen() {
                           <Pressable
                             disabled={raised}
                             onPress={() => {
-                              const next = scanLines.slice();
-                              next[0] = { ...next[0], issueRaised: true };
-                              setScanLines(next);
+                              updateCurrentLine({ issueRaised: true });
                               handleRaiseIssue(scannedLine.sku);
                             }}
                             style={[
@@ -1412,38 +1556,50 @@ export function RackViewScreen() {
                           // rather than a single combined subform.
                           <>
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                              <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 1: Quantity</Text>
-                                {!formIsManual && qtyChecked ? (
-                                  <View
-                                    style={[
-                                      styles.editStatusPill,
-                                      {
-                                        backgroundColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                        borderColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.border : tokens.rag.amber.border,
-                                        borderRadius: tokens.radius.lg,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={{
-                                        color: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
-                                        fontWeight: tokens.fontWeight.bold,
-                                        fontSize: tokens.text.xs,
-                                      }}
+                              <Pressable
+                                disabled={qtyChecked}
+                                onPress={() => setUnitSectionOpen((v) => !v)}
+                                style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: unitSectionOpen ? tokens.border : 'transparent', borderBottomWidth: unitSectionOpen ? 1 : 0 }]}
+                              >
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Sku Units</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  {!formIsManual && qtyChecked ? (
+                                    <View
+                                      style={[
+                                        styles.editStatusPill,
+                                        {
+                                          backgroundColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
+                                          borderColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.border : tokens.rag.amber.border,
+                                          borderRadius: tokens.radius.lg,
+                                        },
+                                      ]}
                                     >
-                                      {scannedLine.qty === expectedSku?.qty ? 'Matched' : 'Mismatched'}
-                                    </Text>
-                                  </View>
-                                ) : null}
-                              </View>
+                                      <Text
+                                        style={{
+                                          color: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
+                                          fontWeight: tokens.fontWeight.bold,
+                                          fontSize: tokens.text.xs,
+                                        }}
+                                      >
+                                        {scannedLine.qty === expectedSku?.qty ? 'Matched' : 'Mismatched'}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                  {!qtyChecked ? (
+                                    <View style={[styles.sectionToggle, { borderColor: tokens.border }]}>
+                                      <Ionicons name={unitSectionOpen ? 'remove' : 'add'} size={14} color={tokens.foreground} />
+                                    </View>
+                                  ) : null}
+                                </View>
+                              </Pressable>
+                              {unitSectionOpen ? (
                               <View style={styles.fieldCardBody}>
                                 {qtyEditing ? (
                                   <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                                     <TextInput
                                       value={qtyInputText}
                                       onChangeText={setQtyInputText}
-                                      placeholder="Quantity you found"
+                                      placeholder="Unit you found"
                                       keyboardType="number-pad"
                                       placeholderTextColor={tokens.slate400}
                                       autoFocus
@@ -1453,22 +1609,56 @@ export function RackViewScreen() {
                                       <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
                                     </Pressable>
                                   </View>
+                                ) : qtyChecked ? (
+                                  // Confirmed — same Expected/Scanned compare
+                                  // language as the Sku status card above, so
+                                  // a matched or mismatched unit count reads
+                                  // exactly the same way SKU identity does.
+                                  <View style={{ gap: 8 }}>
+                                    <View style={styles.compareRow}>
+                                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
+                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku ? expectedSku.qty : '—'}</Text>
+                                      </View>
+                                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Found</Text>
+                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.qty}</Text>
+                                      </View>
+                                    </View>
+                                    <Pressable
+                                      onPress={() => {
+                                        setQtyInputText(String(scannedLine.qty));
+                                        setQtyEditing(true);
+                                      }}
+                                      style={styles.fieldValueRow}
+                                    >
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Correct the found units</Text>
+                                      <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                        <Ionicons name="create-outline" size={14} color={tokens.primary} />
+                                      </View>
+                                    </Pressable>
+                                  </View>
                                 ) : (
                                   <Pressable
                                     onPress={() => {
-                                      setQtyInputText(qtyChecked ? String(scannedLine.qty) : '');
+                                      setQtyInputText('');
                                       setQtyEditing(true);
                                     }}
                                     style={styles.fieldValueRow}
                                   >
                                     <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
-                                      Qty found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{qtyChecked ? scannedLine.qty : '-'}</Text>
+                                      Unit found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>-</Text>
                                     </Text>
                                     <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
-                                      <Ionicons name={qtyChecked ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                      <Ionicons name="create-outline" size={14} color={tokens.primary} />
                                     </View>
                                   </Pressable>
                                 )}
+                                {!qtyChecked ? (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
+                                    Enter the units you actually found, then Confirm to see whether it matches what's expected.
+                                  </Text>
+                                ) : null}
                                 {(formIsManual ? qtyChecked : qtyChecked && scannedLine.qty !== expectedSku?.qty) ? (
                                   <Pressable
                                     disabled={!!scannedLine.qtyIssueRaised}
@@ -1484,7 +1674,7 @@ export function RackViewScreen() {
                                   >
                                     <Ionicons name={scannedLine.qtyIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
                                     <Text style={{ color: scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
-                                      {scannedLine.qtyIssueRaised ? 'Issue raised for quantity' : 'Raise Issue — quantity'}
+                                      {scannedLine.qtyIssueRaised ? 'Issue raised for unit' : 'Raise Issue — unit'}
                                     </Text>
                                   </Pressable>
                                 ) : null}
@@ -1506,11 +1696,17 @@ export function RackViewScreen() {
                                   onRemoveVideo={(i) => updateFieldEvidence('qtyEvidence', { videos: ensureFieldEvidence('qtyEvidence').videos.filter((_, ii) => ii !== i) })}
                                 />
                               </View>
+                              ) : null}
                             </View>
 
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                              <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border }]}>
-                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Issue For 2: Damage</Text>
+                              <Pressable
+                                disabled={damageChecked}
+                                onPress={() => setDamageSectionOpen((v) => !v)}
+                                style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: damageSectionOpen ? tokens.border : 'transparent', borderBottomWidth: damageSectionOpen ? 1 : 0 }]}
+                              >
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Sku Damage conditions</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 {damageChecked ? (
                                   <View
                                     style={[
@@ -1533,7 +1729,14 @@ export function RackViewScreen() {
                                     </Text>
                                   </View>
                                 ) : null}
-                              </View>
+                                {!damageChecked ? (
+                                  <View style={[styles.sectionToggle, { borderColor: tokens.border }]}>
+                                    <Ionicons name={damageSectionOpen ? 'remove' : 'add'} size={14} color={tokens.foreground} />
+                                  </View>
+                                ) : null}
+                                </View>
+                              </Pressable>
+                              {damageSectionOpen ? (
                               <View style={styles.fieldCardBody}>
                                 {damageEditing ? (
                                   <>
@@ -1594,28 +1797,59 @@ export function RackViewScreen() {
                                       <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
                                     </Pressable>
                                   </>
+                                ) : damageChecked ? (
+                                  // Confirmed — same Expected/Scanned compare
+                                  // language as the Sku status card above.
+                                  <View style={{ gap: 8 }}>
+                                    <View style={styles.compareRow}>
+                                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
+                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>Good</Text>
+                                      </View>
+                                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Found</Text>
+                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.observation ?? scannedLine.condition}</Text>
+                                        {scannedLine.activityPhase ? (
+                                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.activityPhase}</Text>
+                                        ) : null}
+                                      </View>
+                                    </View>
+                                    <Pressable
+                                      onPress={() => {
+                                        setDamagePhaseDraft(scannedLine.activityPhase ?? null);
+                                        setDamageObservationDraft(scannedLine.observation ?? null);
+                                        setDamageEditing(true);
+                                      }}
+                                      style={styles.fieldValueRow}
+                                    >
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Correct the condition found</Text>
+                                      <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
+                                        <Ionicons name="create-outline" size={14} color={tokens.primary} />
+                                      </View>
+                                    </Pressable>
+                                  </View>
                                 ) : (
                                   <Pressable
                                     onPress={() => {
-                                      setDamagePhaseDraft(damageChecked ? (scannedLine.activityPhase ?? null) : null);
-                                      setDamageObservationDraft(damageChecked ? (scannedLine.observation ?? null) : null);
+                                      setDamagePhaseDraft(null);
+                                      setDamageObservationDraft(null);
                                       setDamageEditing(true);
                                     }}
                                     style={styles.fieldValueRow}
                                   >
-                                    <View style={{ flex: 1 }}>
-                                      <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
-                                        Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>{damageChecked ? (scannedLine.observation ?? scannedLine.condition) : '-'}</Text>
-                                      </Text>
-                                      {damageChecked && scannedLine.activityPhase ? (
-                                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{scannedLine.activityPhase}</Text>
-                                      ) : null}
-                                    </View>
+                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
+                                      Damage found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>-</Text>
+                                    </Text>
                                     <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
-                                      <Ionicons name={damageChecked ? 'create-outline' : 'add'} size={14} color={tokens.primary} />
+                                      <Ionicons name="create-outline" size={14} color={tokens.primary} />
                                     </View>
                                   </Pressable>
                                 )}
+                                {!damageChecked ? (
+                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
+                                    Record what you actually found, then Confirm to see whether it matches what's expected.
+                                  </Text>
+                                ) : null}
                                 {damageChecked && scannedLine.condition !== 'Good' ? (
                                   <Pressable
                                     disabled={!!scannedLine.damageIssueRaised}
@@ -1653,13 +1887,61 @@ export function RackViewScreen() {
                                   onRemoveVideo={(i) => updateFieldEvidence('damageEvidence', { videos: ensureFieldEvidence('damageEvidence').videos.filter((_, ii) => ii !== i) })}
                                 />
                               </View>
+                              ) : null}
                             </View>
                           </>
                         )}
                       </>
                     );
-                  })()
+                              })()}
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
                 ) : null}
+
+                {!noScannerFound && formIsManual && !scannedLine ? (
+                  // Manual Mode has no header scan icon — this dashed box is
+                  // still its one way into a scan.
+                  <>
+                    <Pressable
+                      onPress={() => setScannerOpen('sku')}
+                      style={[styles.scanDottedBox, { borderColor: tokens.mutedForeground, borderRadius: tokens.radius.xl }]}
+                    >
+                      <View style={[styles.scanDottedIconWrap, { backgroundColor: tokens.primary }]}>
+                        <Ionicons name="qr-code-outline" size={26} color={tokens.primaryForeground} />
+                      </View>
+                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginTop: 10 }}>Tap to Scan SKU</Text>
+                    </Pressable>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, textAlign: 'center' }}>
+                      Scans the SKU code on this pallet so you can report what you actually found here.
+                    </Text>
+                  </>
+                ) : null}
+
+                <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderWidth: 0, borderRadius: tokens.radius.xl }]}>
+                  <View style={[styles.fieldCardBody, { paddingHorizontal: 0, paddingVertical: 0 }]}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Is the pallet condition at this location good?</Text>
+                    <View style={styles.condGrid}>
+                      {([
+                        { label: 'Good', value: true },
+                        { label: 'Not Good', value: false },
+                      ] as const).map((opt) => {
+                        const selected = palletConditionGood === opt.value;
+                        return (
+                          <Pressable key={opt.label} onPress={() => handleSelectPalletCondition(opt.value)} style={styles.condChip}>
+                            <View style={[styles.radioDot, { borderColor: selected ? tokens.primary : tokens.slate400 }]}>
+                              {selected ? <View style={[styles.radioDotFill, { backgroundColor: tokens.primary }]} /> : null}
+                            </View>
+                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs }}>{opt.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
                 </>
               )}
             </ScrollView>
@@ -1703,9 +1985,9 @@ export function RackViewScreen() {
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{noScannerFound ? 'Marked Empty' : 'Empty'}</Text>
                 </Pressable>
                 <Pressable
-                  disabled={!scannedLine && !noScannerFound}
+                  disabled={!scanLines.length && !noScannerFound}
                   onPress={handleScanNext}
-                  style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: scannedLine || noScannerFound ? 1 : 0.5 }]}
+                  style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: scanLines.length || noScannerFound ? 1 : 0.5 }]}
                 >
                   <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save & Scan Next</Text>
                 </Pressable>
@@ -1716,10 +1998,54 @@ export function RackViewScreen() {
         </View>
       </View>
 
+      <Modal visible={locationDetailsOpen} transparent animationType="fade" onRequestClose={() => setLocationDetailsOpen(false)}>
+        <Pressable style={[styles.dupBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setLocationDetailsOpen(false)}>
+          <Pressable style={[styles.locModalCard, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.locModalHead}>
+              <View style={[styles.locModalIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                <Ionicons name="location" size={20} color={tokens.accentBlue.strong} />
+              </View>
+              <Text style={{ flex: 1, color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Location Details</Text>
+              <Pressable onPress={() => setLocationDetailsOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={20} color={tokens.mutedForeground} />
+              </Pressable>
+            </View>
+
+            {(() => {
+              const bayForLoc = selectedLocObj ? rackObj.bays.find((b) => b.locations.some((l) => l.code === selectedLocObj.code)) : undefined;
+              const { level, position } = locLevelPosition(bayForLoc, selectedLocObj?.code);
+              return (
+                <>
+                  <View style={[styles.locModalHero, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      Pallet
+                    </Text>
+                    <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg, marginTop: 2 }}>
+                      {selectedLocObj ? palletIdFor(selectedLocObj) : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.locModalGrid}>
+                    <DetailRow label="Layout" value={layoutObj.name} tokens={tokens} />
+                    <DetailRow label="Rack" value={rackObj.code} tokens={tokens} />
+                    <DetailRow label="Bay" value={selectedLocObj ? bayCodeForLoc(selectedLocObj.code) : '—'} tokens={tokens} />
+                    <DetailRow label="Level" value={level ? `L${level}` : '—'} tokens={tokens} />
+                    <DetailRow label="Position" value={position ? `P${String(position).padStart(2, '0')}` : '—'} tokens={tokens} />
+                  </View>
+                </>
+              );
+            })()}
+
+            <Pressable onPress={() => setLocationDetailsOpen(false)} style={[styles.locModalCloseBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <BarcodeScannerModal
         visible={scannerOpen === 'sku'}
-        title="Scan SKU"
-        hint="Point at the SKU QR code on the pallet"
+        title={formIsManual ? 'Scan SKU' : 'Scan SKUs'}
+        hint={formIsManual ? 'Point at the SKU QR code on the pallet' : "Scan a box's code. Scan again (from the header icon) to add another SKU or another unit."}
         onScanned={(data) => {
           setScannerOpen(null);
           handleSkuScanned(data);
@@ -1730,6 +2056,40 @@ export function RackViewScreen() {
         }}
         onClose={() => setScannerOpen(null)}
       />
+
+      {/* Same Modal/backdrop/card language as Zone Audit's own "Already
+          Scanned" prompt — refuses the re-scan (same physical box's code,
+          not just the same SKU) instead of quietly counting it again, with
+          a one-tap way to retry with a different box. */}
+      <Modal visible={!!duplicateScanLabel} transparent animationType="fade" onRequestClose={() => setDuplicateScanLabel(null)}>
+        <Pressable style={[styles.dupBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setDuplicateScanLabel(null)}>
+          <Pressable style={[styles.dupCard, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.dupIconWrap, { backgroundColor: tokens.rag.amber.soft }]}>
+              <Ionicons name="alert-outline" size={22} color={tokens.rag.amber.strong} />
+            </View>
+            <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base, marginTop: 12 }}>
+              Already Scanned
+            </Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, lineHeight: 19, marginTop: 6, textAlign: 'center' }}>
+              This box has already been scanned onto this pallet.
+            </Text>
+            <View style={styles.dupActions}>
+              <Pressable onPress={() => setDuplicateScanLabel(null)} style={[styles.dupBtn, styles.dupOutlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setDuplicateScanLabel(null);
+                  setScannerOpen('sku');
+                }}
+                style={[styles.dupBtn, { backgroundColor: tokens.rag.amber.strong, borderRadius: tokens.radius.lg }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Again</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <NewAttachmentModal
         visible={attachmentTarget !== null}
         onClose={() => setAttachmentTarget(null)}
@@ -2033,8 +2393,8 @@ function ScanDirectionToolbar({
     // bottom — Card's overflow:hidden clips it cleanly to its rounded
     // corners rather than the bar floating inset inside the canvas frame.
     <View style={[dirToolbarStyles.row, { backgroundColor: '#F7F8FA', borderTopColor: tokens.border, marginHorizontal: -14, marginBottom: -14 }]}>
-      <DirToolbarBtn customIcon={<BarArrowIcon pointing="left" color={from === 'right' ? tokens.primary : tokens.foreground} />} label="Right" active={from === 'right'} onPress={() => onSetFrom('right')} />
-      <DirToolbarBtn customIcon={<BarArrowIcon pointing="right" color={from === 'left' ? tokens.primary : tokens.foreground} />} label="Left" active={from === 'left'} onPress={() => onSetFrom('left')} />
+      <DirToolbarBtn customIcon={<BarArrowIcon pointing="left" color={from === 'right' ? tokens.primary : tokens.foreground} />} label="Left" active={from === 'right'} onPress={() => onSetFrom('right')} />
+      <DirToolbarBtn customIcon={<BarArrowIcon pointing="right" color={from === 'left' ? tokens.primary : tokens.foreground} />} label="Right" active={from === 'left'} onPress={() => onSetFrom('left')} />
       <View style={[dirToolbarStyles.divider, { backgroundColor: tokens.border }]} />
       {patternButtons.map((b) => (
         <DirToolbarBtn
@@ -2161,6 +2521,12 @@ function DetailRow({ label, value, tokens }: { label: string; value: string; tok
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  dupBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  dupCard: { width: '100%', maxWidth: 340, padding: 20, alignItems: 'center' },
+  dupIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  dupActions: { flexDirection: 'row', gap: 10, marginTop: 20, width: '100%' },
+  dupBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
+  dupOutlineBtn: { borderWidth: 1 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   manualModeWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 6 },
   switchTrack: { width: 34, height: 20, borderRadius: 10 },
@@ -2207,12 +2573,28 @@ const styles = StyleSheet.create({
   // Full-bleed banded header, matching the canvas card's "Front View" head
   // row — negative margins escape the Card's own 16px padding just for
   // this row, rather than de-padding the whole panel.
-  skuPanelHead: { minHeight: 60, justifyContent: 'center', marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  skuPanelHead: { minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  headerScanBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
+  locModalCard: { width: '100%', maxWidth: 360, padding: 20 },
+  locModalHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  locModalIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  locModalHero: { padding: 14, marginBottom: 16 },
+  locModalGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 16 },
+  locModalCloseBtn: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
   detailRow: { flexBasis: '28%', flexGrow: 1 },
   scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
   scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  scannedListWrap: { gap: 8, marginBottom: 10 },
+  scannedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 10 },
+  unitBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  accordionBody: { borderWidth: 1, borderTopWidth: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, padding: 12, gap: 10 },
+  sectionToggle: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  scanNoteBox: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 14 },
+  scanCountRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  scanCountBadge: { paddingHorizontal: 12, paddingVertical: 4, minWidth: 34, alignItems: 'center' },
+  scanNoteIconWrap: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   compareRow: { flexDirection: 'row', gap: 10 },
   compareCol: { flex: 1, borderWidth: 1, padding: 12 },
   manualSummaryBox: { borderWidth: 1, padding: 14 },

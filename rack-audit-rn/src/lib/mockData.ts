@@ -567,7 +567,13 @@ function buildExpectedSkus(locationsMap: Record<string, AuditLocationsTree>): vo
   allLocationNodesInMap(locationsMap).forEach((loc, idx) => {
     const master = MASTER_INVENTORY[loc.code];
     if (!master) return;
-    const lineCount = idx % 5 === 0 ? 4 : idx % 3 === 0 ? 2 : 1;
+    // Ground level (L1) is where a real rack holds bulk/full pallets —
+    // physically bigger, so it's the one that plausibly carries several
+    // distinct SKUs stacked together. Every level above it is pick-face
+    // storage, one SKU per position, matching a smaller pallet's actual
+    // capacity. This is also what lets the Reconciliation Form's single-
+    // SKU vs multi-SKU layouts both be exercised predictably by location.
+    const lineCount = loc.level !== 1 ? 1 : idx % 5 === 0 ? 4 : idx % 3 === 0 ? 3 : 2;
     const lines: ExpectedSkuLine[] = [{ sku: master.sku, name: master.name, lot: master.lot, qty: master.qty }];
     for (let i = 1; i < lineCount; i++) {
       const extra = INVENTORY_POOL[(idx + i) % INVENTORY_POOL.length];
@@ -598,5 +604,31 @@ buildExpectedSkus(LOCATIONS);
     EXPECTED_SKUS[loc.code] = lines.map((line, j) =>
       line.sku === 'SKU-1001' ? { ...line, ...nonTargetPool[(i + j) % nonTargetPool.length] } : line,
     );
+  });
+}
+
+// User-requested concrete example: AUD-0231's Rack A-06 deliberately keeps
+// several SKUs at Level 10 and exactly one at Level 9, across every bay —
+// a known, reliable location to exercise the Reconciliation Form's
+// single-SKU vs multi-SKU layouts while testing, rather than depending on
+// wherever the generic every-Nth-location heuristic above happens to land.
+{
+  const rackA06 = LOCATIONS['AUD-0231'].layouts[0].racks.find((r) => r.code === 'A-06');
+  rackA06?.bays.forEach((bay) => {
+    bay.locations.forEach((loc, i) => {
+      const master = MASTER_INVENTORY[loc.code];
+      if (!master) return;
+      if (loc.level === 10) {
+        const lines: ExpectedSkuLine[] = [{ sku: master.sku, name: master.name, lot: master.lot, qty: master.qty }];
+        for (let k = 1; k < 3; k++) {
+          const extra = INVENTORY_POOL[(i + k) % INVENTORY_POOL.length];
+          if (lines.some((l) => l.sku === extra.sku)) continue;
+          lines.push({ sku: extra.sku, name: extra.name, lot: extra.lot, qty: 4 + ((i + k * 3) % 16) });
+        }
+        EXPECTED_SKUS[loc.code] = lines;
+      } else if (loc.level === 9) {
+        EXPECTED_SKUS[loc.code] = [{ sku: master.sku, name: master.name, lot: master.lot, qty: master.qty }];
+      }
+    });
   });
 }

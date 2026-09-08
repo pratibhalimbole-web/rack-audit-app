@@ -59,10 +59,10 @@ export type ScanFrom = 'left' | 'right';
 export type ScanPattern = 'first' | 'last';
 // Level progression within a bay: bottom(1)→top, or top→bottom(1).
 export type ScanVertical = 'up' | 'down';
-// 'bay' ("Bay's Level") — confined to whichever single bay the current
+// 'bay' ("Bay wise") — confined to whichever single bay the current
 // selection is in: level by level within that one bay only (Bay 1 → L1,
-// L2, L3…), never advancing into another bay on its own. 'rack' ("Bay
-// wise") — bay-major across the WHOLE rack instead: fully climb one bay
+// L2, L3…), never advancing into another bay on its own. 'rack' ("Bay's
+// Level") — bay-major across the WHOLE rack instead: fully climb one bay
 // (all its levels, snaking side to side) before moving to the next bay,
 // same as a real inspector/MHE walking over and clearing one whole bay
 // at a time instead of one elevation at a time.
@@ -104,7 +104,7 @@ export function buildScanOrder(
     return buildOneBayOrder(settings.from, settings.pattern, settings.vertical, current.rows).order;
   }
 
-  // 'rack' ("Bay wise") — bay-major: fully walk ONE bay (its own complete
+  // 'rack' ("Bay's Level") — bay-major: fully walk ONE bay (its own complete
   // vertical climb, snaking sides level-to-level exactly like scope 'bay')
   // before moving on to the next bay — matching how an inspector/MHE
   // actually works a rack physically: finish everything reachable in this

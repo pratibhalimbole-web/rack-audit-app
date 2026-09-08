@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
-import { Pill } from '@/components/Pill';
-import { flattenBays, fmtDate, priorityFor, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
+import { flattenBays, fmtDate, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { FLOOR_AREAS, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
@@ -68,7 +67,11 @@ export function AuditDetailsScreen() {
   const isSubmitted = ['Submitted', 'Reconciled', 'Closed'].includes(audit.status);
   const isFullyCounted = r.locTotal > 0 && r.locTotal === r.locDone;
   const showCompletedState = isSubmitted || isFullyCounted;
-  const startLabel = showCompletedState ? 'View Audit Summary' : audit.status === 'In Progress' ? 'Resume Audit' : 'Start Audit';
+  // Driven by real scan progress (has any location actually been counted
+  // yet), not the audit's own status field — a "Scheduled" audit the
+  // inspector already started scanning, or an "In Progress" one nothing's
+  // actually been recorded for yet, both read correctly this way.
+  const startLabel = showCompletedState ? 'View Audit Summary' : r.locDone > 0 ? 'Resume Audit' : 'Start Audit';
   // Coarser than every other scope_type — this audit is only ever worked
   // at the whole-zone grain, never drilled down to a specific bay, so the
   // usual bay-chip grid and Rack View entry point don't apply here at all.
@@ -103,9 +106,22 @@ export function AuditDetailsScreen() {
       return;
     }
     if (isTablet) {
-      const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
-      if (targetBay) {
-        onPressBay(targetBay, false);
+      // Resuming (something's already been scanned) jumps straight to the
+      // first still-pending bay, same as before. A genuinely fresh start
+      // opens the rack's canvas with nothing pre-picked at all — no bay
+      // filter, no pallet — so the inspector chooses where to begin
+      // themselves, from the dropdown or by tapping the canvas directly.
+      if (r.locDone > 0) {
+        const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
+        if (targetBay) {
+          onPressBay(targetBay, false);
+          return;
+        }
+      } else if (flatBays[0]) {
+        router.push({
+          pathname: '/audit/[auditId]/rack/[rackId]',
+          params: { auditId: audit.audit_id, rackId: flatBays[0].rack, layout: flatBays[0].layout },
+        } as never);
         return;
       }
     }
@@ -292,14 +308,9 @@ export function AuditDetailsScreen() {
           </View>
           <View style={styles.inspGrid}>
             <InspField label="Audit Type" value={audit.audit_type} />
-            <InspField label="Audit Date" value={fmtDate(audit.start_date)} />
+            <InspField label="Start Date" value={fmtDate(audit.start_date)} />
+            <InspField label="End Date" value={fmtDate(audit.end_date)} />
             <InspField label="Total Bay" value={String(r.bayTotal)} />
-            <View style={styles.inspFieldWrap}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 4 }}>
-                Priority
-              </Text>
-              <Pill label={priorityFor(audit)} tone={priorityFor(audit)} />
-            </View>
             <InspField label="Total Racks" value={String(totalRackCount)} />
             <InspField label="Total Locations" value={String(r.locTotal)} />
             <InspField label="Event Scope Type" value={audit.event_scope_type ?? 'Location Wise'} />
@@ -348,15 +359,6 @@ export function AuditDetailsScreen() {
           </View>
           {isZoneScope ? zoneBody : bayBody}
         </Card>
-
-        <Pressable
-          onPress={() => router.push({ pathname: '/audit/[auditId]/progress', params: { auditId: audit.audit_id } } as never)}
-          style={styles.linkBtn}
-        >
-          <Text style={{ color: tokens.primary, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-            View Reported Issues
-          </Text>
-        </Pressable>
       </ScrollView>
       <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
         <Pressable onPress={onPressStart} style={[styles.startBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
@@ -403,7 +405,6 @@ const styles = StyleSheet.create({
   accHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   accBadge: { paddingHorizontal: 10, paddingVertical: 4 },
   accIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  linkBtn: { paddingVertical: 6, alignItems: 'center' },
   footerBar: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth },
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48 },
 });
