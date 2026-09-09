@@ -18,5 +18,5 @@ export const NAV_ITEMS: NavItem[] = [
   // Ports the "Pallet" admin web's Maintenance board (UI reference
   // screenshot) down to the inspector's own assigned-task list — see
   // src/lib/maintenance.ts.
-  { key: 'maintenance', label: 'Maintenance', icon: 'maintenance' },
+  { key: 'maintenance', label: 'Completed Task', icon: 'maintenance' },
 ];

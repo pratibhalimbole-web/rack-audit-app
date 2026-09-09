@@ -14,7 +14,11 @@ import { Pill } from './Pill';
 // even (50/50) columns per row so their spacing scales with it. Total Bay
 // and Total Location are each one "done/total" ratio field rather than
 // three separate completed/pending/total fields.
-export function TodoCard({ audit, rollup }: { audit: Audit; rollup: Rollup }) {
+// hideStatus: the Completed Task screen (src/features/maintenance/
+// MaintenanceScreen.tsx) already implies every card here is done, so its
+// own "Task Status" pill is redundant there — only the Tasks board (mixed
+// due-date buckets, where status is the point) shows it.
+export function TodoCard({ audit, rollup, hideStatus }: { audit: Audit; rollup: Rollup; hideStatus?: boolean }) {
   const { tokens } = useTheme();
   const uis = uiStatus(audit);
   // Zone-scoped audits have no rack/bay breakdown (worked at the whole-zone
@@ -40,10 +44,12 @@ export function TodoCard({ audit, rollup }: { audit: Audit; rollup: Rollup }) {
       </Text>
       <View style={styles.fields}>
         <View style={styles.row}>
-          <Field label="Task Status">
-            <Pill label={uis} tone={uis} />
-          </Field>
-          <Field label="Task Type">
+          {!hideStatus ? (
+            <Field label="Task Status">
+              <Pill label={uis} tone={uis} />
+            </Field>
+          ) : null}
+          <Field label="Task Type" full={hideStatus}>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Audit</Text>
           </Field>
         </View>
@@ -81,10 +87,10 @@ function ratio(done: number, total: number): string {
   return `${String(done).padStart(2, '0')}/${String(total).padStart(2, '0')}`;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   const { tokens } = useTheme();
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, full ? styles.fieldFull : null]}>
       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 4 }}>{label}</Text>
       {children}
     </View>
@@ -105,6 +111,7 @@ const styles = StyleSheet.create({
   fields: { rowGap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
   field: { width: '48%' },
+  fieldFull: { width: '100%' },
   mono: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   chip: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2 },
 });

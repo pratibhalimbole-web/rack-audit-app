@@ -39,7 +39,7 @@ export function IssueDetailsScreen() {
   if (!f) {
     return (
       <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-        <AppHeader title="Reported Audit Details" showBack />
+        <AppHeader title="Issue Details" showBack />
         <View style={styles.loading}>
           <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>This item is no longer flagged.</Text>
         </View>
@@ -53,7 +53,7 @@ export function IssueDetailsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Reported Audit Details" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
+      <AppHeader title="Issue Details" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
       <ScrollView contentContainerStyle={styles.body}>
         <Card>
           <View style={styles.sectionLabelRow}>

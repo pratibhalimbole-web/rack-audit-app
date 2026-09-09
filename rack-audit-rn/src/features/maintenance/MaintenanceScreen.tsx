@@ -1,29 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
-import { Card } from '@/components/Card';
-import { useLocationsTreeMap } from '@/hooks/useLocationsTree';
+import { TodoCard } from '@/components/TodoCard';
+import { MaintenanceTodoCard } from '@/components/MaintenanceTodoCard';
+import { useAuditProgressMap, useLocationsTreeMap } from '@/hooks/useLocationsTree';
 import { mine } from '@/lib/auditLogic';
-import { buildMaintenanceTasks, maintenanceLocationLabel, type MaintenanceStatusColor, type MaintenanceTask } from '@/lib/maintenance';
-import type { Priority } from '@/lib/types';
+import { buildMaintenanceTasks } from '@/lib/maintenance';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
-const PRIORITIES: Priority[] = ['High', 'Medium', 'Low'];
-const STATUS_TOKEN: Record<MaintenanceStatusColor, 'red' | 'amber' | 'green'> = { Red: 'red', Amber: 'amber', Green: 'green' };
+const COMPLETED_AUDIT_STATUSES = ['Submitted', 'Reconciled', 'Closed'];
 
-type FilterCategory = 'priority' | 'location';
-const CATEGORY_LABEL: Record<FilterCategory, string> = { priority: 'Priority', location: 'Location Details' };
-type SortOrder = 'newest' | 'oldest';
-
-// Ports the "Pallet" admin web's Maintenance board (UI reference screenshot)
-// down to a field inspector's own assigned-task list — see src/lib/
-// maintenance.ts for how a card's action/status is derived from the same
-// findings Reported Audits already shows (Rules and Action defines the
-// action pool per discrepancy type; Action Board assigns one + a status to
-// each specific reported issue — this app has no admin surface for either,
-// so both are derived deterministically instead of user-editable here).
+// Same two-card-type board shape as Tasks (src/features/tasks/TasksBoard.tsx)
+// — Audit cards (TodoCard) and Maintenance/Field cards (MaintenanceTodoCard)
+// — but grouped under "Audits" / "Maintenance" headers instead of due-date
+// columns, and showing only what's actually done: completed audits
+// (Submitted/Reconciled/Closed) and closed maintenance follow-ups. The one
+// card-level difference from Tasks' own cards is the extra "Action Taken"
+// label on a closed Maintenance card (showActionTaken on MaintenanceTodoCard).
 export function MaintenanceScreen() {
   const { tokens } = useTheme();
   const { data: audits } = useAudits();
@@ -32,32 +27,22 @@ export function MaintenanceScreen() {
   const { map: treeMap, isLoading } = useLocationsTreeMap(candidateIds);
 
   const [search, setSearch] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [openCategory, setOpenCategory] = useState<FilterCategory | null>(null);
-  const [filterPriorities, setFilterPriorities] = useState<Priority[]>([]);
-  const [filterLocations, setFilterLocations] = useState<string[]>([]);
-  const [sortOpen, setSortOpen] = useState(false);
-  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+
+  const completedAudits = useMemo(() => candidates.filter((a) => COMPLETED_AUDIT_STATUSES.includes(a.status)), [candidates]);
+  const { map: progressMap } = useAuditProgressMap(completedAudits.map((a) => a.audit_id));
 
   const tasks = useMemo(() => buildMaintenanceTasks(candidates, treeMap), [candidates, treeMap]);
-  const openTasks = useMemo(() => tasks.filter((t) => t.boardStatus !== 'Closed'), [tasks]);
-  const locationOptions = useMemo(() => [...new Set(openTasks.map((t) => maintenanceLocationLabel(t)))].sort(), [openTasks]);
+  const completedMaintenance = useMemo(() => tasks.filter((t) => t.boardStatus === 'Closed'), [tasks]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return openTasks
-      // Closed tasks are considered resolved and tracked in the web
-      // (admin) app's Action Board — Maintenance only ever shows open work.
-      .filter((t) => !filterPriorities.length || filterPriorities.includes(t.priority))
-      .filter((t) => !filterLocations.length || filterLocations.includes(maintenanceLocationLabel(t)))
-      .filter((t) => !q || [t.sku, t.name, t.rack, t.locCode, t.action, t.issueType].join(' ').toLowerCase().includes(q))
-      .slice()
-      .sort((a, b) => (sortOrder === 'newest' ? b.dueDate.localeCompare(a.dueDate) : a.dueDate.localeCompare(b.dueDate)));
-  }, [openTasks, search, filterPriorities, filterLocations, sortOrder]);
-
-  const activeFilterCount = filterPriorities.length + filterLocations.length;
-  const toggleIn = <T,>(list: T[], value: T, setList: (v: T[]) => void) =>
-    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  const q = search.trim().toLowerCase();
+  const filteredAudits = useMemo(
+    () => completedAudits.filter((a) => !q || [a.audit_id, a.audit_name].join(' ').toLowerCase().includes(q)),
+    [completedAudits, q],
+  );
+  const filteredMaintenance = useMemo(
+    () => completedMaintenance.filter((t) => !q || [t.sku, t.name, t.rack, t.locCode, t.action, t.issueType].join(' ').toLowerCase().includes(q)),
+    [completedMaintenance, q],
+  );
 
   if (isLoading) {
     return (
@@ -69,221 +54,71 @@ export function MaintenanceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Maintenance" sub="Follow-up actions assigned to reported issues" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
+      <AppHeader title="Completed Task" sub="Completed audits and closed maintenance follow-ups" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
 
-      <View style={styles.toolbar}>
+      <View style={styles.searchWrap}>
         <View style={[styles.searchBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
           <Ionicons name="search" size={16} color="#667085" />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search SKU, rack, action..."
+            placeholder="Search audit, SKU, rack, action..."
             placeholderTextColor={tokens.slate400}
-            style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 8 }}
+            style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 10 }}
           />
         </View>
-        <View style={styles.toolbarIcons}>
-          <View>
-            <Pressable
-              onPress={() => {
-                setPickerOpen((o) => !o);
-                setOpenCategory(null);
-                setSortOpen(false);
-              }}
-              style={[styles.iconBtn, { backgroundColor: activeFilterCount || pickerOpen ? tokens.accentBlue.soft : tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
-            >
-              <Ionicons name="filter-outline" size={18} color={activeFilterCount || pickerOpen ? tokens.accentBlue.strong : tokens.foreground} />
-            </Pressable>
-
-            {pickerOpen ? (
-              <>
-                {openCategory ? (
-                  <View style={[styles.categoryPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>{CATEGORY_LABEL[openCategory]}</Text>
-                    <ScrollView style={{ maxHeight: 260 }}>
-                      {(openCategory === 'priority' ? PRIORITIES : locationOptions).map((opt) => {
-                        const checked = openCategory === 'priority' ? filterPriorities.includes(opt as Priority) : filterLocations.includes(opt);
-                        return (
-                          <Pressable
-                            key={opt}
-                            onPress={() =>
-                              openCategory === 'priority'
-                                ? toggleIn(filterPriorities, opt as Priority, setFilterPriorities)
-                                : toggleIn(filterLocations, opt, setFilterLocations)
-                            }
-                            style={styles.checklistRow}
-                          >
-                            <Checkbox checked={checked} />
-                            <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }} numberOfLines={1}>
-                              {opt}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                ) : null}
-
-                <View style={[styles.mainPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                  <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Filter By</Text>
-                  {(['priority', 'location'] as FilterCategory[]).map((cat) => (
-                    <Pressable key={cat} onPress={() => setOpenCategory(openCategory === cat ? null : cat)} style={styles.checklistRow}>
-                      <Text style={{ color: openCategory === cat ? tokens.primary : tokens.popoverForeground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold, flex: 1 }}>
-                        {CATEGORY_LABEL[cat]}
-                      </Text>
-                      <Ionicons name={openCategory === cat ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : null}
-          </View>
-
-          <View>
-            <Pressable
-              onPress={() => {
-                setSortOpen((o) => !o);
-                setPickerOpen(false);
-                setOpenCategory(null);
-              }}
-              style={[styles.iconBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
-            >
-              <Ionicons name="swap-vertical-outline" size={18} color={tokens.foreground} />
-            </Pressable>
-            {sortOpen ? (
-              <View style={[styles.sortDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                <Text style={[styles.panelTitle, { color: tokens.mutedForeground, borderBottomColor: tokens.border }]}>Sort by Due Date</Text>
-                {(['newest', 'oldest'] as SortOrder[]).map((order) => (
-                  <Pressable
-                    key={order}
-                    onPress={() => {
-                      setSortOrder(order);
-                      setSortOpen(false);
-                    }}
-                    style={styles.checklistRow}
-                  >
-                    <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1, textTransform: 'capitalize' }}>{order}</Text>
-                    {sortOrder === order ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
-        <View style={[styles.totalBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-          <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Total : {filtered.length}</Text>
+      <View style={styles.board}>
+        <View style={styles.column}>
+          <View style={[styles.columnHead, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Audits</Text>
+            <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.base }]}>
+              <Text style={{ color: tokens.card, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>
+                {String(filteredAudits.length).padStart(2, '0')}
+              </Text>
+            </View>
+          </View>
+          <ScrollView style={styles.columnBody} showsVerticalScrollIndicator={false}>
+            {filteredAudits.length ? (
+              filteredAudits.map((a) => <TodoCard key={a.audit_id} audit={a} rollup={progressMap[a.audit_id]?.rollup ?? EMPTY_ROLLUP} hideStatus />)
+            ) : (
+              <Text style={{ color: tokens.slate400, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 20 }}>Nothing here</Text>
+            )}
+          </ScrollView>
         </View>
 
-        {filtered.length ? (
-          <View style={{ gap: 12 }}>
-            {filtered.map((t) => (
-              <MaintenanceCard key={t.id} task={t} />
-            ))}
+        <View style={styles.column}>
+          <View style={[styles.columnHead, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Maintenance</Text>
+            <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.base }]}>
+              <Text style={{ color: tokens.card, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>
+                {String(filteredMaintenance.length).padStart(2, '0')}
+              </Text>
+            </View>
           </View>
-        ) : (
-          <View style={styles.empty}>
-            <Ionicons name="checkmark-circle-outline" size={28} color="#667085" />
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>No maintenance tasks</Text>
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Nothing matches these filters.</Text>
-          </View>
-        )}
-      </ScrollView>
+          <ScrollView style={styles.columnBody} showsVerticalScrollIndicator={false}>
+            {filteredMaintenance.length ? (
+              filteredMaintenance.map((t) => <MaintenanceTodoCard key={t.id} task={t} showActionTaken />)
+            ) : (
+              <Text style={{ color: tokens.slate400, fontSize: tokens.text.xs, textAlign: 'center', marginTop: 20 }}>Nothing here</Text>
+            )}
+          </ScrollView>
+        </View>
+      </View>
     </View>
   );
 }
 
-function Checkbox({ checked }: { checked: boolean }) {
-  const { tokens } = useTheme();
-  return (
-    <View
-      style={[
-        styles.checkbox,
-        { borderRadius: tokens.radius.sm, borderColor: checked ? tokens.primary : tokens.border, backgroundColor: checked ? tokens.primary : 'transparent' },
-      ]}
-    >
-      {checked ? <Ionicons name="checkmark" size={13} color={tokens.primaryForeground} /> : null}
-    </View>
-  );
-}
-
-function fmtDue(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-}
-
-function MaintenanceField({ label, value }: { label: string; value: string }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={{ width: '50%', marginBottom: 12 }}>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 2 }}>{label}</Text>
-      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function MaintenanceCard({ task }: { task: MaintenanceTask }) {
-  const { tokens } = useTheme();
-  const ragKey = STATUS_TOKEN[task.statusColor];
-  const priorityRag = task.priority === 'High' ? 'red' : task.priority === 'Medium' ? 'amber' : 'green';
-  return (
-    <Card style={{ padding: 0, overflow: 'hidden' }}>
-      <View style={[styles.cardHead, { backgroundColor: tokens.muted, borderBottomColor: tokens.border }]}>
-        <View style={styles.cardHeadLeft}>
-          <Ionicons name="calendar-outline" size={14} color={tokens.mutedForeground} />
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>Due Date :</Text>
-          <Text style={{ color: tokens.foreground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{fmtDue(task.dueDate)}</Text>
-        </View>
-        <View style={[styles.statusPill, { backgroundColor: tokens.rag[ragKey].soft, borderColor: tokens.rag[ragKey].border }]}>
-          <Text style={{ color: tokens.rag[ragKey].strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{task.boardStatus}</Text>
-        </View>
-      </View>
-      <View style={{ padding: 14 }}>
-        <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 8 }} numberOfLines={1}>
-          {task.auditId} · {task.auditName}
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <MaintenanceField label="Issue Type" value={task.issueType} />
-          <MaintenanceField label="SKU" value={task.sku} />
-          <MaintenanceField label="Rack Name" value={task.rack} />
-          <MaintenanceField label="Action" value={task.action} />
-        </View>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 2 }}>Location</Text>
-        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm, marginBottom: 12 }} numberOfLines={1}>
-          {maintenanceLocationLabel(task)}
-        </Text>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginBottom: 4 }}>Priority</Text>
-        <View style={[styles.priorityBadge, { backgroundColor: tokens.rag[priorityRag].soft, borderColor: tokens.rag[priorityRag].border }]}>
-          <View style={[styles.priorityDot, { backgroundColor: tokens.rag[priorityRag].strong }]} />
-          <Text style={{ color: tokens.rag[priorityRag].strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>{task.priority}</Text>
-        </View>
-      </View>
-    </Card>
-  );
-}
+const EMPTY_ROLLUP = { rackDone: 0, rackTotal: 0, bayDone: 0, bayTotal: 0, locDone: 0, locTotal: 0 };
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, zIndex: 30 },
-  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
-  toolbarIcons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  mainPanel: { position: 'absolute', top: 44, right: 0, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
-  categoryPanel: { position: 'absolute', top: 44, right: 212, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
-  sortDropdown: { position: 'absolute', top: 44, right: 0, width: 180, borderWidth: 1, padding: 10, zIndex: 21 },
-  panelTitle: { fontSize: 12, fontWeight: '700', paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1 },
-  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 2 },
-  checkbox: { width: 18, height: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  body: { padding: 16, paddingTop: 4, paddingBottom: 40 },
-  totalBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14 },
-  empty: { alignItems: 'center', gap: 6, paddingVertical: 40 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  cardHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
-  statusPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  priorityBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  priorityDot: { width: 6, height: 6, borderRadius: 3 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
+  board: { flex: 1, flexDirection: 'row', padding: 16, gap: 12 },
+  column: { flex: 1 },
+  columnHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
+  countBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
+  columnBody: { flex: 1 },
 });

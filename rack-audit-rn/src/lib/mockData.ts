@@ -611,6 +611,26 @@ function buildExpectedSkus(locationsMap: Record<string, AuditLocationsTree>): vo
 }
 buildExpectedSkus(LOCATIONS);
 
+// Give AUD-0234 (SKU Wise, otherwise deliberately untouched) one genuine
+// flagged discrepancy so the Tasks board's Maintenance card type actually
+// has a real example to show — previously the only flagged issue in the
+// whole dataset (AUD-0225's pallet P-1202) happened to hash to a Closed
+// board status, so buildMaintenanceTasks' openMaintenanceTasks filter
+// dropped it and no Maintenance card ever rendered anywhere. This is a
+// `saved` pallet only (not loc.status), so it doesn't affect AUD-0234's
+// rollup/"Start Audit" freshness at all.
+{
+  const flaggedLoc = LOCATIONS['AUD-0234'].layouts[0].racks[0].bays[0].locations[0];
+  const expected = EXPECTED_SKUS[flaggedLoc.code]?.[0];
+  if (expected) {
+    flaggedLoc.pallets.push({
+      pallet: 'P-30401',
+      lines: [{ sku: expected.sku, name: expected.name, lot: expected.lot, qty: expected.qty, condition: 'Damaged' }],
+      saved: true,
+    });
+  }
+}
+
 // buildExpectedSkus can independently pick SKU-1001 as one of a location's
 // *secondary* expected lines (it cycles through the same INVENTORY_POOL,
 // which includes SKU-1001) even after the primary-pallet scrub above — so
