@@ -78,10 +78,10 @@ export function IssueDetailsScreen() {
               </Text>
             </View>
             <View style={[styles.assignedBox, { borderColor: tokens.accentBlue.base, backgroundColor: tokens.accentBlue.soft }]}>
-              <Field label="Assigned Action" value={maintTask.action} />
-              <Field label="Assigned To" value={INSPECTOR.name} />
-              <Field label="Assigned Date & Time" value={fmtDate(maintTask.dueDate)} />
-              <Field label="Comments" value="NA" />
+              <Field label="Assigned Action" value={maintTask.action} quarter />
+              <Field label="Assigned To" value={INSPECTOR.name} quarter />
+              <Field label="Assigned Date & Time" value={fmtDate(maintTask.dueDate)} quarter />
+              <Field label="Comments" value="NA" quarter />
             </View>
           </View>
         ) : null}
@@ -189,10 +189,22 @@ function EvidenceGroupHead({ icon, label, count }: { icon: keyof typeof Ionicons
   );
 }
 
-function Field({ label, value, mono, children }: { label: string; value?: string; mono?: boolean; children?: React.ReactNode }) {
+function Field({
+  label,
+  value,
+  mono,
+  children,
+  quarter,
+}: {
+  label: string;
+  value?: string;
+  mono?: boolean;
+  children?: React.ReactNode;
+  quarter?: boolean;
+}) {
   const { tokens } = useTheme();
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, quarter ? styles.fieldQuarter : null]}>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 4 }}>{label}</Text>
       {children ?? (
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, fontFamily: mono ? 'Inter_500Medium' : undefined }}>{value}</Text>
@@ -214,6 +226,7 @@ const styles = StyleSheet.create({
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   field: { width: '50%', marginBottom: 14 },
+  fieldQuarter: { width: '25%', marginBottom: 0 },
   audioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
   waveform: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2, height: 24 },
   waveBar: { width: 2, borderRadius: 1 },
