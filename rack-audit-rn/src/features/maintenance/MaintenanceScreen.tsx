@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { TodoCard } from '@/components/TodoCard';
 import { MaintenanceTodoCard } from '@/components/MaintenanceTodoCard';
@@ -19,8 +20,20 @@ const COMPLETED_AUDIT_STATUSES = ['Submitted', 'Reconciled', 'Closed'];
 // (Submitted/Reconciled/Closed) and closed maintenance follow-ups. The one
 // card-level difference from Tasks' own cards is the extra "Action Taken"
 // label on a closed Maintenance card (showActionTaken on MaintenanceTodoCard).
+// Tasks (TasksBoard.tsx) lays 4 due-date columns across the same board
+// padding/gap — this screen only has 2 (Audits/Maintenance), so letting
+// them flex:1 the same way would render noticeably wider cards. Pin each
+// column to the same width a Tasks column actually gets instead, so a card
+// here reads as the same size as its Tasks counterpart rather than a
+// stretched-out version of it.
+const BOARD_PADDING = 16;
+const BOARD_GAP = 12;
+const TASKS_BOARD_COLUMNS = 4;
+
 export function MaintenanceScreen() {
   const { tokens } = useTheme();
+  const { width: winWidth } = useWindowDimensions();
+  const columnWidth = (winWidth - BOARD_PADDING * 2 - BOARD_GAP * (TASKS_BOARD_COLUMNS - 1)) / TASKS_BOARD_COLUMNS;
   const { data: audits } = useAudits();
   const candidates = useMemo(() => (audits ? mine(audits) : []), [audits]);
   const candidateIds = useMemo(() => candidates.map((a) => a.audit_id), [candidates]);
@@ -70,7 +83,7 @@ export function MaintenanceScreen() {
       </View>
 
       <View style={styles.board}>
-        <View style={styles.column}>
+        <View style={[styles.column, { width: columnWidth }]}>
           <View style={[styles.columnHead, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
             <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Audits</Text>
             <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.base }]}>
@@ -88,7 +101,7 @@ export function MaintenanceScreen() {
           </ScrollView>
         </View>
 
-        <View style={styles.column}>
+        <View style={[styles.column, { width: columnWidth }]}>
           <View style={[styles.columnHead, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
             <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Maintenance</Text>
             <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.base }]}>
@@ -106,6 +119,17 @@ export function MaintenanceScreen() {
           </ScrollView>
         </View>
       </View>
+      <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
+        <Pressable onPress={() => router.back()} style={[styles.footerBtn, styles.cancelBtn, { borderColor: tokens.border }]}>
+          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.footerBtn, { flex: 1.4, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+        >
+          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Complete Task</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -117,8 +141,11 @@ const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
   board: { flex: 1, flexDirection: 'row', padding: 16, gap: 12 },
-  column: { flex: 1 },
+  column: {},
   columnHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
   countBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   columnBody: { flex: 1 },
+  footerBar: { flexDirection: 'row', gap: 12, padding: 16, borderTopWidth: StyleSheet.hairlineWidth },
+  footerBtn: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { borderWidth: 1, borderRadius: 12 },
 });
