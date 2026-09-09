@@ -105,6 +105,12 @@ export type CountLine = {
   // pallet can now hold several scanned lines, each at its own stage.
   qtyConfirmed?: boolean;
   damageConfirmed?: boolean;
+  // One Inventory Unit ID per physical box scanned onto this line — the
+  // same concept the admin "Pallet" tool's Add Inventory flow uses (every
+  // unit gets its own ID at placement time). A pallet with 6 boxes of the
+  // same SKU is one CountLine with 6 IDs here, qty === unitIds.length;
+  // this is what actually backs the unit count, not just a running number.
+  unitIds?: string[];
   // Damage's own cascading detail: which phase of the pallet's lifecycle the
   // damage relates to, and what was actually observed — the Observation
   // options offered depend on which Activity Phase is selected.

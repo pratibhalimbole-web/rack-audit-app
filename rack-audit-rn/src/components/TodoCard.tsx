@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { fmtDate, priorityFor, uiStatus } from '@/lib/auditLogic';
+import { fmtDate, uiStatus } from '@/lib/auditLogic';
 import type { Audit } from '@/lib/types';
 import type { Rollup } from '@/lib/auditLogic';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -16,7 +16,6 @@ import { Pill } from './Pill';
 export function TodoCard({ audit, rollup }: { audit: Audit; rollup: Rollup }) {
   const { tokens } = useTheme();
   const uis = uiStatus(audit);
-  const priority = priorityFor(audit);
 
   return (
     <Pressable
@@ -34,22 +33,27 @@ export function TodoCard({ audit, rollup }: { audit: Audit; rollup: Rollup }) {
           <Field label="Task Status">
             <Pill label={uis} tone={uis} />
           </Field>
-          <Field label="Priority">
-            <Pill label={priority} tone={priority} />
+          <Field label="Task Type">
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Audit</Text>
           </Field>
         </View>
         <View style={styles.row}>
-          <Field label="Audit Date">
+          <Field label="Start Date">
             <Text style={[styles.mono, { color: tokens.foreground }]}>{fmtDate(audit.start_date)}</Text>
           </Field>
+          <Field label="End Date">
+            <Text style={[styles.mono, { color: tokens.foreground }]}>{fmtDate(audit.end_date)}</Text>
+          </Field>
+        </View>
+        <View style={styles.row}>
           <Field label="No. of Racks">
             <NumChip value={rollup.rackTotal} />
           </Field>
-        </View>
-        <View style={styles.row}>
           <Field label="Total Bay">
             <NumChip value={ratio(rollup.bayDone, rollup.bayTotal)} />
           </Field>
+        </View>
+        <View style={styles.row}>
           <Field label="Total Location">
             <NumChip value={ratio(rollup.locDone, rollup.locTotal)} />
           </Field>

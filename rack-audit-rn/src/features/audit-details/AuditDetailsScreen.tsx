@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
-import { flattenBays, fmtDate, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
+import { flattenBays, fmtDate, lastSaved, nextPending, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { FLOOR_AREAS, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
@@ -106,12 +106,22 @@ export function AuditDetailsScreen() {
       return;
     }
     if (isTablet) {
-      // Resuming (something's already been scanned) jumps straight to the
-      // first still-pending bay, same as before. A genuinely fresh start
-      // opens the rack's canvas with nothing pre-picked at all — no bay
-      // filter, no pallet — so the inspector chooses where to begin
-      // themselves, from the dropdown or by tapping the canvas directly.
+      // Resuming (something's already been scanned) preselects a real
+      // pallet in the dropdown, not just a bay filter — the same pallet
+      // already scanned/saved most recently if there is one, or the
+      // nearest still-pending one otherwise. A genuinely fresh start opens
+      // the rack's canvas with nothing pre-picked at all — no bay filter,
+      // no pallet — so the inspector chooses where to begin themselves,
+      // from the dropdown or by tapping the canvas directly.
       if (r.locDone > 0) {
+        const resumeEntry = lastSaved(tree) ?? nextPending(tree);
+        if (resumeEntry) {
+          router.push({
+            pathname: '/audit/[auditId]/rack/[rackId]',
+            params: { auditId: audit.audit_id, rackId: resumeEntry.rack, layout: resumeEntry.layout, bay: resumeEntry.bay, loc: resumeEntry.loc.code },
+          } as never);
+          return;
+        }
         const targetBay = flatBays.find((b) => !b.done) ?? flatBays[0];
         if (targetBay) {
           onPressBay(targetBay, false);
@@ -307,14 +317,10 @@ export function AuditDetailsScreen() {
             </Text>
           </View>
           <View style={styles.inspGrid}>
-            <InspField label="Audit Type" value={audit.audit_type} />
+            <InspField label="Event Name" value={audit.audit_name} />
+            <InspField label="Event Scope Type" value={audit.event_scope_type ?? 'Location Wise'} />
             <InspField label="Start Date" value={fmtDate(audit.start_date)} />
             <InspField label="End Date" value={fmtDate(audit.end_date)} />
-            <InspField label="Total Bay" value={String(r.bayTotal)} />
-            <InspField label="Total Racks" value={String(totalRackCount)} />
-            <InspField label="Total Locations" value={String(r.locTotal)} />
-            <InspField label="Event Scope Type" value={audit.event_scope_type ?? 'Location Wise'} />
-            <InspField label="Work Scope" value={audit.work_scope?.length ? audit.work_scope.join(', ') : 'Not selected'} />
             {(audit.event_scope_type ?? 'Location Wise') === 'Location Wise' ? (
               <>
                 <InspField label="Scope Type" value={audit.scope_type} />
@@ -326,6 +332,7 @@ export function AuditDetailsScreen() {
                 <InspField label="Batch / Lot" value={audit.batch_lot ?? 'All batches'} />
               </>
             ) : null}
+            <InspField label="Work Scope" value={audit.work_scope?.length ? audit.work_scope.join(', ') : 'Not selected'} />
           </View>
         </Card>
 

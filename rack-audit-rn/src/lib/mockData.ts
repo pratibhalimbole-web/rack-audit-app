@@ -284,6 +284,15 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
 LOCATIONS['AUD-0231'].layouts[0].racks[0].bays[1].locations[2].pallets = [
   { pallet: 'P-10481', lines: [{ sku: 'SKU-1042', name: 'Steel Bracket 90', lot: 'L-2291', qty: 46, condition: 'Good' }], saved: true },
 ];
+// A bay only reads as "done" once EVERY one of its locations (all 13
+// levels, not just the 3 hand-seeded level-1 slots above) is Completed —
+// fillBayLevels leaves the rest 'Not Started' by default, so no bay was
+// ever actually fully done despite level 1 looking finished. Rack A-05's
+// Bay B-01 is deliberately the one real completed bay for this audit, so
+// Audit Details/Dashboard have a genuine "1 of N bays done" case to show.
+LOCATIONS['AUD-0231'].layouts[0].racks[0].bays[0].locations.forEach((loc) => {
+  loc.status = 'Completed';
+});
 LOCATIONS['AUD-0225'].layouts[0].racks[0].bays[0].locations[0].pallets.push({
   pallet: 'P-20011',
   lines: [

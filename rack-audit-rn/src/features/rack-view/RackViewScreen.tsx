@@ -810,7 +810,7 @@ export function RackViewScreen() {
         // The tally just changed, so whatever was previously entered as
         // "found units" is stale — back to unconfirmed until the inspector
         // re-enters it.
-        next[idx] = { ...next[idx], qty: next[idx].qty + 1, qtyConfirmed: false };
+        next[idx] = { ...next[idx], qty: next[idx].qty + 1, qtyConfirmed: false, unitIds: [...(next[idx].unitIds ?? []), labelPart] };
         landedIndex = idx;
       } else {
         const line: CountLine = {
@@ -823,6 +823,7 @@ export function RackViewScreen() {
           // Carries forward whatever was already answered before this scan —
           // the pallet condition question doesn't depend on the SKU scan.
           palletConditionGood: palletConditionGood ?? undefined,
+          unitIds: [labelPart],
         };
         next = [...prev, line];
         landedIndex = next.length - 1;
@@ -1494,6 +1495,11 @@ export function RackViewScreen() {
                                     <>
                                       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
                                       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
+                                      {scannedLine.unitIds?.length ? (
+                                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
+                                          Unit IDs: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
+                                        </Text>
+                                      ) : null}
                                     </>
                                   ) : (
                                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
@@ -1514,6 +1520,11 @@ export function RackViewScreen() {
                                   <>
                                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
                                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
+                                    {scannedLine.unitIds?.length ? (
+                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
+                                        Unit IDs: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
+                                      </Text>
+                                    ) : null}
                                   </>
                                 ) : (
                                   <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
@@ -2034,10 +2045,6 @@ export function RackViewScreen() {
                 </>
               );
             })()}
-
-            <Pressable onPress={() => setLocationDetailsOpen(false)} style={[styles.locModalCloseBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Close</Text>
-            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2576,14 +2583,18 @@ const styles = StyleSheet.create({
   skuPanelHead: { minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   headerScanBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
-  locModalCard: { width: '100%', maxWidth: 360, padding: 20 },
-  locModalHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  locModalIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  locModalHero: { padding: 14, marginBottom: 16 },
-  locModalGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 16 },
-  locModalCloseBtn: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  locModalCard: { width: '100%', maxWidth: 440, padding: 26 },
+  locModalHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  locModalIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  locModalHero: { padding: 16, marginBottom: 20 },
+  locModalGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 10 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
-  detailRow: { flexBasis: '28%', flexGrow: 1 },
+  // Fixed width (no flexGrow) — a lone item on the last row must NOT
+  // stretch to fill the leftover space, or it renders far wider than every
+  // other field above it (this is what made Level/Position look so
+  // mismatched: Position was alone on its row and stretching almost to the
+  // full card width).
+  detailRow: { width: '45%' },
   scanDottedBox: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', paddingVertical: 32, marginBottom: 10 },
   scanDottedIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   scannedListWrap: { gap: 8, marginBottom: 10 },
