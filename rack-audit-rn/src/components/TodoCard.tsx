@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fmtDate, uiStatus } from '@/lib/auditLogic';
+import { ZONE_EXPECTED_SKUS } from '@/lib/mockData';
 import type { Audit } from '@/lib/types';
 import type { Rollup } from '@/lib/auditLogic';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -16,6 +17,15 @@ import { Pill } from './Pill';
 export function TodoCard({ audit, rollup }: { audit: Audit; rollup: Rollup }) {
   const { tokens } = useTheme();
   const uis = uiStatus(audit);
+  // Zone-scoped audits have no rack/bay breakdown (worked at the whole-zone
+  // grain, same as Audit Details) — "Total Bay" would just read 00/00, so
+  // this shows how many zones are in scope instead.
+  const isZoneScope = audit.scope_type === 'Zone';
+  // Distinct SKUs across this audit's zones' own pick lists — same source
+  // Zone Scan itself checks scans against.
+  const zoneSkuCount = isZoneScope
+    ? new Set(audit.scope_values.flatMap((z) => (ZONE_EXPECTED_SKUS[z] ?? []).map((s) => s.sku))).size
+    : 0;
 
   return (
     <Pressable
@@ -46,16 +56,18 @@ export function TodoCard({ audit, rollup }: { audit: Audit; rollup: Rollup }) {
           </Field>
         </View>
         <View style={styles.row}>
-          <Field label="No. of Racks">
-            <NumChip value={rollup.rackTotal} />
-          </Field>
-          <Field label="Total Bay">
-            <NumChip value={ratio(rollup.bayDone, rollup.bayTotal)} />
+          {!isZoneScope ? (
+            <Field label="No. of Racks">
+              <NumChip value={rollup.rackTotal} />
+            </Field>
+          ) : null}
+          <Field label={isZoneScope ? 'Total Zone' : 'Total Bay'}>
+            {isZoneScope ? <NumChip value={audit.scope_values.length} /> : <NumChip value={ratio(rollup.bayDone, rollup.bayTotal)} />}
           </Field>
         </View>
         <View style={styles.row}>
-          <Field label="Total Location">
-            <NumChip value={ratio(rollup.locDone, rollup.locTotal)} />
+          <Field label={isZoneScope ? 'No. of SKUs' : 'Total Location'}>
+            {isZoneScope ? <NumChip value={zoneSkuCount} /> : <NumChip value={ratio(rollup.locDone, rollup.locTotal)} />}
           </Field>
         </View>
       </View>
