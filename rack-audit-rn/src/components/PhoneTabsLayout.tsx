@@ -101,7 +101,7 @@ export default function PhoneTabsLayout() {
       <Tabs.Screen name="audit/[auditId]/rack/[rackId]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/zone-map" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="tasks/map" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="audit/[auditId]/issue/[lineId]" options={{ href: null }} />
+      <Tabs.Screen name="audit/[auditId]/issue/[lineId]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/discrepancy/[key]" options={{ href: null }} />
     </Tabs>
   );

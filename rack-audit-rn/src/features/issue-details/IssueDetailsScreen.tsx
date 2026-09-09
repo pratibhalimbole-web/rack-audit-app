@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
-import { summaryStats } from '@/lib/auditLogic';
+import { fmtDate, summaryStats } from '@/lib/auditLogic';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
+import { buildMaintenanceTasks } from '@/lib/maintenance';
+import { INSPECTOR } from '@/lib/mockData';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
@@ -51,10 +53,38 @@ export function IssueDetailsScreen() {
   const images = ev?.images ?? [];
   const videos = ev?.videos ?? [];
 
+  // Same identity this flagged line's own MaintenanceTask carries (see
+  // maintenance.ts's taskFromScoped/taskFromManual) — re-derived rather
+  // than passed through nav params, same reasoning as `f` above. Not every
+  // flagged line has a Maintenance follow-up (e.g. one that never made
+  // scopedIssues'/summaryStats' Maintenance-eligible cut), so this box only
+  // renders when a real assignment actually exists.
+  const maintTask = buildMaintenanceTasks(audit ? [audit] : [], { [audit.audit_id]: tree }).find(
+    (t) => t.layout === f.layout && t.rack === f.rack && t.bay === f.bay && t.locCode === f.locCode && t.pallet === f.pallet && t.sku === f.sku,
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader title="Issue Details" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
       <ScrollView contentContainerStyle={styles.body}>
+        {maintTask ? (
+          <View style={styles.assignedWrap}>
+            <View style={styles.assignedByRow}>
+              <View style={[styles.assignedByIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                <Ionicons name="calendar-outline" size={14} color={tokens.accentBlue.base} />
+              </View>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
+                Assigned By: {INSPECTOR.name}
+              </Text>
+            </View>
+            <View style={[styles.assignedBox, { borderColor: tokens.accentBlue.base, backgroundColor: tokens.accentBlue.soft }]}>
+              <Field label="Assigned Action" value={maintTask.action} />
+              <Field label="Assigned To" value={INSPECTOR.name} />
+              <Field label="Assigned Date & Time" value={fmtDate(maintTask.dueDate)} />
+              <Field label="Comments" value="NA" />
+            </View>
+          </View>
+        ) : null}
         <Card>
           <View style={styles.sectionLabelRow}>
             <Ionicons name="search-outline" size={16} color={tokens.foreground} />
@@ -127,6 +157,19 @@ export function IssueDetailsScreen() {
           )}
         </Card>
       </ScrollView>
+      {maintTask ? (
+        <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
+          <Pressable onPress={() => router.back()} style={[styles.footerBtn, styles.cancelBtn, { borderColor: tokens.border }]}>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.back()}
+            style={[styles.footerBtn, { flex: 1.4, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+          >
+            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Complete Task</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -161,6 +204,13 @@ function Field({ label, value, mono, children }: { label: string; value?: string
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 16, gap: 14, paddingBottom: 40 },
+  assignedWrap: { gap: 10 },
+  assignedByRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  assignedByIconWrap: { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  assignedBox: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 14 },
+  footerBar: { flexDirection: 'row', gap: 12, padding: 16, borderTopWidth: StyleSheet.hairlineWidth },
+  footerBtn: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { borderWidth: 1, borderRadius: 12 },
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   field: { width: '50%', marginBottom: 14 },
