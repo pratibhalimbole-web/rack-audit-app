@@ -70,10 +70,13 @@ export const AUDITS: Audit[] = [
     event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
-    audit_id: 'AUD-0234', audit_name: 'Cycle — Fast Movers, Layout B', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
+    audit_id: 'AUD-0234', audit_name: 'skus wise check', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
     start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
-    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+    event_scope_type: 'SKU Wise',
+    sku_types: ['SKU-3301', 'SKU-5088', 'SKU-1180', 'SKU-4410', 'SKU-4411'],
+    batch_lot: 'L-30030,L-30040',
+    work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
     audit_id: 'AUD-0225', audit_name: 'Zone C Damaged Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
@@ -236,7 +239,11 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
       ]),
     ],
   },
-  'AUD-0234': { layouts: [makeLayout('Layout B', genRacks(['B-01', 'B-02', 'B-03', 'B-04'], 3, 3, 1, 1))] },
+  // Genuinely untouched (0 fully-done, 0 partial) — this is the SKU Wise
+  // "To Do" demo audit (see Audit Details' SKU accordion), so every chip
+  // must read Pending and the footer button must read "Start Audit", not
+  // "Resume Audit".
+  'AUD-0234': { layouts: [makeLayout('Layout B', genRacks(['B-01', 'B-02', 'B-03', 'B-04'], 3, 3, 0, 0))] },
   'AUD-0225': {
     layouts: [
       makeLayout('Layout A', [
@@ -376,6 +383,11 @@ export const ZONE_EXPECTED_SKUS: Record<string, ZoneExpectedSku[]> = {
     { sku: 'SKU-1002', name: 'iPhone 15 Charger', expectedCount: 6 },
   ],
   'Zone B': [{ sku: 'SKU-3301', name: 'Plastic Crate Blue', expectedCount: 8 }],
+  // AUD-0234 (SKU Wise) picks SKU-5088 across BOTH a rack (Layout B, via
+  // EXPECTED_SKUS) and this standalone floor zone — a SKU Wise audit's
+  // scope isn't confined to one physical grain, so its own SKU accordion
+  // needs to show both a Rack group and a Zone group for the same SKU.
+  'Zone C': [{ sku: 'SKU-5088', name: 'Corner Protector', expectedCount: 6 }],
   'Staging Area': [{ sku: 'SKU-9011', name: 'Rack Label Kit', expectedCount: 5 }],
 };
 
@@ -467,9 +479,11 @@ seedEvidenceForFlaggedLines(LOCATIONS);
 // state — fillAllBaysToFullLevels above pads every bay with extra Not
 // Started locations regardless of genRacks' fullyDoneRacks intent, so
 // without this explicit override no rack could ever actually read as fully
-// done. AUD-0234 (Scheduled, not overdue as of TODAY) touches this rack, so
-// it renders green rather than red/blue on the map.
-LOCATIONS['AUD-0234'].layouts[0].racks[0].bays.forEach((bay) => {
+// done. AUD-0233 (Scheduled, not overdue as of TODAY) touches this rack, so
+// it renders green rather than red/blue on the map. (Previously used
+// AUD-0234, but that's now the SKU Wise "To Do" demo audit and must read as
+// genuinely untouched — see the LOCATIONS['AUD-0234'] comment above.)
+LOCATIONS['AUD-0233'].layouts[0].racks[0].bays.forEach((bay) => {
   bay.locations.forEach((loc) => {
     loc.status = 'Completed';
   });

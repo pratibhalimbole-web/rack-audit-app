@@ -13,7 +13,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL } from '@/lib/mockData';
+import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
 import { ACTIVITY_PHASES, OBSERVATIONS_BY_PHASE, type ActivityPhase, type Condition, type Evidence } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -59,12 +59,31 @@ type LayoutGroup = { layout: string; racks: RackGroup[] };
 // list instead of a per-pallet reconciliation against one expected SKU.
 export function ZoneAuditMapScreen() {
   const { tokens } = useTheme();
-  const { auditId } = useLocalSearchParams<{ auditId: string }>();
+  // zoneId: set when arriving from a specific zone pill (e.g. a SKU Wise
+  // audit's Zone chip in Audit Details' SKU accordion), so the canvas lands
+  // with that exact zone already highlighted instead of nothing selected.
+  const { auditId, zoneId: zoneIdParam } = useLocalSearchParams<{ auditId: string; zoneId?: string }>();
   const { data: audits = [] } = useAudits();
   const audit = audits.find((a) => a.audit_id === auditId);
   const { map } = useAuditProgressMap(audits.map((a) => a.audit_id));
 
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!zoneIdParam || !audit) return;
+    const zone = FLOOR_AREAS.find((z) => z.id === zoneIdParam);
+    if (!zone) return;
+    const eligible =
+      audit.scope_values.includes(zone.label) ||
+      (audit.event_scope_type === 'SKU Wise' && (audit.sku_types ?? []).some((sku) => (ZONE_EXPECTED_SKUS[zone.label] ?? []).some((z2) => z2.sku === sku)));
+    if (eligible) {
+      setSelectedZoneId(zoneIdParam);
+      // Same as tapping the zone on the canvas grid (pickZone) — opens the
+      // Reconciliation Form straight away rather than landing on a bare
+      // selected zone the inspector still has to tap into.
+      setSkuPanelOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-seed when the param or audit itself changes, not on every audit re-render
+  }, [zoneIdParam, audit?.audit_id]);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [zoneField, setZoneField] = useState(false);
   const [scannedByZone, setScannedByZone] = useState<Record<string, ZoneScanLine[]>>({});
@@ -241,7 +260,12 @@ export function ZoneAuditMapScreen() {
     );
   }
 
-  const inScope = (label: string) => audit.scope_values.includes(label);
+  // A SKU Wise audit (e.g. AUD-0234) has no scope_values naming these
+  // floor zones at all — its real zone coverage comes from wherever its own
+  // sku_types are on a zone's expected pick list (ZONE_EXPECTED_SKUS).
+  const inScope = (label: string) =>
+    audit.scope_values.includes(label) ||
+    (audit.event_scope_type === 'SKU Wise' && (audit.sku_types ?? []).some((sku) => (ZONE_EXPECTED_SKUS[label] ?? []).some((z) => z.sku === sku)));
   const selectedZone = selectedZoneId ? FLOOR_AREAS.find((z) => z.id === selectedZoneId) : null;
   const zoneOptions: SheetOption[] = FLOOR_AREAS.filter((z) => inScope(z.label)).map((z) => ({ value: z.id, label: z.label }));
   // Combined total across every zone this audit covers (e.g. Zone A +

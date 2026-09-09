@@ -29,7 +29,7 @@ import { buildBayDiagram, buildScanOrder, locLevelPosition, type ScanFrom, type 
 // Every other entry point (Resume Audit, opening the rack generally, etc.)
 // leaves `source` unset and keeps pending locations directly tappable
 // across bays regardless of the lock — see isLocSelectable below.
-type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string; source?: 'bay-chip' };
+type Params = { auditId: string; layout: string; rackId: string; bay: string; loc?: string; source?: 'bay-chip'; fresh?: string };
 
 // Matches styles.cell's width and styles.diagramCells' gap below — a full
 // (3-slot) row's total width, used to stretch a shorter level's real cells
@@ -135,6 +135,13 @@ export function RackViewScreen() {
   // `??` would let through as bayFilter='', silently failing every
   // inBayFilter() check since no real bay code ever equals ''.
   const [bayFilter, setBayFilter] = useState<string>(params.bay || 'all');
+  // A genuinely fresh "Start Audit" (nothing scanned yet) lands on some
+  // rack/layout under the hood — the route requires one — but the Layout
+  // and Rack toolbar fields show as unselected placeholders rather than
+  // that default, since the inspector never actually chose it. The moment
+  // they pick anything themselves (layout, rack, bay, or a canvas tap),
+  // this clears and the fields show the real selection like normal.
+  const [freshUnselected, setFreshUnselected] = useState(!!params.fresh);
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
   const [pendingTab, setPendingTab] = useState<'pending' | 'empty'>('pending');
   const [pendingSearch, setPendingSearch] = useState('');
@@ -307,7 +314,7 @@ export function RackViewScreen() {
   // a different location after a previous Rack View visit) would silently
   // keep showing whichever rack/bay/location was open before, not the one
   // just navigated to.
-  const paramsKey = `${auditId}|${params.layout}|${params.rackId}|${params.bay}|${params.loc ?? ''}|${params.source ?? ''}`;
+  const paramsKey = `${auditId}|${params.layout}|${params.rackId}|${params.bay}|${params.loc ?? ''}|${params.source ?? ''}|${params.fresh ?? ''}`;
   const paramsKeyRef = useRef<string>(paramsKey);
   useEffect(() => {
     if (paramsKeyRef.current === paramsKey) return;
@@ -317,6 +324,7 @@ export function RackViewScreen() {
     setBayFilter(params.bay || 'all');
     setSelectedLoc(params.loc ?? null);
     setSkuPanelOpen(!!params.loc);
+    setFreshUnselected(!!params.fresh);
     scale.value = 1;
     savedScale.value = 1;
     translateX.value = 0;
@@ -384,6 +392,7 @@ export function RackViewScreen() {
   const selectLocation = (code: string) => {
     setSelectedLoc(code);
     setBayFilter(bayCodeForLoc(code));
+    setFreshUnselected(false);
   };
 
   // When this audit has a target_sku (the admin's "SKU Type" field), only
@@ -464,6 +473,7 @@ export function RackViewScreen() {
   const pickBayFilter = (bay: string) => {
     setBayFilter(bay);
     setPickerField(null);
+    setFreshUnselected(false);
     if (bay === 'all') return;
     const bayLocs = rackLocations.filter((loc) => bayCodeForLoc(loc.code) === bay);
     const next = bayLocs.find((loc) => isLocPending(loc.code)) ?? bayLocs[0];
@@ -535,11 +545,13 @@ export function RackViewScreen() {
     const nextLayout = tree.layouts.find((l) => l.name === name);
     if (nextLayout?.racks[0]) setRackCode(nextLayout.racks[0].code);
     setPickerField(null);
+    setFreshUnselected(false);
   };
 
   const handlePickRack = (code: string) => {
     setRackCode(code);
     setPickerField(null);
+    setFreshUnselected(false);
   };
   // Dropdown -> canvas: picking a pallet here also becomes the canvas'
   // selection (the cell gets the blue "selected" outline), same object of
@@ -1032,7 +1044,7 @@ export function RackViewScreen() {
 
       <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <View>
-          <ToolbarField label={layoutObj.name} open={pickerField === 'layout'} onPress={() => setPickerField(pickerField === 'layout' ? null : 'layout')} />
+          <ToolbarField label={freshUnselected ? 'Select Layout' : layoutObj.name} open={pickerField === 'layout'} onPress={() => setPickerField(pickerField === 'layout' ? null : 'layout')} />
           {pickerField === 'layout' ? (
             <>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
@@ -1041,7 +1053,7 @@ export function RackViewScreen() {
           ) : null}
         </View>
         <View>
-          <ToolbarField label={`Rack ${rackObj.code}`} open={pickerField === 'rack'} onPress={() => setPickerField(pickerField === 'rack' ? null : 'rack')} />
+          <ToolbarField label={freshUnselected ? 'Select Rack' : `Rack ${rackObj.code}`} open={pickerField === 'rack'} onPress={() => setPickerField(pickerField === 'rack' ? null : 'rack')} />
           {pickerField === 'rack' ? (
             <>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerField(null)} />
@@ -1051,7 +1063,7 @@ export function RackViewScreen() {
         </View>
         <View>
           <ToolbarField
-            label={bayFilter === 'all' ? 'All Bays' : `Bay ${bayFilter}`}
+            label={freshUnselected ? 'Select Bay' : bayFilter === 'all' ? 'All Bays' : `Bay ${bayFilter}`}
             open={pickerField === 'bay'}
             onPress={() => setPickerField(pickerField === 'bay' ? null : 'bay')}
           />
@@ -1497,7 +1509,7 @@ export function RackViewScreen() {
                                       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
                                       {scannedLine.unitIds?.length ? (
                                         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                          Unit IDs: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
+                                          Inventory Unit ID: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
                                         </Text>
                                       ) : null}
                                     </>
@@ -1522,7 +1534,7 @@ export function RackViewScreen() {
                                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
                                     {scannedLine.unitIds?.length ? (
                                       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                        Unit IDs: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
+                                        Inventory Unit ID: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
                                       </Text>
                                     ) : null}
                                   </>
