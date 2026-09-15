@@ -111,6 +111,11 @@ export type CountLine = {
   // same SKU is one CountLine with 6 IDs here, qty === unitIds.length;
   // this is what actually backs the unit count, not just a running number.
   unitIds?: string[];
+  // Rack View only (for now — see the SKU-level activityPhase/observation
+  // fields below, still what Quick Scan's 3 modes use): per-physical-unit
+  // damage flag + evidence, keyed by the same label in unitIds, instead of
+  // one Activity Phase/Observation answer for the whole scanned line.
+  unitDamage?: Record<string, { flagged: boolean; evidence?: Evidence }>;
   // Damage's own cascading detail: which phase of the pallet's lifecycle the
   // damage relates to, and what was actually observed — the Observation
   // options offered depend on which Activity Phase is selected.
@@ -120,6 +125,11 @@ export type CountLine = {
   // after Selected Location Details and independent of the SKU-level
   // Quantity/Damage findings below it.
   palletConditionGood?: boolean;
+  // Evidence for the pallet condition question above (only ever collected
+  // when palletConditionGood is false) — same Evidence shape as qty/damage,
+  // just scoped to the whole pallet rather than one SKU line, so it's
+  // asked once up top rather than per scanned SKU.
+  conditionEvidence?: Evidence;
 };
 
 export type ActivityPhase = 'Installation' | 'Operation & Maintenance' | 'Design Discrepancy';
