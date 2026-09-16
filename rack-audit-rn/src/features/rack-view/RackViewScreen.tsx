@@ -694,6 +694,32 @@ export function RackViewScreen() {
     });
   };
 
+  // A unit reads Mismatched either because its SKU isn't the one expected
+  // here (lineMatched), or — even for the right SKU — because this exact
+  // physical Inventory Unit ID was already saved at a DIFFERENT location
+  // earlier in the audit: the same real-world unit can't legitimately be in
+  // two places, so finding its label again elsewhere is itself a mismatch,
+  // not just a re-scan of the same box.
+  const isDuplicateUnit = (unitId: string): boolean => {
+    if (!tree || !selectedLocObj) return false;
+    for (const layout of tree.layouts) {
+      for (const rack of layout.racks) {
+        for (const bay of rack.bays) {
+          for (const loc of bay.locations) {
+            if (loc.code === selectedLocObj.code) continue;
+            for (const pallet of loc.pallets) {
+              if (!pallet.saved) continue;
+              for (const line of pallet.lines) {
+                if (line.unitIds?.includes(unitId)) return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+
   // Shared by "Start Audit" (from the canvas) and "Scan Next SKU" (from
   // inside an already-open panel) — resets the scan state for a location.
   // Only a pallet the inspector genuinely already scanned and saved this
@@ -1813,13 +1839,15 @@ export function RackViewScreen() {
                               </View>
                               <View style={styles.fieldCardBody}>
                                 {/* One row per physical unit scanned onto this SKU line (unitIds), not
-                                    one section for the whole line — Matched/Mismatched reuses the same
-                                    SKU-identity status the collapsed accordion row already shows (no
-                                    separate per-unit expected-vs-found registry exists to diverge from
-                                    that), while Damage is genuinely tracked per unit. */}
+                                    one section for the whole line. Matched requires both the right SKU
+                                    (lineMatched) AND this exact physical unit ID not already sitting at
+                                    a different location this audit — a duplicate label showing up
+                                    somewhere else is itself a mismatch, so units of the same SKU can
+                                    genuinely read differently. Damage is tracked per unit too. */}
                                 {(scannedLine.unitIds?.length ? scannedLine.unitIds : [scannedLine.sku]).map((unitId, ui) => {
                                   const unitFlagged = !!scannedLine.unitDamage?.[unitId]?.flagged;
                                   const unitEvidence = scannedLine.unitDamage?.[unitId]?.evidence ?? EMPTY_EVIDENCE;
+                                  const unitMatched = lineMatched && !isDuplicateUnit(unitId);
                                   return (
                                     <View key={unitId} style={ui > 0 ? [styles.unitDivider, { borderTopColor: tokens.border }] : null}>
                                       <View style={styles.unitRow}>
@@ -1829,11 +1857,11 @@ export function RackViewScreen() {
                                         <View
                                           style={[
                                             styles.editStatusPill,
-                                            { backgroundColor: lineMatched ? tokens.rag.green.soft : tokens.rag.amber.soft, borderColor: lineMatched ? tokens.rag.green.border : tokens.rag.amber.border, borderRadius: tokens.radius.lg },
+                                            { backgroundColor: unitMatched ? tokens.rag.green.soft : tokens.rag.amber.soft, borderColor: unitMatched ? tokens.rag.green.border : tokens.rag.amber.border, borderRadius: tokens.radius.lg },
                                           ]}
                                         >
-                                          <Text style={{ color: lineMatched ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                                            {lineMatched ? 'Matched' : 'Mismatched'}
+                                          <Text style={{ color: unitMatched ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                                            {unitMatched ? 'Matched' : 'Mismatched'}
                                           </Text>
                                         </View>
                                         <View style={styles.unitDamageWrap}>
