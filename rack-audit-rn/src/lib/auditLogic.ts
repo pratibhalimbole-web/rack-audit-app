@@ -154,7 +154,11 @@ export type FlaggedLine = {
   issueRaised?: boolean;
   // 'manual' marks a Rack View Manual Mode report — outside the audit's
   // assigned target_sku scope, only reportable because Manual Mode was on.
-  source?: 'scan' | 'manual';
+  // 'missing' lines never actually reach `flagged` below (they keep
+  // condition 'Good' and no issueRaised) — this just mirrors CountLine's
+  // full source union so the type stays in sync with it.
+  source?: 'scan' | 'manual' | 'missing' | 'empty';
+  unitIds?: string[];
 };
 
 export type SummaryStats = {
@@ -207,6 +211,7 @@ export function summaryStats(tree: AuditLocationsTree | undefined): SummaryStats
             evidence: line.evidence,
             issueRaised: line.issueRaised,
             source: line.source,
+            unitIds: line.unitIds,
           });
         }
       });
@@ -289,6 +294,10 @@ export type ScopedIssue = {
   condition: Condition;
   issueRaised?: boolean;
   evidence?: Evidence;
+  // The specific physical Inventory Unit IDs behind this line's qty, when
+  // scanned via the per-unit Rack View flow — used to give a mismatch/
+  // damage finding a real unit id instead of just a SKU-level qty.
+  unitIds?: string[];
 };
 
 // Reconciles each location's actually-saved pallet (loc.pallets.find by
@@ -305,7 +314,7 @@ export function scopedIssues(tree: AuditLocationsTree | undefined): ScopedIssue[
   allLocations(tree).forEach(({ layout, rack, bay, loc }) => {
     const saved = loc.pallets.find((p) => p.saved);
     const found = saved?.lines[0];
-    if (!saved || !found || found.source === 'manual') return;
+    if (!saved || !found || found.source === 'manual' || found.source === 'empty') return;
     const expected = EXPECTED_SKUS[loc.code]?.[0];
     if (!expected) return;
     const skuOk = found.sku === expected.sku;
@@ -327,6 +336,57 @@ export function scopedIssues(tree: AuditLocationsTree | undefined): ScopedIssue[
       condition: found.condition,
       issueRaised: found.issueRaised,
       evidence: found.evidence,
+      unitIds: found.unitIds,
+    });
+  });
+  return out;
+}
+
+export type MissingLine = { layout: string; rack: string; bay: string; locCode: string; pallet: string; sku: string; name: string; missingUnitIds: string[] };
+
+// Expected Inventory Unit IDs the inspector proceeded past without ever
+// scanning — set by Rack View's "Missing Inventory Unit IDs" prompt
+// (CountLine.missingUnitIds), on either a synthetic source:'missing' line
+// (the SKU was never scanned onto this pallet at all) or a genuinely
+// scanned line that was only partially fulfilled.
+export function missingLines(tree: AuditLocationsTree | undefined): MissingLine[] {
+  const out: MissingLine[] = [];
+  allLocations(tree).forEach(({ layout, rack, bay, loc }) => {
+    (loc.pallets || []).forEach((p) => {
+      if (!p.saved) return;
+      (p.lines || []).forEach((line) => {
+        if (line.missingUnitIds?.length) {
+          out.push({ layout, rack, bay, locCode: loc.code, pallet: p.pallet, sku: line.sku, name: line.name, missingUnitIds: line.missingUnitIds });
+        }
+      });
+    });
+  });
+  return out;
+}
+
+export type EmptyLocation = {
+  layout: string;
+  rack: string;
+  bay: string;
+  locCode: string;
+  pallet: string;
+  palletConditionGood: boolean | null;
+  conditionEvidence?: Evidence;
+};
+
+// A location resolved via "Is the selected location pallet is empty?" —
+// identified by its one saved source:'empty' line (see CountLine.source),
+// which carries only whatever palletConditionGood/conditionEvidence were
+// answered there, never a real SKU.
+export function emptyLocations(tree: AuditLocationsTree | undefined): EmptyLocation[] {
+  const out: EmptyLocation[] = [];
+  allLocations(tree).forEach(({ layout, rack, bay, loc }) => {
+    (loc.pallets || []).forEach((p) => {
+      if (!p.saved) return;
+      const line = (p.lines || []).find((l) => l.source === 'empty');
+      if (line) {
+        out.push({ layout, rack, bay, locCode: loc.code, pallet: p.pallet, palletConditionGood: line.palletConditionGood ?? null, conditionEvidence: line.conditionEvidence });
+      }
     });
   });
   return out;

@@ -16,7 +16,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { EXPECTED_SKUS, generateWaveformBars, INVENTORY_POOL, RACK_DIAGRAM_SLOTS_PER_LEVEL, type ExpectedSkuLine } from '@/lib/mockData';
+import { EXPECTED_SKUS, expectedUnitIdsForQty, generateWaveformBars, INVENTORY_POOL, RACK_DIAGRAM_SLOTS_PER_LEVEL, type ExpectedSkuLine } from '@/lib/mockData';
 import { ACTIVITY_PHASES, CONDITIONS, OBSERVATIONS_BY_PHASE, type ActivityPhase, type CountLine, type Evidence, type LocationNode } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -176,6 +176,11 @@ export function RackViewScreen() {
   // switches it.
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
+  // Its own accordion, separate from the SKU-line accordion above it — a
+  // unit's evidence section auto-opens the moment Damage is switched on
+  // (toggleUnitDamage), but can then be collapsed/reopened independently
+  // via its own chevron without having to turn Damage back off.
+  const [openUnitIds, setOpenUnitIds] = useState<Set<string>>(new Set());
   // Every box's unique label already scanned onto the CURRENT pallet this
   // session — a real pallet QR is "<sku>::<label>" (same convention as
   // Zone Audit's scanner), so two different boxes of the same SKU carry
@@ -183,6 +188,11 @@ export function RackViewScreen() {
   // same physical box scanned twice) is rejected as a duplicate.
   const [scannedLabels, setScannedLabels] = useState<Set<string>>(new Set());
   const [duplicateScanLabel, setDuplicateScanLabel] = useState<string | null>(null);
+  // "Save & Scan Next" checks for expected units never scanned before it
+  // lets the inspector leave this pallet — this just gates the confirm
+  // modal; the actual missing-group data is recomputed fresh each render
+  // (missingGroups below) rather than snapshotted here.
+  const [missingModalOpen, setMissingModalOpen] = useState(false);
   const [scanPallet, setScanPallet] = useState<string | null>(null);
   const [expectedSkus, setExpectedSkus] = useState<ExpectedSkuLine[]>([]);
   const [skuScanCount, setSkuScanCount] = useState(0);
@@ -653,11 +663,18 @@ export function RackViewScreen() {
   const toggleUnitDamage = (unitId: string) => {
     if (!scannedLine) return;
     const current = scannedLine.unitDamage?.[unitId];
-    const unitDamage = { ...scannedLine.unitDamage, [unitId]: { flagged: !current?.flagged, evidence: current?.evidence ?? EMPTY_EVIDENCE } };
+    const nextFlagged = !current?.flagged;
+    const unitDamage = { ...scannedLine.unitDamage, [unitId]: { flagged: nextFlagged, evidence: current?.evidence ?? EMPTY_EVIDENCE } };
     const anyFlagged = Object.values(unitDamage).some((u) => u.flagged);
     const patch: Partial<CountLine> = { unitDamage, condition: anyFlagged ? 'Damaged' : 'Good', damageConfirmed: true };
     updateCurrentLine(patch);
     setDamageChecked(true);
+    setOpenUnitIds((prev) => {
+      const next = new Set(prev);
+      if (nextFlagged) next.add(unitId);
+      else next.delete(unitId);
+      return next;
+    });
     // Same reasoning as the old handleConfirmDamage — condition changed, so
     // the canvas cell color (green/amber/red) needs recomputing too, not
     // just the panel's own state.
@@ -666,6 +683,15 @@ export function RackViewScreen() {
       if (nextLines[activeLineIndex]) nextLines[activeLineIndex] = { ...nextLines[activeLineIndex], ...patch };
       applyLocationStatus(selectedLocObj.code, nextLines, expectedSkus);
     }
+  };
+
+  const toggleUnitOpen = (unitId: string) => {
+    setOpenUnitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(unitId)) next.delete(unitId);
+      else next.add(unitId);
+      return next;
+    });
   };
 
   const updateUnitEvidence = (unitId: string, patch: Partial<Evidence>) => {
@@ -727,6 +753,7 @@ export function RackViewScreen() {
       // the inspector enters what they actually found.
       setQtyChecked(!!existing?.lines[0]);
       setDamageChecked(!!existing?.lines[0]);
+      setOpenUnitIds(new Set());
       setQtyEditing(false);
       setDamageEditing(false);
       setPalletConditionGood(line.palletConditionGood ?? null);
@@ -740,12 +767,17 @@ export function RackViewScreen() {
       return;
     }
     const existing = loc.pallets.find((p) => p.saved) ?? null;
+    // A synthetic empty-pallet record (see handleScanNext's noScannerFound
+    // branch) isn't a real scan to restore into scanLines — reopening it
+    // should read right back as "marked empty", pallet condition/evidence
+    // and all, not as a pallet carrying one blank-SKU line.
+    const wasMarkedEmpty = existing?.lines[0]?.source === 'empty';
     // A pallet can carry more than one distinct SKU now — every previously
     // saved line applies, not just the first. A line that was already
     // saved this audit already has real, confirmed qty/condition values —
     // unlike a fresh scan, it doesn't need the inspector to re-enter them
     // before its Matched/Mismatched status shows.
-    const base = existing ? existing.lines.map((l) => ({ ...l, qtyConfirmed: true, damageConfirmed: true })) : [];
+    const base = existing && !wasMarkedEmpty ? existing.lines.map((l) => ({ ...l, qtyConfirmed: true, damageConfirmed: true })) : [];
     const expected = EXPECTED_SKUS[loc.code] ?? [];
     setScanPallet(existing ? existing.pallet : null);
     setScanLines(base);
@@ -762,12 +794,14 @@ export function RackViewScreen() {
     // what they actually found.
     setQtyChecked(!!base.length);
     setDamageChecked(!!base.length);
+    setOpenUnitIds(new Set());
     setQtyEditing(false);
     setDamageEditing(false);
     setExpectedSkus(expected);
-    setNoScannerFound(false);
-    setPalletConditionGood(base[0]?.palletConditionGood ?? null);
-    setConditionEvidence(base[0]?.conditionEvidence ?? EMPTY_EVIDENCE);
+    setNoScannerFound(wasMarkedEmpty);
+    const conditionLine = wasMarkedEmpty ? existing?.lines[0] : base[0];
+    setPalletConditionGood(conditionLine?.palletConditionGood ?? null);
+    setConditionEvidence(conditionLine?.conditionEvidence ?? EMPTY_EVIDENCE);
     applyLocationStatus(loc.code, base, expected);
   };
 
@@ -818,6 +852,65 @@ export function RackViewScreen() {
     setManualMode(!manualMode);
   };
 
+  // What the admin pick list (EXPECTED_SKUS, via expectedUnitIdsForQty)
+  // says should be here that hasn't actually been scanned onto this pallet
+  // yet — per SKU, only the specific Inventory Unit IDs still missing, not
+  // just "not fully scanned". A SKU with no scanned line at all here is
+  // entirely missing; a partially-scanned one only lists what's left.
+  const missingGroups =
+    !formIsManual && !noScannerFound
+      ? expectedSkus
+          .map((exp) => {
+            const expectedIds = expectedUnitIdsForQty(exp.qty);
+            const scannedIds = new Set(scanLines.find((l) => l.sku === exp.sku)?.unitIds ?? []);
+            const missingIds = expectedIds.filter((id) => !scannedIds.has(id));
+            return { sku: exp.sku, name: exp.name, lot: exp.lot, missingIds };
+          })
+          .filter((g) => g.missingIds.length > 0)
+      : [];
+  const missingTotal = missingGroups.reduce((sum, g) => sum + g.missingIds.length, 0);
+
+  // "Proceed" on the Missing Inventory Unit IDs prompt — marks every still-
+  // missing unit onto this pallet's record (a real line if the SKU was
+  // scanned at all, a synthetic source:'missing' line if it never was) so
+  // the gap is an actual saved finding, not silently dropped, then
+  // continues exactly like a normal Save & Scan Next.
+  const handleConfirmMissingAndProceed = () => {
+    setScanLines((prev) => {
+      const next = prev.slice();
+      missingGroups.forEach((g) => {
+        const idx = next.findIndex((l) => l.sku === g.sku);
+        if (idx !== -1) {
+          next[idx] = { ...next[idx], missingUnitIds: g.missingIds };
+        } else {
+          next.push({
+            sku: g.sku,
+            name: g.name,
+            lot: g.lot,
+            qty: 0,
+            condition: 'Good',
+            source: 'missing',
+            missingUnitIds: g.missingIds,
+          });
+        }
+      });
+      return next;
+    });
+    setMissingModalOpen(false);
+    // scanLines won't reflect the update above until the next render, but
+    // handleScanNext reads it via closure on THIS render — same pattern
+    // saveRecord already relies on elsewhere, so defer one tick.
+    setTimeout(() => handleScanNext(), 0);
+  };
+
+  const handleSaveAndScanNextPress = () => {
+    if (missingGroups.length) {
+      setMissingModalOpen(true);
+      return;
+    }
+    handleScanNext();
+  };
+
   // Persists the pallet just finished, then jumps straight to the next
   // location on this rack — selecting it (which highlights it on the
   // canvas behind the panel) reloads it via the effect above, so the
@@ -839,7 +932,15 @@ export function RackViewScreen() {
     } else if (selectedLocObj && noScannerFound) {
       // "Empty" is also a resolved outcome — nothing to scan, but the
       // location has been checked, so it counts toward the bay same as one.
-      await completeLocation(tree, { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code });
+      // Still saves a record (one synthetic source:'empty' line) so the
+      // pallet condition question/evidence answered up top for this
+      // location survives past the session — Reconciliation Findings'
+      // "Show Empty location" cards read it back via emptyLocations().
+      const ref = { auditId, layout: layoutName, rack: rackCode, bay: bayCodeForLoc(selectedLocObj.code), loc: selectedLocObj.code };
+      await saveRecord(tree, ref, [
+        { sku: '', name: '', lot: '—', qty: 0, condition: 'Good', source: 'empty', palletConditionGood: palletConditionGood ?? undefined, conditionEvidence },
+      ]);
+      await completeLocation(tree, ref);
     }
     const locs = scannableLocations;
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
@@ -909,6 +1010,7 @@ export function RackViewScreen() {
       // before either one's Matched/Mismatched status shows.
       setQtyChecked(!!next[landedIndex].qtyConfirmed);
       setDamageChecked(!!next[landedIndex].damageConfirmed);
+      setOpenUnitIds(new Set());
       if (selectedLocObj) applyLocationStatus(selectedLocObj.code, next, expectedSkus);
       return next;
     });
@@ -952,12 +1054,17 @@ export function RackViewScreen() {
     // simulate a genuinely different/unexpected item to demo that path too
     // — each tap gets its own numeric Inventory Unit ID (1001, 1002, ...,
     // matching the admin "Pallet" tool's own unit ID convention) so
-    // repeated taps add fresh units instead of tripping the duplicate-scan
-    // check.
+    // repeated taps add fresh units. Every 5th tap deliberately re-sends the
+    // immediately previous tap's own ID instead of a fresh one, so the
+    // Already-Scanned duplicate flow (there's no real camera in Expo Go to
+    // trigger it by re-scanning a physical sticker) is reachable from this
+    // simulate button too.
     const expected = expectedSkus[0];
     const useExpected = expected && skuScanCount % 3 !== 0;
     const pick = useExpected ? expected : INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length];
-    applyMultiSkuScan(`${pick.sku}::${1001 + skuScanCount}`);
+    const isDuplicateDemo = skuScanCount > 0 && skuScanCount % 5 === 4;
+    const unitId = isDuplicateDemo ? 1001 + skuScanCount - 1 : 1001 + skuScanCount;
+    applyMultiSkuScan(`${pick.sku}::${unitId}`);
     setSkuScanCount((c) => c + 1);
   };
 
@@ -977,19 +1084,6 @@ export function RackViewScreen() {
   const updateFieldEvidence = (field: 'qtyEvidence' | 'damageEvidence', patch: Partial<Evidence>) => {
     if (!scannedLine) return;
     updateCurrentLine({ [field]: { ...ensureFieldEvidence(field), ...patch } });
-  };
-
-  // Manual Mode always offers this once a field's checked — reporting a
-  // problem is the whole point there, and there's no expected value to
-  // gate a mismatch on the way normal mode's version of this button is.
-  const raiseFieldIssue = (kind: 'qty' | 'damage') => {
-    if (!selectedLocObj || !scannedLine) return;
-    updateCurrentLine({
-      issueRaised: true,
-      qtyIssueRaised: kind === 'qty' ? true : scannedLine.qtyIssueRaised,
-      damageIssueRaised: kind === 'damage' ? true : scannedLine.damageIssueRaised,
-    });
-    handleRaiseIssue(scannedLine.sku);
   };
 
   // Manual Mode's whole point is reporting a problem, so saving it always
@@ -1488,13 +1582,17 @@ export function RackViewScreen() {
                 ) : null}
 
                 {!formIsManual && !noScannerFound ? (
-                  // Persistent running tally — visible from 00 through
-                  // however many SKUs have been scanned onto this pallet,
-                  // not just once the list actually has rows.
+                  // Persistent running tally — how many times the inspector
+                  // has actually scanned something onto this pallet (every
+                  // distinct successful scan, i.e. scannedLabels.size), not
+                  // how many distinct SKU groups that collapses into below —
+                  // repeat-scanning the same expected SKU several times
+                  // keeps this climbing even while scanLines.length stays
+                  // at 1.
                   <View style={styles.scanCountRow}>
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scanned SKUS:</Text>
                     <View style={[styles.scanCountBadge, { backgroundColor: tokens.muted, borderRadius: tokens.radius.lg }]}>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{String(scanLines.length).padStart(2, '0')}</Text>
+                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{String(scannedLabels.size).padStart(2, '0')}</Text>
                     </View>
                   </View>
                 ) : null}
@@ -1527,6 +1625,7 @@ export function RackViewScreen() {
                               setDamageChecked(!!line.damageConfirmed);
                               setQtyEditing(false);
                               setDamageEditing(false);
+                              setOpenUnitIds(new Set());
                             }}
                             style={[
                               styles.scannedRow,
@@ -1536,6 +1635,11 @@ export function RackViewScreen() {
                             <View style={{ flex: 1 }}>
                               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
                               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{line.name}</Text>
+                            </View>
+                            <View style={[styles.scanCountBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg, minWidth: 0, paddingHorizontal: 10 }]}>
+                              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+                                {String(line.unitIds?.length ?? 1).padStart(2, '0')}
+                              </Text>
                             </View>
                             <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
                           </Pressable>
@@ -1561,6 +1665,7 @@ export function RackViewScreen() {
                                     genuinely read differently. Damage is tracked per unit too. */}
                                 {(scannedLine.unitIds?.length ? scannedLine.unitIds : [scannedLine.sku]).map((unitId, ui) => {
                                   const unitFlagged = !!scannedLine.unitDamage?.[unitId]?.flagged;
+                                  const unitOpen = openUnitIds.has(unitId);
                                   const unitEvidence = scannedLine.unitDamage?.[unitId]?.evidence ?? EMPTY_EVIDENCE;
                                   const unitMatched = lineMatched && !isDuplicateUnit(unitId);
                                   return (
@@ -1582,14 +1687,21 @@ export function RackViewScreen() {
                                         <View style={styles.unitDamageWrap}>
                                           <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Damage:</Text>
                                           <SimpleToggle value={unitFlagged} onToggle={() => toggleUnitDamage(unitId)} />
+                                          {unitFlagged ? (
+                                            <Pressable onPress={() => toggleUnitOpen(unitId)} hitSlop={8}>
+                                              <Ionicons name={unitOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                                            </Pressable>
+                                          ) : (
+                                            // Same footprint as the chevron above — keeps every row's
+                                            // Damage toggle sitting at the same horizontal position
+                                            // whether or not that unit has an issue, instead of the
+                                            // flagged rows alone shifting left for the extra icon.
+                                            <View style={{ width: 16, height: 16 }} />
+                                          )}
                                         </View>
                                       </View>
-                                      {unitFlagged ? (
-                                        <View style={{ marginTop: 10 }}>
-                                          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-                                            Add evidence for this issue. <Text style={{ color: tokens.rag.red.strong }}>*</Text>
-                                          </Text>
-                                          <EvidenceBlock
+                                      {unitFlagged && unitOpen ? (
+                                        <EvidenceBlock
                                             evidence={unitEvidence}
                                             onOpenNote={() => updateUnitEvidence(unitId, { noteOpen: true })}
                                             onChangeNote={(note) => updateUnitEvidence(unitId, { note })}
@@ -1604,30 +1716,10 @@ export function RackViewScreen() {
                                             onAddVideo={() => updateUnitEvidence(unitId, { videos: [...unitEvidence.videos, { durationSec: 20 }] })}
                                             onRemoveVideo={(i) => updateUnitEvidence(unitId, { videos: unitEvidence.videos.filter((_, ii) => ii !== i) })}
                                           />
-                                        </View>
                                       ) : null}
                                     </View>
                                   );
                                 })}
-                                {scannedLine.condition !== 'Good' ? (
-                                  <Pressable
-                                    disabled={!!scannedLine.damageIssueRaised}
-                                    onPress={() => raiseFieldIssue('damage')}
-                                    style={[
-                                      styles.raiseIssueBox,
-                                      { marginTop: 12,
-                                        backgroundColor: scannedLine.damageIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                                        borderColor: scannedLine.damageIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
-                                        borderRadius: tokens.radius.lg,
-                                      },
-                                    ]}
-                                  >
-                                    <Ionicons name={scannedLine.damageIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                                    <Text style={{ color: scannedLine.damageIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
-                                      {scannedLine.damageIssueRaised ? 'Issue raised for damage' : 'Raise Issue — damage'}
-                                    </Text>
-                                  </Pressable>
-                                ) : null}
                               </View>
                             </View>
                       </>
@@ -1697,7 +1789,7 @@ export function RackViewScreen() {
                 </Pressable>
                 <Pressable
                   disabled={!scanLines.length && !noScannerFound}
-                  onPress={handleScanNext}
+                  onPress={handleSaveAndScanNextPress}
                   style={[styles.primaryBtn, { flex: 1, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg, opacity: scanLines.length || noScannerFound ? 1 : 0.5 }]}
                 >
                   <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save & Scan Next</Text>
@@ -1775,10 +1867,10 @@ export function RackViewScreen() {
               <Ionicons name="alert-outline" size={22} color={tokens.rag.amber.strong} />
             </View>
             <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base, marginTop: 12 }}>
-              Already Scanned
+              Inventory Unit ID Already Scanned
             </Text>
             <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, lineHeight: 19, marginTop: 6, textAlign: 'center' }}>
-              This box has already been scanned onto this pallet.
+              This SKU Inventory Unit ID is already scanned. Proceed to scan another SKU.
             </Text>
             <View style={styles.dupActions}>
               <Pressable onPress={() => setDuplicateScanLabel(null)} style={[styles.dupBtn, styles.dupOutlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
@@ -1792,6 +1884,49 @@ export function RackViewScreen() {
                 style={[styles.dupBtn, { backgroundColor: tokens.rag.amber.strong, borderRadius: tokens.radius.lg }]}
               >
                 <Text style={{ color: '#fff', fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Scan Again</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      <Modal visible={missingModalOpen} transparent animationType="fade" onRequestClose={() => setMissingModalOpen(false)}>
+        <Pressable style={[styles.dupBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setMissingModalOpen(false)}>
+          <Pressable style={[styles.missingModalCard, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.missingModalHead}>
+              <View style={[styles.dupIconWrap, { backgroundColor: tokens.rag.red.soft }]}>
+                <Ionicons name="shield-outline" size={20} color={tokens.rag.red.strong} />
+              </View>
+              <Text style={{ flex: 1, color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                Missing Inventory Unit IDs
+              </Text>
+            </View>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, lineHeight: 19, marginTop: 12 }}>
+              The following SKUs have Inventory Unit IDs that haven't been scanned yet. Clicking Proceed will mark them as missing.
+            </Text>
+            <View style={[styles.missingTotalBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Total : {missingTotal}</Text>
+            </View>
+            <ScrollView style={styles.missingTableScroll}>
+              <View style={[styles.missingTableHead, { borderBottomColor: tokens.border }]}>
+                <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>SKU ID & Name</Text>
+                <Text style={{ flex: 1.4, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Inventory Unit IDs</Text>
+              </View>
+              {missingGroups.map((g) => (
+                <View key={g.sku} style={[styles.missingTableRow, { borderBottomColor: tokens.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{g.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{g.name}</Text>
+                  </View>
+                  <Text style={{ flex: 1.4, color: tokens.foreground, fontSize: tokens.text.sm }}>{g.missingIds.join(', ')}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.dupActions}>
+              <Pressable onPress={() => setMissingModalOpen(false)} style={[styles.dupBtn, styles.dupOutlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleConfirmMissingAndProceed} style={[styles.dupBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Proceed</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -2261,6 +2396,12 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   dupBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   dupCard: { width: '100%', maxWidth: 340, padding: 20, alignItems: 'center' },
+  missingModalCard: { width: '100%', maxWidth: 560, padding: 22, maxHeight: '80%' },
+  missingModalHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  missingTotalBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, marginTop: 12 },
+  missingTableScroll: { marginTop: 14 },
+  missingTableHead: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, marginBottom: 4 },
+  missingTableRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   dupIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   dupActions: { flexDirection: 'row', gap: 10, marginTop: 20, width: '100%' },
   dupBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },

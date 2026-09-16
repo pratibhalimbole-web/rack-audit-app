@@ -10,6 +10,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 // (same "honest stub" reasoning the source gives) — the photo path is real
 // (AnnotationCanvas), audio/video stay mocked waveform/duration stubs.
 export function EvidenceBlock({
+  label = 'Add evidence for this issue.',
+  required = true,
   evidence,
   onOpenNote,
   onChangeNote,
@@ -21,6 +23,8 @@ export function EvidenceBlock({
   onAddVideo,
   onRemoveVideo,
 }: {
+  label?: string;
+  required?: boolean;
   evidence: Evidence;
   onOpenNote: () => void;
   onChangeNote: (note: string) => void;
@@ -37,8 +41,12 @@ export function EvidenceBlock({
   return (
     <View style={[styles.wrap, { borderTopColor: tokens.border }]}>
       <View style={styles.row}>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, flex: 1 }}>Write a note or record an audio for the issue</Text>
+        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
+          {label} {required ? <Text style={{ color: tokens.rag.red.strong }}>*</Text> : null}
+        </Text>
         <View style={styles.btnRow}>
+          <IconBtn icon="camera-outline" onPress={onAddImage} label="Add photo" />
+          <IconBtn icon="videocam-outline" onPress={onAddVideo} label="Add video" />
           <IconBtn icon="pencil-outline" onPress={onOpenNote} label="Add note" />
           <IconBtn icon="mic-outline" onPress={onRecordAudio} label="Record audio" />
         </View>
@@ -71,14 +79,6 @@ export function EvidenceBlock({
           </Pressable>
         </View>
       ) : null}
-
-      <View style={styles.row}>
-        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, flex: 1 }}>Click on upload image or capture video for the issue</Text>
-        <View style={styles.btnRow}>
-          <IconBtn icon="camera-outline" onPress={onAddImage} label="Add photo" />
-          <IconBtn icon="videocam-outline" onPress={onAddVideo} label="Add video" />
-        </View>
-      </View>
 
       {evidence.images.length ? (
         <ThumbGroup icon="image-outline" label="Image Attachments" count={evidence.images.length}>

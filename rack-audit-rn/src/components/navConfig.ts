@@ -5,7 +5,7 @@
 export type NavItem = {
   key: 'index' | 'schedule' | 'tasks' | 'scan' | 'progress' | 'maintenance';
   label: string;
-  tabletLabel?: string; // Progress tab reads "Reported Audits" on tablet — source line ~1704
+  tabletLabel?: string; // Progress tab reads "Reconciliation Findings" on tablet — source line ~1704
   icon: 'home' | 'calendar' | 'tasks' | 'scan' | 'progress' | 'maintenance';
 };
 
@@ -14,7 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'schedule', label: 'Audit Schedule', icon: 'calendar' },
   { key: 'tasks', label: 'Tasks', icon: 'tasks' },
   { key: 'scan', label: 'Scan', icon: 'scan' },
-  { key: 'progress', label: 'Progress', tabletLabel: 'Reported Audits', icon: 'progress' },
+  { key: 'progress', label: 'Progress', tabletLabel: 'Reconciliation Findings', icon: 'progress' },
   // Ports the "Pallet" admin web's Maintenance board (UI reference
   // screenshot) down to the inspector's own assigned-task list — see
   // src/lib/maintenance.ts.

@@ -575,6 +575,15 @@ buildMasterInventory(LOCATIONS);
 
 export type ExpectedSkuLine = { sku: string; name: string; lot: string; qty: number };
 
+// The admin "Pallet" tool assigns each unit of a SKU its own Inventory Unit
+// ID at placement time (see the CountLine.unitIds comment in types.ts) — an
+// expected line's `qty` is really the count of specific unit IDs that
+// should exist here. Purely derived from qty rather than stored, so it
+// never drifts out of sync with it: qty 10 always means IDs 1001-1010.
+export function expectedUnitIdsForQty(qty: number): string[] {
+  return Array.from({ length: Math.max(0, qty) }, (_, i) => String(1001 + i));
+}
+
 // What a pallet at this location is SUPPOSED to hold, per the pick list —
 // the reconciliation form shows this before scanning so an inspector can
 // scan against a known checklist rather than guessing, since a real pallet
@@ -629,6 +638,67 @@ buildExpectedSkus(LOCATIONS);
       saved: true,
     });
   }
+}
+
+// Same reasoning as the Damaged example above, one real seeded record per
+// remaining Reconciliation Findings card type (Missing SKU, Manual Report,
+// Empty location) so that page never reads as genuinely empty — every
+// finding type in the reference design has at least one real example to
+// show without requiring a user to go generate one live first.
+{
+  // Missing SKU — a location whose expected SKU was never scanned at all,
+  // same shape Rack View's own "Missing Inventory Unit IDs" prompt saves
+  // (source:'missing', missingUnitIds = every expected unit).
+  const missingLoc = LOCATIONS['AUD-0234'].layouts[0].racks[0].bays[0].locations[1];
+  const expectedMissing = EXPECTED_SKUS[missingLoc.code]?.[0];
+  if (expectedMissing) {
+    missingLoc.pallets.push({
+      pallet: 'P-30402',
+      lines: [
+        {
+          sku: expectedMissing.sku,
+          name: expectedMissing.name,
+          lot: expectedMissing.lot,
+          qty: 0,
+          condition: 'Good',
+          source: 'missing',
+          missingUnitIds: expectedUnitIdsForQty(expectedMissing.qty),
+        },
+      ],
+      saved: true,
+    });
+  }
+
+  // Manual Report — an out-of-scope find, reported via Rack View's Manual
+  // Mode rather than matched against this location's own pick list.
+  const manualLoc = LOCATIONS['AUD-0234'].layouts[0].racks[0].bays[0].locations[2];
+  const manualSku = INVENTORY_POOL.find((p) => p.sku === 'SKU-4410')!;
+  manualLoc.pallets.push({
+    pallet: 'P-30403',
+    lines: [{ sku: manualSku.sku, name: manualSku.name, lot: manualSku.lot, qty: 6, condition: 'Good', source: 'manual', issueRaised: true }],
+    saved: true,
+  });
+
+  // Empty location — "Is the selected location pallet is empty?" answered
+  // yes, with the pallet condition question/evidence Rack View still asks
+  // even then (see RackViewScreen's noScannerFound save path).
+  const emptyLoc = LOCATIONS['AUD-0234'].layouts[0].racks[0].bays[1].locations[0];
+  emptyLoc.pallets.push({
+    pallet: 'P-30404',
+    lines: [
+      {
+        sku: '',
+        name: '',
+        lot: '—',
+        qty: 0,
+        condition: 'Good',
+        source: 'empty',
+        palletConditionGood: false,
+        conditionEvidence: { note: 'Missing anchor bolt is to be repaired.', noteOpen: false, audio: null, images: [{}], videos: [] },
+      },
+    ],
+    saved: true,
+  });
 }
 
 // buildExpectedSkus can independently pick SKU-1001 as one of a location's

@@ -83,10 +83,20 @@ export type CountLine = {
   issueRaised?: boolean;
   // How this line was captured — 'manual' for a Rack View Manual Mode
   // report (selectable outside the audit's assigned target_sku scope),
-  // 'scan' (the default) for the normal scoped Reconciliation flow. Lets
-  // downstream views distinguish an out-of-scope report from a normal
-  // in-scope one, which is otherwise structurally identical.
-  source?: 'scan' | 'manual';
+  // 'scan' (the default) for the normal scoped Reconciliation flow,
+  // 'missing' for a SKU the pick list expected here that never got scanned
+  // at all before the inspector proceeded past the "Missing Inventory Unit
+  // IDs" prompt. 'empty' is the single synthetic line Rack View saves when
+  // "Is the selected location pallet is empty?" is answered yes — carries
+  // no real SKU, just whatever palletConditionGood/conditionEvidence were
+  // answered, so that data survives past the session instead of being
+  // dropped (the empty branch never called saveRecord before this).
+  source?: 'scan' | 'manual' | 'missing' | 'empty';
+  // Set alongside source: 'missing' (or on an otherwise-normal 'scan' line
+  // that's only partially fulfilled) — the specific expected Inventory
+  // Unit IDs for this SKU that were never actually scanned here, confirmed
+  // via the Missing Inventory Unit IDs prompt rather than silently assumed.
+  missingUnitIds?: string[];
   // Quantity and damage are independently-entered, independently-raisable
   // findings on a matched-SKU pallet (an inspector can find a quantity
   // problem, a damage problem, both, or neither) — each gets its own

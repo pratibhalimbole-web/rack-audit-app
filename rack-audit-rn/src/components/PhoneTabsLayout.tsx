@@ -13,13 +13,13 @@ import { useTheme } from '@/theme/ThemeProvider';
 // audit's id (source: `railTo('progress', {auditId: ongoing.audit_id})`),
 // so both are intercepted via `listeners.tabPress` rather than getting real
 // tab screen content. Same bottom bar on tablet as phone — Progress just
-// reads "Reported Audits" there (source line ~1704).
+// reads "Reconciliation Findings" there (source line ~1704).
 export default function PhoneTabsLayout() {
   const { tokens } = useTheme();
   const device = useDeviceClass();
   const ongoing = useCurrentOngoing();
   const hasOngoing = !!ongoing;
-  const progressLabel = device === 'tablet' ? 'Reported Audits' : 'Progress';
+  const progressLabel = device === 'tablet' ? 'Reconciliation Findings' : 'Progress';
 
   return (
     <Tabs
@@ -89,7 +89,7 @@ export default function PhoneTabsLayout() {
           offers no benefit here and just eats into the page. */}
       <Tabs.Screen name="audit/[auditId]/index" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/count-sheet" options={{ href: null }} />
-      {/* Reported Audits (this task's own breakdown, or the ongoing audit's
+      {/* Reconciliation Findings (this task's own breakdown, or the ongoing audit's
           when reached via the bottom tab) already has its own back button —
           same reasoning as Audit Details above. */}
       <Tabs.Screen name="audit/[auditId]/progress" options={{ href: null, tabBarStyle: { display: 'none' } }} />
@@ -103,6 +103,10 @@ export default function PhoneTabsLayout() {
       <Tabs.Screen name="tasks/map" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/issue/[lineId]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/discrepancy/[key]" options={{ href: null }} />
+      {/* Reconciliation Findings' own two card types (a real finding, or a
+          resolved-empty location) each open their own Issue Details variant. */}
+      <Tabs.Screen name="finding/[findingId]" options={{ href: null }} />
+      <Tabs.Screen name="finding/empty/[emptyId]" options={{ href: null }} />
     </Tabs>
   );
 }
