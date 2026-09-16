@@ -6,7 +6,7 @@ import { Card } from '@/components/Card';
 import { locLevelPosition } from '@/features/rack-view/buildBayDiagram';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
 import { findLayoutIn, findRackIn } from '@/lib/locationsRepo';
-import { buildFindings, findingRouteId } from '@/lib/findings';
+import { buildFindings } from '@/lib/findings';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
@@ -25,12 +25,22 @@ const FINDING_BADGE: Record<string, 'red' | 'amber' | 'accentBlue'> = {
 export function FindingDetailsScreen() {
   const { tokens } = useTheme();
   const { findingId } = useLocalSearchParams<{ findingId: string }>();
-  const [auditId] = (findingId ?? '').split('~').map((s) => decodeURIComponent(s));
+  // Decode once here and match plain fields against the freshly-rebuilt
+  // Finding list — comparing a re-encoded whole string against the raw
+  // route param (as this used to) breaks the moment any field needs
+  // encoding (e.g. "Mismatched SKU"'s own space), since expo-router may
+  // already have decoded the incoming param by the time it reaches here.
+  const [pAuditId, pFindingType, pLocCode, pPallet, pSku, pUnitId] = (findingId ?? '').split('~').map((s) => decodeURIComponent(s));
+  const auditId = pAuditId;
   const { data: audits } = useAudits();
   const audit = audits?.find((a) => a.audit_id === auditId);
   const { data: tree, isLoading } = useLocationsTree(auditId);
 
-  const finding = audit ? buildFindings([audit], { [auditId]: tree }, [], undefined, undefined).find((f) => findingRouteId(f) === findingId) : undefined;
+  const finding = audit
+    ? buildFindings([audit], { [auditId]: tree }, [], undefined, undefined).find(
+        (f) => f.auditId === pAuditId && f.findingType === pFindingType && f.locCode === pLocCode && f.pallet === pPallet && f.sku === pSku && f.unitId === pUnitId,
+      )
+    : undefined;
 
   if (!audit || isLoading) {
     return (

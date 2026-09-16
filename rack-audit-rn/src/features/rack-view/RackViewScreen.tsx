@@ -912,6 +912,24 @@ export function RackViewScreen() {
   };
 
   // Persists the pallet just finished, then jumps straight to the next
+  // scannableLocations only ever covers the CURRENT rack's own scan order
+  // (buildScanOrder builds it from this rack's bay diagrams alone) — once
+  // that's exhausted, look ahead to the rest of this layout's racks, in
+  // order, for the first still-pending location instead of just stranding
+  // the inspector on a bare canvas with the form closed.
+  const findNextPendingAcrossRacks = (): { rack: string; bay: string; loc: string } | null => {
+    const idx = layoutObj.racks.findIndex((r) => r.code === rackCode);
+    for (let i = idx + 1; i < layoutObj.racks.length; i++) {
+      const r = layoutObj.racks[i];
+      for (const bay of r.bays) {
+        const pending = bay.locations.find((l) => l.status !== 'Completed');
+        if (pending) return { rack: r.code, bay: bay.code, loc: pending.code };
+      }
+    }
+    return null;
+  };
+
+  // Persists the pallet just finished, then jumps straight to the next
   // location on this rack — selecting it (which highlights it on the
   // canvas behind the panel) reloads it via the effect above, so the
   // inspector never has to close the panel and tap the canvas by hand.
@@ -946,6 +964,16 @@ export function RackViewScreen() {
     const idx = selectedLocObj ? locs.findIndex((l) => l.code === selectedLocObj.code) : -1;
     const next = idx !== -1 ? locs[idx + 1] : undefined;
     if (!next) {
+      const acrossRacks = findNextPendingAcrossRacks();
+      if (acrossRacks) {
+        router.push({
+          pathname: '/audit/[auditId]/rack/[rackId]',
+          params: { auditId, rackId: acrossRacks.rack, layout: layoutName, bay: acrossRacks.bay, loc: acrossRacks.loc },
+        } as never);
+        return;
+      }
+      // Truly nothing left pending anywhere in this layout — only then does
+      // the panel actually close back to the bare canvas.
       setSkuPanelOpen(false);
       return;
     }

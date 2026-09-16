@@ -77,14 +77,20 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
     [candidates, treeMap],
   );
 
+  // "Show Empty location" SWITCHES the view, it doesn't add to it — on,
+  // the grid is only resolved-empty locations; off (default), it's only
+  // real findings. The two card shapes are different enough (no SKU/unit
+  // id/Finding Type on an empty card at all) that mixing them in one grid
+  // would read as a formatting error, not two kinds of the same thing.
   const findings = useMemo(() => {
+    if (showEmptyLocation) return [];
     const q = search.trim().toLowerCase();
     const filtered = allFindings.filter((f) => {
       if (filterTypes.length && !filterTypes.includes(f.findingType)) return false;
       return !q || [f.sku, f.skuName, f.unitId, f.rack, f.bay, f.locCode, f.auditName, f.discId].join(' ').toLowerCase().includes(q);
     });
     return filtered.slice().sort((x, y) => (sortDesc ? y.sku.localeCompare(x.sku) : x.sku.localeCompare(y.sku)));
-  }, [allFindings, search, filterTypes, sortDesc]);
+  }, [allFindings, search, filterTypes, sortDesc, showEmptyLocation]);
 
   const emptyCards = useMemo(() => {
     if (!showEmptyLocation) return [];
@@ -92,7 +98,7 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
     return emptyFindings.filter((e) => !q || [e.rack, e.bay, e.locCode, e.auditName].join(' ').toLowerCase().includes(q));
   }, [showEmptyLocation, emptyFindings, search]);
 
-  const total = findings.length + emptyCards.length;
+  const total = showEmptyLocation ? emptyCards.length : findings.length;
   const activeFilterCount = filterTypes.length;
   const toggleType = (t: FindingType) => setFilterTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
@@ -106,12 +112,10 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader
-        title="Reconciliation Findings"
-        sub={scopedAudit ? `${scopedAudit.audit_id} · ${scopedAudit.audit_name}` : `${candidates.length} Assigned Audit${candidates.length === 1 ? '' : 's'} · Issue overview`}
-        showBack
-        menuItems={[{ label: 'Sync Now', onPress: () => {} }]}
-      />
+      {/* No per-audit subtitle — this board always merges findings across
+          every assigned audit now, so a single audit's name/id up here
+          would misleadingly imply it's scoped to just that one. */}
+      <AppHeader title="Reconciliation Findings" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
 
       <View style={styles.toolbar}>
         <View style={[styles.searchBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
@@ -359,7 +363,10 @@ const styles = StyleSheet.create({
   body: { padding: 16 },
   totalBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, marginBottom: 14 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  findingCard: { flexGrow: 1, flexBasis: 260, borderWidth: 1, overflow: 'hidden' },
+  // Pinned to a fixed 4-per-row width (not flexGrow-to-fill) so the grid
+  // reads as a real 4x4 layout regardless of card content length, matching
+  // the reference design instead of however many happen to fit.
+  findingCard: { flexGrow: 0, flexShrink: 0, flexBasis: '23%', minWidth: 240, borderWidth: 1, overflow: 'hidden' },
   findingHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
   findingBody: { padding: 14, gap: 10 },
   findingRow: { flexDirection: 'row', gap: 10 },
