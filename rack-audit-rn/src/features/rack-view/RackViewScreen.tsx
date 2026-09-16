@@ -176,11 +176,6 @@ export function RackViewScreen() {
   // switches it.
   const [scanLines, setScanLines] = useState<CountLine[]>([]);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
-  // "Sku Units" section collapses independently within the active line's
-  // expanded accordion — the "-"/"+" toggle in its own header, not tied to
-  // qtyEditing. (Damage no longer has an equivalent single-section toggle —
-  // see the per-Inventory-Unit-ID list below instead.)
-  const [unitSectionOpen, setUnitSectionOpen] = useState(true);
   // Every box's unique label already scanned onto the CURRENT pallet this
   // session — a real pallet QR is "<sku>::<label>" (same convention as
   // Zone Audit's scanner), so two different boxes of the same SKU carry
@@ -206,7 +201,6 @@ export function RackViewScreen() {
   // Mismatch badge and the Raise Issue button for that field.
   const [qtyChecked, setQtyChecked] = useState(false);
   const [qtyEditing, setQtyEditing] = useState(false);
-  const [qtyInputText, setQtyInputText] = useState('');
   const [damageChecked, setDamageChecked] = useState(false);
   const [damageEditing, setDamageEditing] = useState(false);
   // Draft selections while the Damage editor is open — Observations is a
@@ -419,21 +413,8 @@ export function RackViewScreen() {
   // the Manual Mode toggle while an in-scope, expected-SKU pallet is still
   // selected must NOT switch that pallet's form into manual behavior.
   const formIsManual = manualMode && !!selectedLocObj && !!audit.target_sku && !matchesTargetSku(selectedLocObj.code);
-  // Manual Mode shares this same qty/damage form (see the shared JSX
-  // block below), but there's genuinely no expected SKU/qty/condition for
-  // an out-of-scope pallet, so expectedSku always stays null there —
-  // skuMatched/misplaced fall out false automatically as a result, and the
-  // form itself skips rendering anything that depends on a comparison.
   const activeLine = scanLines[activeLineIndex] ?? null;
   const scannedLine = formIsManual ? (manualScanned ? manualLine : null) : activeLine;
-  // Per-SKU-line matching: the active line is checked against whichever
-  // expected SKU it actually matches (a pallet can carry more than one
-  // expected SKU now), falling back to the first expected entry so the
-  // "Expected" compare column still has something to show before anything's
-  // been scanned yet.
-  const expectedSku = formIsManual ? null : (expectedSkus.find((e) => e.sku === activeLine?.sku) ?? expectedSkus[0] ?? null);
-  const skuMatched = !!scannedLine && !!expectedSku && scannedLine.sku === expectedSku.sku;
-  const misplaced = !!scannedLine && !skuMatched && !formIsManual;
 
   const inBayFilter = (locCode: string) => bayFilter === 'all' || bayCodeForLoc(locCode) === bayFilter;
   // Still waiting on a clean, confirmed match at this location — either
@@ -969,12 +950,14 @@ export function RackViewScreen() {
     }
     // Mostly scan the expected SKU (the common case), occasionally
     // simulate a genuinely different/unexpected item to demo that path too
-    // — each tap gets its own synthetic suffix so repeated taps add fresh
-    // units instead of tripping the duplicate-scan check.
+    // — each tap gets its own numeric Inventory Unit ID (1001, 1002, ...,
+    // matching the admin "Pallet" tool's own unit ID convention) so
+    // repeated taps add fresh units instead of tripping the duplicate-scan
+    // check.
     const expected = expectedSkus[0];
     const useExpected = expected && skuScanCount % 3 !== 0;
     const pick = useExpected ? expected : INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length];
-    applyMultiSkuScan(`${pick.sku}::SIM-${skuScanCount}`);
+    applyMultiSkuScan(`${pick.sku}::${1001 + skuScanCount}`);
     setSkuScanCount((c) => c + 1);
   };
 
@@ -1007,24 +990,6 @@ export function RackViewScreen() {
       damageIssueRaised: kind === 'damage' ? true : scannedLine.damageIssueRaised,
     });
     handleRaiseIssue(scannedLine.sku);
-  };
-
-  // Commits the quantity the inspector says they actually found — parses the
-  // input, updates the line, marks Quantity as checked (unlocking its
-  // Matched/Mismatched badge in normal mode), and refreshes the canvas cell
-  // color (normal mode only — Manual Mode pallets don't drive that color).
-  const handleConfirmQty = () => {
-    if (!scannedLine || !selectedLocObj) return;
-    const n = parseInt(qtyInputText, 10);
-    const qty = Number.isNaN(n) ? 0 : Math.max(0, n);
-    updateCurrentLine({ qty, qtyConfirmed: true });
-    setQtyChecked(true);
-    setQtyEditing(false);
-    if (!formIsManual) {
-      const nextLines = scanLines.slice();
-      if (nextLines[activeLineIndex]) nextLines[activeLineIndex] = { ...nextLines[activeLineIndex], qty };
-      applyLocationStatus(selectedLocObj.code, nextLines, expectedSkus);
-    }
   };
 
   // Manual Mode's whole point is reporting a problem, so saving it always
@@ -1546,11 +1511,10 @@ export function RackViewScreen() {
                   <View style={styles.scannedListWrap}>
                     {scanLines.map((line, i) => {
                       const isActive = i === activeLineIndex;
-                      // SKU identity only — same definition the "Sku
-                      // status" pill inside the expanded body uses — so the
-                      // collapsed row and the opened detail never disagree.
+                      // SKU identity only — feeds the per-unit Matched/
+                      // Mismatched pills inside the expanded body below, not
+                      // shown as its own label up here anymore.
                       const lineMatched = expectedSkus.some((e) => e.sku === line.sku);
-                      const lineRag = lineMatched ? tokens.rag.green : tokens.rag.red;
                       return (
                         <View key={`${line.sku}-${i}`}>
                           <Pressable
@@ -1563,7 +1527,6 @@ export function RackViewScreen() {
                               setDamageChecked(!!line.damageConfirmed);
                               setQtyEditing(false);
                               setDamageEditing(false);
-                              setUnitSectionOpen(true);
                             }}
                             style={[
                               styles.scannedRow,
@@ -1574,9 +1537,6 @@ export function RackViewScreen() {
                               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
                               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{line.name}</Text>
                             </View>
-                            <View style={[styles.editStatusPill, { backgroundColor: lineRag.soft, borderColor: lineRag.border, borderRadius: tokens.radius.lg }]}>
-                              <Text style={{ color: lineRag.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>{lineMatched ? 'Matched' : 'Mismatched'}</Text>
-                            </View>
                             <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
                           </Pressable>
 
@@ -1586,253 +1546,8 @@ export function RackViewScreen() {
                     // SKU identity status (Matched/Mismatched) is already
                     // shown on the collapsed accordion row above — no need
                     // to repeat it here as its own header.
-                    const raised = issuesRaised.has(scannedLine.sku);
                     return (
                       <>
-                        {!formIsManual ? (
-                          <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                            {expectedSkus.length <= 1 ? (
-                              // This location only ever expects one SKU —
-                              // pairing the scan against it is unambiguous,
-                              // so show the Expected/Scanned comparison.
-                              // Based on how many SKUs are EXPECTED here,
-                              // not how many have been scanned so far — a
-                              // multi-SKU pallet must look the same way
-                              // from its very first scan, not flip styles
-                              // once a second SKU shows up.
-                              <View style={[styles.fieldCardBody, { flexDirection: 'row', gap: 10 }]}>
-                                <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
-                                  {expectedSku ? (
-                                    <>
-                                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku.sku}</Text>
-                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{expectedSku.name}</Text>
-                                    </>
-                                  ) : (
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Nothing expected</Text>
-                                  )}
-                                </View>
-                                <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                                  <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
-                                  {scannedLine ? (
-                                    <>
-                                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
-                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
-                                      {scannedLine.unitIds?.length ? (
-                                        <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                          Inventory Unit ID: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
-                                        </Text>
-                                      ) : null}
-                                    </>
-                                  ) : (
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
-                                  )}
-                                </View>
-                              </View>
-                            ) : (
-                              // This location expects more than one SKU —
-                              // the expected list can be in any order, so
-                              // there's no reliable way to pair a specific
-                              // expected entry to this specific scanned
-                              // line. Show only what was scanned; the row's
-                              // own Matched/Mismatch pill already says
-                              // whether it belongs.
-                              <View style={styles.fieldCardBody}>
-                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Scanned</Text>
-                                {scannedLine ? (
-                                  <>
-                                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.sku}</Text>
-                                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{scannedLine.name}</Text>
-                                    {scannedLine.unitIds?.length ? (
-                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 5 }}>
-                                        Inventory Unit ID: <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold }}>{scannedLine.unitIds.join(', ')}</Text>
-                                      </Text>
-                                    ) : null}
-                                  </>
-                                ) : (
-                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 4 }}>Not scanned yet</Text>
-                                )}
-                              </View>
-                            )}
-                          </View>
-                        ) : null}
-                        {misplaced ? (
-                          // Wrong SKU is known the instant the scan resolves
-                          // — nothing to enter, so this raises the issue
-                          // directly rather than opening the qty/damage form.
-                          <Pressable
-                            disabled={raised}
-                            onPress={() => {
-                              updateCurrentLine({ issueRaised: true });
-                              handleRaiseIssue(scannedLine.sku);
-                            }}
-                            style={[
-                              styles.raiseIssueBox,
-                              {
-                                backgroundColor: raised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                                borderColor: raised ? tokens.rag.green.border : tokens.rag.red.border,
-                                borderRadius: tokens.radius.lg,
-                              },
-                            ]}
-                          >
-                            <Ionicons name={raised ? 'checkmark-circle' : 'flag'} size={18} color={raised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                            <Text style={{ color: raised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
-                              {raised ? 'Issue raised for this SKU' : 'Raise Issue — wrong item scanned'}
-                            </Text>
-                            {!raised ? <Text style={{ color: tokens.rag.red.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Tap to raise</Text> : null}
-                          </Pressable>
-                        ) : (
-                          // SKU matched — quantity and damage are two
-                          // independent findings on this pallet (an inspector
-                          // can raise one, the other, both, or neither), so
-                          // each gets its own entry control, its own Matched/
-                          // Mismatched status, and its own Raise Issue button
-                          // rather than a single combined subform.
-                          <>
-                            <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                              <Pressable
-                                disabled={qtyChecked}
-                                onPress={() => setUnitSectionOpen((v) => !v)}
-                                style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: unitSectionOpen ? tokens.border : 'transparent', borderBottomWidth: unitSectionOpen ? 1 : 0 }]}
-                              >
-                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Sku Units</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                  {!formIsManual && qtyChecked ? (
-                                    <View
-                                      style={[
-                                        styles.editStatusPill,
-                                        {
-                                          backgroundColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.soft : tokens.rag.amber.soft,
-                                          borderColor: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.border : tokens.rag.amber.border,
-                                          borderRadius: tokens.radius.lg,
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        style={{
-                                          color: scannedLine.qty === expectedSku?.qty ? tokens.rag.green.strong : tokens.rag.amber.strong,
-                                          fontWeight: tokens.fontWeight.bold,
-                                          fontSize: tokens.text.xs,
-                                        }}
-                                      >
-                                        {scannedLine.qty === expectedSku?.qty ? 'Matched' : 'Mismatched'}
-                                      </Text>
-                                    </View>
-                                  ) : null}
-                                  {!qtyChecked ? (
-                                    <View style={[styles.sectionToggle, { borderColor: tokens.border }]}>
-                                      <Ionicons name={unitSectionOpen ? 'remove' : 'add'} size={14} color={tokens.foreground} />
-                                    </View>
-                                  ) : null}
-                                </View>
-                              </Pressable>
-                              {unitSectionOpen ? (
-                              <View style={styles.fieldCardBody}>
-                                {qtyEditing ? (
-                                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                                    <TextInput
-                                      value={qtyInputText}
-                                      onChangeText={setQtyInputText}
-                                      placeholder="Unit you found"
-                                      keyboardType="number-pad"
-                                      placeholderTextColor={tokens.slate400}
-                                      autoFocus
-                                      style={[styles.qtyInput, { flex: 1, color: tokens.foreground, borderColor: tokens.border, backgroundColor: tokens.inputBackground, borderRadius: tokens.radius.lg }]}
-                                    />
-                                    <Pressable onPress={handleConfirmQty} style={[styles.smallPrimaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-                                      <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Confirm</Text>
-                                    </Pressable>
-                                  </View>
-                                ) : qtyChecked ? (
-                                  // Confirmed — same Expected/Scanned compare
-                                  // language as the Sku status card above, so
-                                  // a matched or mismatched unit count reads
-                                  // exactly the same way SKU identity does.
-                                  <View style={{ gap: 8 }}>
-                                    <View style={styles.compareRow}>
-                                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Expected</Text>
-                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{expectedSku ? expectedSku.qty : '—'}</Text>
-                                      </View>
-                                      <View style={[styles.compareCol, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                                        <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Found</Text>
-                                        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 4 }}>{scannedLine.qty}</Text>
-                                      </View>
-                                    </View>
-                                    <Pressable
-                                      onPress={() => {
-                                        setQtyInputText(String(scannedLine.qty));
-                                        setQtyEditing(true);
-                                      }}
-                                      style={styles.fieldValueRow}
-                                    >
-                                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Correct the found units</Text>
-                                      <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
-                                        <Ionicons name="create-outline" size={14} color={tokens.primary} />
-                                      </View>
-                                    </Pressable>
-                                  </View>
-                                ) : (
-                                  <Pressable
-                                    onPress={() => {
-                                      setQtyInputText('');
-                                      setQtyEditing(true);
-                                    }}
-                                    style={styles.fieldValueRow}
-                                  >
-                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
-                                      Unit found: <Text style={{ fontWeight: tokens.fontWeight.bold }}>-</Text>
-                                    </Text>
-                                    <View style={[styles.editIconBtn, { backgroundColor: tokens.muted, borderRadius: tokens.radius.sm }]}>
-                                      <Ionicons name="create-outline" size={14} color={tokens.primary} />
-                                    </View>
-                                  </Pressable>
-                                )}
-                                {!qtyChecked ? (
-                                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>
-                                    Enter the units you actually found, then Confirm to see whether it matches what's expected.
-                                  </Text>
-                                ) : null}
-                                {(formIsManual ? qtyChecked : qtyChecked && scannedLine.qty !== expectedSku?.qty) ? (
-                                  <Pressable
-                                    disabled={!!scannedLine.qtyIssueRaised}
-                                    onPress={() => raiseFieldIssue('qty')}
-                                    style={[
-                                      styles.raiseIssueBox,
-                                      {
-                                        backgroundColor: scannedLine.qtyIssueRaised ? tokens.rag.green.soft : tokens.rag.red.soft,
-                                        borderColor: scannedLine.qtyIssueRaised ? tokens.rag.green.border : tokens.rag.red.border,
-                                        borderRadius: tokens.radius.lg,
-                                      },
-                                    ]}
-                                  >
-                                    <Ionicons name={scannedLine.qtyIssueRaised ? 'checkmark-circle' : 'flag'} size={16} color={scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong} />
-                                    <Text style={{ color: scannedLine.qtyIssueRaised ? tokens.rag.green.strong : tokens.rag.red.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs, flex: 1 }}>
-                                      {scannedLine.qtyIssueRaised ? 'Issue raised for unit' : 'Raise Issue — unit'}
-                                    </Text>
-                                  </Pressable>
-                                ) : null}
-                                <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase' }}>Evidence</Text>
-                                <EvidenceBlock
-                                  evidence={ensureFieldEvidence('qtyEvidence')}
-                                  onOpenNote={() => updateFieldEvidence('qtyEvidence', { noteOpen: true })}
-                                  onChangeNote={(note) => updateFieldEvidence('qtyEvidence', { note })}
-                                  onRecordAudio={() => updateFieldEvidence('qtyEvidence', { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                                  onToggleAudioPlay={() => {
-                                    const ev = ensureFieldEvidence('qtyEvidence');
-                                    if (!ev.audio) return;
-                                    updateFieldEvidence('qtyEvidence', { audio: { ...ev.audio, playing: !ev.audio.playing } });
-                                  }}
-                                  onRemoveAudio={() => updateFieldEvidence('qtyEvidence', { audio: null })}
-                                  onAddImage={() => setAttachmentTarget('qty')}
-                                  onRemoveImage={(i) => updateFieldEvidence('qtyEvidence', { images: ensureFieldEvidence('qtyEvidence').images.filter((_, ii) => ii !== i) })}
-                                  onAddVideo={() => updateFieldEvidence('qtyEvidence', { videos: [...ensureFieldEvidence('qtyEvidence').videos, { durationSec: 20 }] })}
-                                  onRemoveVideo={(i) => updateFieldEvidence('qtyEvidence', { videos: ensureFieldEvidence('qtyEvidence').videos.filter((_, ii) => ii !== i) })}
-                                />
-                              </View>
-                              ) : null}
-                            </View>
-
                             <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                               <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, borderBottomWidth: 1 }]}>
                                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Inventory Unit IDs</Text>
@@ -1915,8 +1630,6 @@ export function RackViewScreen() {
                                 ) : null}
                               </View>
                             </View>
-                          </>
-                        )}
                       </>
                     );
                               })()}
