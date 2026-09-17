@@ -319,32 +319,38 @@ export function scopedIssues(tree: AuditLocationsTree | undefined): ScopedIssue[
   const out: ScopedIssue[] = [];
   allLocations(tree).forEach(({ layout, rack, bay, loc }) => {
     const saved = loc.pallets.find((p) => p.saved);
-    const found = saved?.lines[0];
-    if (!saved || !found || found.source === 'manual' || found.source === 'empty') return;
-    const expected = EXPECTED_SKUS[loc.code]?.[0];
-    if (!expected) return;
-    const skuOk = found.sku === expected.sku;
-    if (skuOk && found.qty === expected.qty && found.condition === 'Good') return; // clean match — not an issue
-    out.push({
-      kind: skuOk ? 'matched-issue' : 'mismatch',
-      layout,
-      rack,
-      bay,
-      locCode: loc.code,
-      pallet: saved.pallet,
-      expectedSku: expected.sku,
-      expectedName: expected.name,
-      expectedQty: expected.qty,
-      foundSku: found.sku,
-      foundName: found.name,
-      foundLot: found.lot,
-      foundQty: found.qty,
-      condition: found.condition,
-      issueRaised: found.issueRaised,
-      evidence: found.evidence,
-      unitIds: found.unitIds,
-      palletConditionGood: found.palletConditionGood,
-      conditionEvidence: found.conditionEvidence,
+    const expectedLines = EXPECTED_SKUS[loc.code];
+    if (!saved || !expectedLines?.length) return;
+    // A pallet can carry several scanned lines (multi-SKU scan) — every one
+    // of them is its own potential discrepancy, not just whichever line
+    // happened to land first. A line only ever drops out silently when it's
+    // a clean match on its own terms (right SKU, right qty, good condition).
+    saved.lines.forEach((found) => {
+      if (found.source === 'manual' || found.source === 'empty') return;
+      const expected = expectedLines.find((e) => e.sku === found.sku) ?? expectedLines[0];
+      const skuOk = expectedLines.some((e) => e.sku === found.sku);
+      if (skuOk && found.qty === expected.qty && found.condition === 'Good') return; // clean match — not an issue
+      out.push({
+        kind: skuOk ? 'matched-issue' : 'mismatch',
+        layout,
+        rack,
+        bay,
+        locCode: loc.code,
+        pallet: saved.pallet,
+        expectedSku: expected.sku,
+        expectedName: expected.name,
+        expectedQty: expected.qty,
+        foundSku: found.sku,
+        foundName: found.name,
+        foundLot: found.lot,
+        foundQty: found.qty,
+        condition: found.condition,
+        issueRaised: found.issueRaised,
+        evidence: found.evidence,
+        unitIds: found.unitIds,
+        palletConditionGood: found.palletConditionGood,
+        conditionEvidence: found.conditionEvidence,
+      });
     });
   });
   return out;

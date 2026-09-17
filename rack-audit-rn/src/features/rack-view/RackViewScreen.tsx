@@ -342,6 +342,20 @@ export function RackViewScreen() {
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
+  // Save & Scan Next (and Proceed on Missing Inventory Unit IDs) can advance
+  // the blinking selection to a pallet the inspector previously panned/
+  // zoomed away from — reset the canvas back to its default framing on
+  // every selection change so the newly-selected, blinking cell is actually
+  // back in view instead of off-screen.
+  useEffect(() => {
+    scale.value = withTiming(1, { duration: 200 });
+    translateX.value = withTiming(0, { duration: 200 });
+    translateY.value = withTiming(0, { duration: 200 });
+    savedScale.value = 1;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+  }, [selectedLoc]);
+
   // Re-syncs layoutName/rackCode/bayFilter/selectedLoc to the INCOMING
   // ROUTE PARAMS, not just on first mount. Tapping a second bay chip within
   // the same rack resolves to the exact same path
