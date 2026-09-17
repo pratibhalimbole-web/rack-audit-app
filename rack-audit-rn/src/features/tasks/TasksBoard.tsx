@@ -8,7 +8,6 @@ import { MaintenanceTodoCard } from '@/components/MaintenanceTodoCard';
 import { DUE_BUCKETS, dueBucket, type DueBucketKey } from '@/lib/auditLogic';
 import { buildMaintenanceTasks, type MaintenanceTask } from '@/lib/maintenance';
 import { useAuditProgressMap, useLocationsTreeMap } from '@/hooks/useLocationsTree';
-import { useAuthStore } from '@/store/useAuthStore';
 import type { Audit } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useMyAudits } from '../dashboard/hooks';
@@ -41,8 +40,8 @@ const COLUMN_COLOR: Record<(typeof DUE_BUCKETS)[number]['color'], 'red' | 'green
 };
 
 type TaskTypeFilter = 'Audit' | 'Maintenance';
-type FilterCategory = 'type' | 'zone' | 'rack' | 'bay';
-const CATEGORY_LABEL: Record<FilterCategory, string> = { type: 'Task Type', zone: 'Zone', rack: 'Rack', bay: 'Bay' };
+type FilterCategory = 'type' | 'zoneValue' | 'layout' | 'rack' | 'bay';
+const CATEGORY_LABEL: Record<FilterCategory, string> = { type: 'Task Type', zoneValue: 'Zone', layout: 'Layout', rack: 'Rack', bay: 'Bay' };
 
 // Flat layout/rack/bay location, sourced from either an audit's own
 // allLocations() or a Maintenance task's direct rack/bay fields — the one
@@ -56,14 +55,18 @@ type FilterLoc = { layout: string; rack: string; bay: string };
 // do" anymore regardless of due date).
 export function TasksBoard() {
   const { tokens } = useTheme();
-  const inspector = useAuthStore((s) => s.inspector);
   const { data: audits = [] } = useMyAudits();
   const [search, setSearch] = useState('');
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState<FilterCategory | null>(null);
+  const [categorySearch, setCategorySearch] = useState('');
   const [typeFilters, setTypeFilters] = useState<TaskTypeFilter[]>([]);
-  const [zoneFilters, setZoneFilters] = useState<string[]>([]);
+  // The actual Zone scope values raised on Zone-type audits (e.g. "Zone A")
+  // — distinct from Layout, which is the warehouse layout a task's
+  // locations live in.
+  const [zoneValueFilters, setZoneValueFilters] = useState<string[]>([]);
+  const [layoutFilters, setLayoutFilters] = useState<string[]>([]);
   const [rackFilters, setRackFilters] = useState<string[]>([]);
   const [bayFilters, setBayFilters] = useState<string[]>([]);
 
@@ -108,19 +111,26 @@ export function TasksBoard() {
     return locs;
   }, [myTasks, map, openMaintenanceTasks]);
 
-  const zoneOptions = useMemo(() => [...new Set(allFilterLocs.map((l) => l.layout))].sort(), [allFilterLocs]);
+  const layoutOptions = useMemo(() => [...new Set(allFilterLocs.map((l) => l.layout))].sort(), [allFilterLocs]);
   const rackOptions = useMemo(() => {
-    const pool = zoneFilters.length ? allFilterLocs.filter((l) => zoneFilters.includes(l.layout)) : allFilterLocs;
+    const pool = layoutFilters.length ? allFilterLocs.filter((l) => layoutFilters.includes(l.layout)) : allFilterLocs;
     return [...new Set(pool.map((l) => l.rack))].sort();
-  }, [allFilterLocs, zoneFilters]);
+  }, [allFilterLocs, layoutFilters]);
   // Bay options only exist once at least one Rack is picked — there's no
   // "browse every bay in the warehouse" option, matching how a real
   // inspector actually narrows down (rack first, then which bay in it).
   const bayOptions = useMemo(() => {
     if (!rackFilters.length) return [];
-    const pool = allFilterLocs.filter((l) => rackFilters.includes(l.rack) && (!zoneFilters.length || zoneFilters.includes(l.layout)));
+    const pool = allFilterLocs.filter((l) => rackFilters.includes(l.rack) && (!layoutFilters.length || layoutFilters.includes(l.layout)));
     return [...new Set(pool.map((l) => l.bay))].sort();
-  }, [allFilterLocs, rackFilters, zoneFilters]);
+  }, [allFilterLocs, rackFilters, layoutFilters]);
+
+  // Every distinct Zone raised on a Zone-type audit — a Maintenance task
+  // has no scope_type of its own, so it never matches a Zone filter.
+  const zoneValueOptions = useMemo(
+    () => [...new Set(myTasks.filter((a) => a.scope_type === 'Zone').flatMap((a) => a.scope_values))].sort(),
+    [myTasks],
+  );
 
   // Dropping a Rack filter value can leave a previously-picked Bay
   // orphaned (it belonged to a rack that's no longer selected) — prune
@@ -129,10 +139,10 @@ export function TasksBoard() {
   const activeBayFilters = useMemo(() => bayFilters.filter((b) => bayOptions.includes(b)), [bayFilters, bayOptions]);
 
   const matchesLocFilters = (locs: FilterLoc[]) => {
-    if (!zoneFilters.length && !rackFilters.length && !activeBayFilters.length) return true;
+    if (!layoutFilters.length && !rackFilters.length && !activeBayFilters.length) return true;
     return locs.some(
       (l) =>
-        (!zoneFilters.length || zoneFilters.includes(l.layout)) &&
+        (!layoutFilters.length || layoutFilters.includes(l.layout)) &&
         (!rackFilters.length || rackFilters.includes(l.rack)) &&
         (!activeBayFilters.length || activeBayFilters.includes(l.bay)),
     );
@@ -142,17 +152,27 @@ export function TasksBoard() {
   const showMaintenanceType = !typeFilters.length || typeFilters.includes('Maintenance');
 
   const filteredAudits = useMemo(
-    () => (showAuditType ? searchedAudits.filter((a) => matchesLocFilters(map[a.audit_id]?.allLocations ?? [])) : []),
+    () =>
+      showAuditType
+        ? searchedAudits.filter(
+            (a) =>
+              matchesLocFilters(map[a.audit_id]?.allLocations ?? []) &&
+              (!zoneValueFilters.length || (a.scope_type === 'Zone' && a.scope_values.some((v) => zoneValueFilters.includes(v)))),
+          )
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searchedAudits, map, showAuditType, zoneFilters, rackFilters, activeBayFilters],
+    [searchedAudits, map, showAuditType, layoutFilters, rackFilters, activeBayFilters, zoneValueFilters],
   );
   const filteredMaintenance = useMemo(
-    () => (showMaintenanceType ? searchedMaintenance.filter((t) => matchesLocFilters([{ layout: t.layout, rack: t.rack, bay: t.bay }])) : []),
+    () =>
+      showMaintenanceType && !zoneValueFilters.length
+        ? searchedMaintenance.filter((t) => matchesLocFilters([{ layout: t.layout, rack: t.rack, bay: t.bay }]))
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searchedMaintenance, showMaintenanceType, zoneFilters, rackFilters, activeBayFilters],
+    [searchedMaintenance, showMaintenanceType, layoutFilters, rackFilters, activeBayFilters, zoneValueFilters],
   );
 
-  const activeFilterCount = typeFilters.length + zoneFilters.length + rackFilters.length + activeBayFilters.length;
+  const activeFilterCount = typeFilters.length + zoneValueFilters.length + layoutFilters.length + rackFilters.length + activeBayFilters.length;
   const toggleIn = <T,>(list: T[], value: T, setList: (v: T[]) => void) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
@@ -167,7 +187,6 @@ export function TasksBoard() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader
         title="Tasks"
-        sub={`${myTasks.length} Assigned · ${inspector?.warehouse ?? ''}`}
         showBack
         menuItems={[
           { label: 'Sync Now', onPress: () => {} },
@@ -207,75 +226,117 @@ export function TasksBoard() {
 
           {filterOpen ? (
             <>
-              <Pressable style={StyleSheet.absoluteFill} onPress={() => setFilterOpen(false)} />
-              {filterCategory ? (
-                <View style={[styles.filterCategoryPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                  <Text style={[styles.filterPanelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>
-                    {CATEGORY_LABEL[filterCategory]}
-                  </Text>
-                  {filterCategory === 'bay' && !rackFilters.length ? (
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, paddingVertical: 10 }}>
-                      Select a Rack first to choose a Bay.
-                    </Text>
-                  ) : (
-                    <ScrollView style={{ maxHeight: 240 }}>
-                      {(filterCategory === 'type' ? (['Audit', 'Maintenance'] as TaskTypeFilter[]) : filterCategory === 'zone' ? zoneOptions : filterCategory === 'rack' ? rackOptions : bayOptions).map((opt) => {
-                        const checked =
-                          filterCategory === 'type'
-                            ? typeFilters.includes(opt as TaskTypeFilter)
-                            : filterCategory === 'zone'
-                              ? zoneFilters.includes(opt)
-                              : filterCategory === 'rack'
-                                ? rackFilters.includes(opt)
-                                : activeBayFilters.includes(opt);
-                        return (
-                          <Pressable
-                            key={opt}
-                            onPress={() => {
-                              if (filterCategory === 'type') toggleIn(typeFilters, opt as TaskTypeFilter, setTypeFilters);
-                              else if (filterCategory === 'zone') toggleIn(zoneFilters, opt, setZoneFilters);
-                              else if (filterCategory === 'rack') toggleIn(rackFilters, opt, setRackFilters);
-                              else toggleIn(bayFilters, opt, setBayFilters);
-                            }}
-                            style={styles.filterChecklistRow}
-                          >
-                            <FilterCheckbox checked={checked} />
-                            <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm }} numberOfLines={1}>
-                              {opt}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  )}
-                </View>
-              ) : null}
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => {
+                  setFilterOpen(false);
+                  setFilterCategory(null);
+                }}
+              />
+              {filterCategory
+                ? (() => {
+                    const options =
+                      filterCategory === 'type'
+                        ? (['Audit', 'Maintenance'] as TaskTypeFilter[])
+                        : filterCategory === 'zoneValue'
+                          ? zoneValueOptions
+                          : filterCategory === 'layout'
+                            ? layoutOptions
+                            : filterCategory === 'rack'
+                              ? rackOptions
+                              : bayOptions;
+                    const cs = categorySearch.trim().toLowerCase();
+                    const visibleOptions = cs ? options.filter((o) => o.toLowerCase().includes(cs)) : options;
+                    return (
+                      <View style={[styles.filterCategoryPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                        <View style={styles.filterCategoryHeadRow}>
+                          <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{CATEGORY_LABEL[filterCategory]}</Text>
+                          <View style={[styles.categoryTotalBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                            <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Total : {options.length}</Text>
+                          </View>
+                        </View>
+                        <View style={[styles.categorySearchBox, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                          <Ionicons name="search" size={15} color="#667085" />
+                          <TextInput
+                            value={categorySearch}
+                            onChangeText={setCategorySearch}
+                            placeholder="Search"
+                            placeholderTextColor={tokens.slate400}
+                            style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm, paddingVertical: 6 }}
+                          />
+                        </View>
+                        {filterCategory === 'bay' && !rackFilters.length ? (
+                          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, paddingVertical: 10 }}>
+                            Select a Rack first to choose a Bay.
+                          </Text>
+                        ) : (
+                          <ScrollView style={{ maxHeight: 260 }}>
+                            {visibleOptions.map((opt) => {
+                              const checked =
+                                filterCategory === 'type'
+                                  ? typeFilters.includes(opt as TaskTypeFilter)
+                                  : filterCategory === 'zoneValue'
+                                    ? zoneValueFilters.includes(opt)
+                                    : filterCategory === 'layout'
+                                      ? layoutFilters.includes(opt)
+                                      : filterCategory === 'rack'
+                                        ? rackFilters.includes(opt)
+                                        : activeBayFilters.includes(opt);
+                              return (
+                                <Pressable
+                                  key={opt}
+                                  onPress={() => {
+                                    if (filterCategory === 'type') toggleIn(typeFilters, opt as TaskTypeFilter, setTypeFilters);
+                                    else if (filterCategory === 'zoneValue') toggleIn(zoneValueFilters, opt, setZoneValueFilters);
+                                    else if (filterCategory === 'layout') toggleIn(layoutFilters, opt, setLayoutFilters);
+                                    else if (filterCategory === 'rack') toggleIn(rackFilters, opt, setRackFilters);
+                                    else toggleIn(bayFilters, opt, setBayFilters);
+                                  }}
+                                  style={styles.filterChecklistRow}
+                                >
+                                  <FilterCheckbox checked={checked} />
+                                  <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.base }} numberOfLines={1}>
+                                    {opt}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        )}
+                      </View>
+                    );
+                  })()
+                : null}
 
               <View style={[styles.filterMainPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                <Text style={[styles.filterPanelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Filter By</Text>
-                {(['type', 'zone', 'rack', 'bay'] as FilterCategory[]).map((cat) => {
+                <Text style={[styles.filterPanelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Select</Text>
+                {(['type', 'zoneValue', 'layout', 'rack', 'bay'] as FilterCategory[]).map((cat) => {
                   // Bay stays visible but visibly disabled until a Rack is
                   // picked — an inspector always narrows rack-first, never
                   // jumps straight to "which bay in the whole warehouse".
                   const disabled = cat === 'bay' && !rackFilters.length;
+                  const active = filterCategory === cat;
                   return (
                     <Pressable
                       key={cat}
                       disabled={disabled}
-                      onPress={() => setFilterCategory(filterCategory === cat ? null : cat)}
-                      style={[styles.filterChecklistRow, disabled ? { opacity: 0.4 } : null]}
+                      onPress={() => {
+                        setFilterCategory(active ? null : cat);
+                        setCategorySearch('');
+                      }}
+                      style={[styles.filterChecklistRow, active ? { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg } : null, disabled ? { opacity: 0.4 } : null]}
                     >
                       <Text
                         style={{
-                          color: filterCategory === cat ? tokens.primary : tokens.popoverForeground,
-                          fontSize: tokens.text.sm,
+                          color: active ? tokens.accentBlue.strong : tokens.popoverForeground,
+                          fontSize: tokens.text.base,
                           fontWeight: tokens.fontWeight.semibold,
                           flex: 1,
                         }}
                       >
                         {CATEGORY_LABEL[cat]}
                       </Text>
-                      <Ionicons name={filterCategory === cat ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
+                      <Ionicons name={active ? 'chevron-up' : 'chevron-down'} size={16} color={active ? tokens.accentBlue.strong : '#667085'} />
                     </Pressable>
                   );
                 })}
@@ -283,14 +344,6 @@ export function TasksBoard() {
             </>
           ) : null}
         </View>
-
-        <Pressable
-          onPress={() => router.push('/tasks/map' as never)}
-          style={[styles.mapBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
-        >
-          <Ionicons name="cube-outline" size={16} color={tokens.foreground} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>View Tasks on 3D</Text>
-        </Pressable>
       </View>
       <View style={styles.board}>
         {DUE_BUCKETS.map(({ key, color }) => {
@@ -347,13 +400,18 @@ const EMPTY_ROLLUP = { rackDone: 0, rackTotal: 0, bayDone: 0, bayTotal: 0, locDo
 const styles = StyleSheet.create({
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
-  mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, height: 40, paddingHorizontal: 12 },
   filterBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   filterCountBadge: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  filterMainPanel: { position: 'absolute', top: 44, left: 0, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
-  filterCategoryPanel: { position: 'absolute', top: 44, left: 212, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
-  filterPanelTitle: { fontSize: 12, fontWeight: '700', paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1 },
-  filterChecklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 2 },
+  filterMainPanel: { position: 'absolute', top: 44, left: 0, width: 220, borderWidth: 1, padding: 12, zIndex: 21 },
+  // Opens to the LEFT of the main "Select" panel, not the right — matches
+  // the reference where the category flyout hangs off the main panel's
+  // near edge instead of extending further off-screen.
+  filterCategoryPanel: { position: 'absolute', top: 44, left: -412, width: 380, borderWidth: 1, padding: 14, zIndex: 21 },
+  filterCategoryHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  categoryTotalBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  categorySearchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 10, marginBottom: 8 },
+  filterPanelTitle: { fontSize: 13, fontWeight: '700', paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1 },
+  filterChecklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 6 },
   filterCheckbox: { width: 18, height: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   board: { flex: 1, flexDirection: 'row', padding: 16, gap: 12 },
   column: { flex: 1 },

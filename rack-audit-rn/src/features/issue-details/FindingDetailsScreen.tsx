@@ -10,11 +10,12 @@ import { buildFindings } from '@/lib/findings';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
-const FINDING_BADGE: Record<string, 'red' | 'amber' | 'accentBlue'> = {
+const FINDING_BADGE: Record<string, 'red' | 'amber' | 'accentBlue' | 'accentPurple'> = {
   'Mismatched SKU': 'amber',
   'Missing SKU': 'accentBlue',
-  Damage: 'red',
+  'Pallet Damage': 'red',
   'Manual Report': 'amber',
+  'Pallet Empty': 'accentPurple',
 };
 
 // Reached from a Reconciliation Findings card — re-derives the exact same
@@ -65,10 +66,16 @@ export function FindingDetailsScreen() {
   const bayObj = rackObj?.bays.find((b) => b.code === finding.bay);
   const { level, position } = locLevelPosition(bayObj, finding.locCode);
   const badgeKey = FINDING_BADGE[finding.findingType] ?? 'amber';
-  const badge = badgeKey === 'accentBlue' ? { bg: tokens.accentBlue.soft, fg: tokens.accentBlue.strong } : { bg: tokens.rag[badgeKey].soft, fg: tokens.rag[badgeKey].strong };
+  const badge =
+    badgeKey === 'accentBlue'
+      ? { bg: tokens.accentBlue.soft, fg: tokens.accentBlue.strong }
+      : badgeKey === 'accentPurple'
+        ? { bg: tokens.accentPurple.soft, fg: tokens.accentPurple.strong }
+        : { bg: tokens.rag[badgeKey].soft, fg: tokens.rag[badgeKey].strong };
   const ev = finding.evidence;
   const images = ev?.images ?? [];
   const videos = ev?.videos ?? [];
+  const conditionLabel = finding.palletConditionGood === false ? 'Not Good' : finding.palletConditionGood === true ? 'Good' : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
@@ -76,7 +83,9 @@ export function FindingDetailsScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <Card>
           <View style={styles.sectionLabelRow}>
-            <Ionicons name="search-outline" size={16} color={tokens.foreground} />
+            <View style={[styles.iconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+              <Ionicons name="search-outline" size={16} color={tokens.accentBlue.strong} />
+            </View>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Issue Details</Text>
           </View>
           <View style={styles.grid}>
@@ -88,8 +97,8 @@ export function FindingDetailsScreen() {
                 <Text style={{ color: badge.fg, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>{finding.findingType}</Text>
               </View>
             </View>
-            <Field label="SKU" value={finding.sku} mono />
-            <Field label="Inventory unit id" value={finding.unitId} mono />
+            <Field label="SKU" value={finding.sku || '-'} mono />
+            <Field label="Inventory unit id" value={finding.findingType === 'Pallet Empty' ? '-' : finding.unitId} mono />
 
             <Field label="Inspected on" value={finding.inspectedOn} />
             <Field label="Layout" value={finding.layout} />
@@ -110,6 +119,21 @@ export function FindingDetailsScreen() {
             <Field label="Note" value={ev?.note || 'NA'} />
           </View>
         </Card>
+
+        {conditionLabel ? (
+          <Card>
+            <View style={styles.sectionLabelRow}>
+              <View style={[styles.iconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                <Ionicons name="barcode-outline" size={16} color={tokens.accentBlue.strong} />
+              </View>
+              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Pallet Condition Details</Text>
+            </View>
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 14 }}>Pallet Condition :</Text>
+            <View style={[styles.typeBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg, marginTop: 6 }]}>
+              <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>{conditionLabel}</Text>
+            </View>
+          </Card>
+        ) : null}
 
         <Card>
           <EvidenceGroupHead icon="image-outline" label="Image Attachments" count={images.length} />
@@ -150,7 +174,9 @@ function EvidenceGroupHead({ icon, label, count }: { icon: keyof typeof Ionicons
   const { tokens } = useTheme();
   return (
     <View style={styles.evidenceHeadRow}>
-      <Ionicons name={icon} size={16} color={tokens.foreground} />
+      <View style={[styles.iconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+        <Ionicons name={icon} size={16} color={tokens.accentBlue.strong} />
+      </View>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{label}</Text>
       <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
         <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{String(count).padStart(2, '0')}</Text>
@@ -175,6 +201,7 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 16, gap: 14, paddingBottom: 40 },
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   field: { width: '20%', minWidth: 140, marginBottom: 14, paddingRight: 8 },
   typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4 },

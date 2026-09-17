@@ -22,7 +22,6 @@ import { useMyAudits } from './hooks';
 // table-style task list instead of stacked cards.
 export function DashboardTablet() {
   const { tokens } = useTheme();
-  const inspector = useAuthStore((s) => s.inspector);
   const { data: myTasks = [] } = useMyAudits();
   // Every audit whose own status field is literally "In Progress" —
   // independent of whether it's also run past its end date. Folding an
@@ -63,6 +62,10 @@ export function DashboardTablet() {
   // Scheduled but not yet started, and not overdue — same bucket the To Do
   // board's own date columns pull from, just counted here as one number.
   const upcomingCount = myTasks.filter((a) => uiStatus(a) === 'To Do').length;
+  // "My Audit Tasks" is a to-do preview, not "every audit I'm on" — a
+  // Submitted/Reconciled/Closed audit is already done, so it doesn't belong
+  // in a task list (same rule Tasks' own board already applies).
+  const openTasks = myTasks.filter((a) => uiStatus(a) !== 'Completed');
 
   const isFullyCounted = bannerProgress.rollup.locTotal > 0 && bannerProgress.rollup.locDone === bannerProgress.rollup.locTotal;
   const isOngoingBanner = banner === ongoing;
@@ -72,7 +75,6 @@ export function DashboardTablet() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader
         title="Dashboard"
-        sub={inspector ? `${inspector.name.split(' ')[0]} · ${inspector.warehouse}` : undefined}
         avatar
         menuItems={[
           { label: 'Refresh', onPress: () => {} },
@@ -90,10 +92,10 @@ export function DashboardTablet() {
 
         {banner ? (
           <View style={[styles.banner, { borderColor: tokens.primary, borderRadius: tokens.radius.xl }]}>
-            <BannerField label="Audit Name" value={banner.audit_name} />
+            <BannerField label="Event Name & ID" value={`${banner.audit_name} -${banner.audit_id}`} />
             <BannerField label="Scheduled" value={`${fmtDate(banner.start_date)} to ${fmtDate(banner.end_date)}`} />
             <BannerField label="Total Locations" value={String(bannerProgress.rollup.locTotal)} />
-            <BannerField label="Last Counted" value={bannerProgress.lastSaved ? bannerProgress.lastSaved.loc.code : '—'} />
+            <BannerField label="Last Selected Pallet" value={bannerProgress.lastSaved ? bannerProgress.lastSaved.loc.code : '—'} />
             <Pressable
               onPress={() => {
                 if (!isOngoingBanner) {
@@ -138,105 +140,117 @@ export function DashboardTablet() {
           </View>
         ) : null}
 
-        <View style={styles.overviewRow}>
-          <Card style={styles.overviewCardNarrow}>
+        <Card>
+          <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
+            <View>
+              <Text style={[styles.cardTitle, { color: tokens.foreground }]}>Audit Overview</Text>
+              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
+                Progress across all assigned audits
+              </Text>
+            </View>
+            <OutlineButton label="See all" onPress={() => router.push('/tasks')} />
+          </View>
+          <View style={styles.statTileRow}>
+            <StatTile value={totalAudits} label="Total Assigned Audits" icon="calendar-outline" />
+            <StatTile value={upcomingCount} label="Upcoming" icon="time-outline" />
+            <StatTile value={ongoingCount} label="Ongoing" icon="time-outline" />
+            <StatTile value={completedCount} label="Completed" icon="checkmark-outline" />
+          </View>
+        </Card>
+
+        {ongoing ? (
+          <Card>
             <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
               <View>
-                <Text style={[styles.cardTitle, { color: tokens.mutedForeground }]}>Audit Overview</Text>
+                <View style={styles.ongoingTitleRow}>
+                  <Text style={[styles.cardTitle, { color: tokens.foreground }]}>Ongoing Audit</Text>
+                  <View style={[styles.todayPill, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                    <View style={[styles.todayDot, { backgroundColor: tokens.accentBlue.strong }]} />
+                    <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Today</Text>
+                  </View>
+                </View>
                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
-                  Progress across all assigned audits
+                  Total Ongoing : {String(ongoingAudits.length).padStart(2, '0')}
                 </Text>
               </View>
-              <OutlineButton label="See All" onPress={() => router.push('/tasks')} />
+              <OutlineButton label="See Details" onPress={() => router.push('/tasks')} />
             </View>
-            <View style={styles.statTileGrid}>
-              <StatTile value={totalAudits} label="Total Assigned Audits" icon="clipboard-outline" />
-              <StatTile value={upcomingCount} label="Upcoming" icon="time-outline" />
-              <StatTile value={ongoingCount} label="Ongoing" icon="sync-outline" />
-              <StatTile value={completedCount} label="Completed" icon="checkmark-circle-outline" />
-            </View>
-          </Card>
-
-          {ongoing ? (
-            <Card style={styles.overviewCardWide}>
-              <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
-                <View>
-                  <View style={styles.ongoingTitleRow}>
-                    <Text style={[styles.cardTitle, { color: tokens.mutedForeground }]}>Ongoing Audit</Text>
-                    <View style={[styles.todayPill, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-                      <View style={[styles.todayDot, { backgroundColor: tokens.accentBlue.strong }]} />
-                      <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>Today</Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>
-                    Total Ongoing : {String(ongoingAudits.length).padStart(2, '0')}
-                  </Text>
+            <GestureDetector gesture={ongoingSwipeGesture}>
+              <Pressable
+                onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: ongoing.audit_id } } as never)}
+                style={[styles.ongoingCardBox, { borderColor: tokens.accentBlue.base, borderRadius: 8 }]}
+              >
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
+                  {ongoing.audit_name}
+                </Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{ongoing.audit_id}</Text>
+                <View style={[styles.ongoingDivider, { backgroundColor: tokens.border }]} />
+                <View style={styles.detailGrid}>
+                  <DetailField label="Start Date" value={fmtDate(ongoing.start_date)} />
+                  <DetailField label="End Date" value={fmtDate(ongoing.end_date)} />
+                  <DetailField
+                    label="Layout"
+                    value={
+                      bannerTree?.layouts.length
+                        ? bannerTree.layouts.length > 1
+                          ? `${bannerTree.layouts[0].name}, +${bannerTree.layouts.length - 1} more`
+                          : bannerTree.layouts[0].name
+                        : '—'
+                    }
+                  />
+                  <DetailField label="Rack" value={String(bannerProgress.rollup.rackTotal)} />
+                  <DetailField label="Total Bays" value={String(bannerProgress.rollup.bayTotal)} />
+                  <DetailField label="Pending Bays" value={String(bannerProgress.rollup.bayTotal - bannerProgress.rollup.bayDone)} />
+                  <DetailField label="Location Scanned" value={String(bannerProgress.rollup.locDone)} />
+                  <DetailField label="Location Pending" value={String(bannerProgress.rollup.locTotal - bannerProgress.rollup.locDone)} />
                 </View>
-                <OutlineButton
-                  label="See Details"
-                  onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: ongoing.audit_id } } as never)}
-                />
+              </Pressable>
+            </GestureDetector>
+            {ongoingAudits.length > 1 ? (
+              // One dot per ongoing audit — tap a dot, or slide the card
+              // above left/right, to page to that audit.
+              <View style={styles.dotRow}>
+                {ongoingAudits.map((a, i) => (
+                  <Pressable key={a.audit_id} onPress={() => setOngoingIndex(i)} hitSlop={8}>
+                    <View
+                      style={[
+                        styles.dot,
+                        { backgroundColor: i === activeOngoingIndex ? tokens.primary : tokens.border },
+                      ]}
+                    />
+                  </Pressable>
+                ))}
               </View>
-              <GestureDetector gesture={ongoingSwipeGesture}>
-                <View style={[styles.ongoingCardBox, { borderColor: tokens.accentBlue.base, borderRadius: 8 }]}>
-                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }} numberOfLines={1}>
-                    {ongoing.audit_name}
-                  </Text>
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>{ongoing.audit_id}</Text>
-                  <Text style={[styles.sectionLabel, { color: tokens.mutedForeground }]}>Audit Details</Text>
-                  <View style={styles.detailGrid}>
-                    <DetailField label="Start Date" value={fmtDate(ongoing.start_date)} />
-                    <DetailField label="End Date" value={fmtDate(ongoing.end_date)} />
-                    <DetailField label="Layout" value={ongoing.scope_type === 'Layout' && ongoing.scope_values.length ? ongoing.scope_values.join(', ') : '—'} />
-                    <DetailField label="Rack" value={String(bannerProgress.rollup.rackTotal)} />
-                    <DetailField label="Total Bays" value={String(bannerProgress.rollup.bayTotal)} />
-                    <DetailField label="Pending Bays" value={String(bannerProgress.rollup.bayTotal - bannerProgress.rollup.bayDone)} />
-                    <DetailField label="Locations Scanned" value={String(bannerProgress.rollup.locDone)} />
-                    <DetailField label="Locations Pending" value={String(bannerProgress.rollup.locTotal - bannerProgress.rollup.locDone)} />
-                  </View>
-                </View>
-              </GestureDetector>
-              {ongoingAudits.length > 1 ? (
-                // One dot per ongoing audit — tap a dot, or slide the card
-                // above left/right, to page to that audit.
-                <View style={styles.dotRow}>
-                  {ongoingAudits.map((a, i) => (
-                    <Pressable key={a.audit_id} onPress={() => setOngoingIndex(i)} hitSlop={8}>
-                      <View
-                        style={[
-                          styles.dot,
-                          { backgroundColor: i === activeOngoingIndex ? tokens.primary : tokens.border },
-                        ]}
-                      />
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
-            </Card>
-          ) : (
-            <Card style={[styles.overviewCardWide, styles.emptyCard]}>
-              <Ionicons name="cube-outline" size={26} color="#667085" />
-              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>
-                No audit in progress
-              </Text>
-              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Open a task below to start one.</Text>
-            </Card>
-          )}
-        </View>
+            ) : null}
+          </Card>
+        ) : (
+          <Card style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={26} color="#667085" />
+            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>
+              No audit in progress
+            </Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Open a task below to start one.</Text>
+          </Card>
+        )}
 
         <Card>
           <View style={[styles.cardHeadRow, { borderBottomColor: tokens.border }]}>
             <View>
-              <Text style={[styles.cardTitle, { color: tokens.mutedForeground }]}>My Assigned Tasks</Text>
-              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 2 }}>Total Audits : {totalAudits}</Text>
+              <Text style={[styles.cardTitle, { color: tokens.foreground }]}>My Audit Tasks</Text>
+              <View style={styles.totalAuditsRow}>
+                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>Total Audits :</Text>
+                <View style={[styles.totalAuditsBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
+                  <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>{String(openTasks.length).padStart(2, '0')}</Text>
+                </View>
+              </View>
             </View>
             <OutlineButton label="View All Tasks" onPress={() => router.push('/tasks')} />
           </View>
           <View style={{ marginTop: 12, gap: 8 }}>
-            {myTasks.length ? (
+            {openTasks.length ? (
               // Card only ever previews up to 3 — however many there really
               // are (up to 7 or more), the rest live behind "View All Tasks".
-              myTasks.slice(0, 3).map((a) => <AuditListRow key={a.audit_id} audit={a} locTotal={map[a.audit_id]?.rollup.locTotal ?? 0} />)
+              openTasks.slice(0, 3).map((a) => <AuditListRow key={a.audit_id} audit={a} locTotal={map[a.audit_id]?.rollup.locTotal ?? 0} />)
             ) : (
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>
                 No audits assigned.
@@ -277,9 +291,9 @@ function StatTile({ value, label, icon }: { value: number; label: string; icon: 
 function DetailField({ label, value }: { label: string; value: string }) {
   const { tokens } = useTheme();
   return (
-    <View style={{ width: '25%', marginBottom: 10 }}>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{label}</Text>
-      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 2 }}>{value}</Text>
+    <View style={{ width: '25%', marginBottom: 20 }}>
+      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{label}</Text>
+      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, marginTop: 4 }}>{value}</Text>
     </View>
   );
 }
@@ -328,27 +342,23 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 20, borderWidth: 1.5, borderStyle: 'dashed', padding: 16 },
   bannerField: { flex: 1, minWidth: 120 },
   bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, height: 40, marginLeft: 'auto' },
-  overviewRow: { flexDirection: 'row', gap: 16 },
-  // Audit Overview no longer carries a progress bar, so it needs less
-  // width than the Ongoing Audit card next to it — narrower here, wider
-  // there, so the row still reads as balanced rather than the first card
-  // leaving obvious empty space.
-  overviewCardNarrow: { flex: 0.82 },
-  overviewCardWide: { flex: 1.18 },
   cardHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 12, marginBottom: 8 },
-  cardTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
-  statTileGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 22, marginTop: 16 },
-  statTile: { flexBasis: '47%', flexGrow: 1, borderRadius: 14, padding: 14 },
+  cardTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  statTileRow: { flexDirection: 'row', gap: 16, marginTop: 16 },
+  statTile: { flex: 1, borderRadius: 10, padding: 14 },
   statTileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   sectionLabel: { fontSize: 11, fontWeight: '700', marginTop: 14, marginBottom: 8 },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  ongoingCardBox: { borderWidth: 1.5, padding: 12, marginTop: 14 },
+  ongoingCardBox: { borderWidth: 1.5, padding: 14, marginTop: 14 },
+  ongoingDivider: { height: StyleSheet.hairlineWidth, marginVertical: 12 },
   ongoingTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   todayPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3 },
   todayDot: { width: 5, height: 5, borderRadius: 2.5 },
-  dotRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 },
+  dotRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 12 },
   dot: { width: 7, height: 7, borderRadius: 3.5 },
   outlineBtn: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
+  totalAuditsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  totalAuditsBadge: { paddingHorizontal: 6, paddingVertical: 1 },
   emptyCard: { alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 22 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 10 },
   iconWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },

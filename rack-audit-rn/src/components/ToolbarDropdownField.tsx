@@ -10,13 +10,32 @@ const STATUS_TONE = { 'Not Started': 'To Do', 'In Progress': 'In Progress', Comp
 // The compact toolbar chip Rack View's Layout/Rack/Bay/Pallet fields use —
 // shared here so any other screen wanting the exact same toolbar dropdown
 // look (e.g. Quick Scan's Pin Exact Location) doesn't reinterpret it.
-export function ToolbarField({ label, fixed, tag, open, onPress }: { label: string; fixed?: boolean; tag?: string; open?: boolean; onPress?: () => void }) {
+export function ToolbarField({
+  label,
+  fixed,
+  tag,
+  open,
+  onPress,
+  width,
+}: {
+  label: string;
+  fixed?: boolean;
+  tag?: string;
+  open?: boolean;
+  onPress?: () => void;
+  // A number pins an exact width; 'auto' drops the shared dropdown width
+  // entirely so the field hugs whatever the label actually measures (its
+  // length varies a lot here — Level/Position/Pallet segments each have a
+  // different digit count per location); omitted keeps the shared 118px.
+  width?: number | 'auto';
+}) {
   const { tokens } = useTheme();
   const content = (
     <View
       style={[
         styles.toolbarField,
-        !fixed ? styles.toolbarFieldDropdown : null,
+        !fixed && width !== 'auto' ? styles.toolbarFieldDropdown : null,
+        typeof width === 'number' ? { width } : null,
         { backgroundColor: fixed ? tokens.muted : tokens.card, borderColor: open ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg },
       ]}
     >
@@ -32,10 +51,20 @@ export function ToolbarField({ label, fixed, tag, open, onPress }: { label: stri
 
 // Anchored right under the field that opened it — a web-style dropdown
 // instead of BottomSheetPicker's slide-up-from-the-bottom sheet.
-export function InlineDropdown({ options, selectedValue, onSelect }: { options: SheetOption[]; selectedValue: string; onSelect: (value: string) => void }) {
+export function InlineDropdown({
+  options,
+  selectedValue,
+  onSelect,
+  width,
+}: {
+  options: SheetOption[];
+  selectedValue: string;
+  onSelect: (value: string) => void;
+  width?: number;
+}) {
   const { tokens } = useTheme();
   return (
-    <View style={[styles.inlineDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+    <View style={[styles.inlineDropdown, width ? { width } : null, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
       {options.length === 0 ? (
         <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, padding: 12 }}>No options here</Text>
       ) : null}

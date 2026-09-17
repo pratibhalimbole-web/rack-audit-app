@@ -1,4 +1,4 @@
-import { missingLines, scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } from './auditLogic';
+import { emptyLocations, missingLines, scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } from './auditLogic';
 import { TODAY } from './mockData';
 import type { AuditLocationsTree, Evidence } from './types';
 import type { ZoneScanRecord } from '@/store/useZoneAuditStore';
@@ -7,7 +7,11 @@ import type { ZoneScanRecord } from '@/store/useZoneAuditStore';
 // Unit ID wherever a scan actually identified one — shared by Reconciliation
 // Findings (the board) and its own Issue Details screen, both of which need
 // to build the exact same list to re-locate one finding by identity.
-export type FindingType = 'Mismatched SKU' | 'Missing SKU' | 'Damage' | 'Manual Report';
+// "Pallet Empty" is folded in here as a finding type too (a location
+// resolved via "Is the selected location pallet is empty?"), rather than
+// living behind its own "Show Empty location" toggle/view — same grid, same
+// filters, just another kind of finding.
+export type FindingType = 'Mismatched SKU' | 'Missing SKU' | 'Pallet Damage' | 'Manual Report' | 'Pallet Empty';
 
 export type Finding = {
   discId: string;
@@ -25,6 +29,10 @@ export type Finding = {
   inspectedOn: string;
   evidence?: Evidence;
   note?: string;
+  // Only ever set on a 'Pallet Empty' finding — the pallet condition
+  // question/evidence answered up top of Rack View's Reconciliation Form
+  // for that location, carried through since there's no SKU/unit id here.
+  palletConditionGood?: boolean | null;
 };
 
 export type WithAudit<T> = T & { auditId: string; auditName: string };
@@ -68,7 +76,7 @@ export function buildFindings(
     scopedIssues(treeMap[a.audit_id]).map((s): WithAudit<ScopedIssue> => ({ ...s, auditId: a.audit_id, auditName: a.audit_name })),
   );
   scoped.forEach((s) => {
-    const type: FindingType = s.kind === 'mismatch' ? 'Mismatched SKU' : s.condition !== 'Good' ? 'Damage' : 'Mismatched SKU';
+    const type: FindingType = s.kind === 'mismatch' ? 'Mismatched SKU' : s.condition !== 'Good' ? 'Pallet Damage' : 'Mismatched SKU';
     const units = s.unitIds?.length ? s.unitIds : [s.pallet];
     units.forEach((unitId) => {
       out.push({
@@ -86,6 +94,7 @@ export function buildFindings(
         pallet: s.pallet,
         inspectedOn: fmtInspected(),
         evidence: s.evidence,
+        palletConditionGood: s.palletConditionGood ?? undefined,
       });
     });
   });
@@ -135,6 +144,27 @@ export function buildFindings(
         pallet: m.pallet,
         inspectedOn: fmtInspected(),
       });
+    });
+  });
+
+  const emptyByAudit = candidates.flatMap((a) => emptyLocations(treeMap[a.audit_id]).map((e) => ({ ...e, auditId: a.audit_id, auditName: a.audit_name })));
+  emptyByAudit.forEach((e) => {
+    out.push({
+      discId: discIdFor(`${e.auditId}|${e.locCode}|${e.pallet}|empty`),
+      auditId: e.auditId,
+      auditName: e.auditName,
+      findingType: 'Pallet Empty',
+      sku: '',
+      skuName: '',
+      unitId: e.pallet,
+      layout: e.layout,
+      rack: e.rack,
+      bay: e.bay,
+      locCode: e.locCode,
+      pallet: e.pallet,
+      inspectedOn: fmtInspected(),
+      evidence: e.conditionEvidence,
+      palletConditionGood: e.palletConditionGood,
     });
   });
 

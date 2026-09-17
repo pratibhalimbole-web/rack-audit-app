@@ -298,6 +298,12 @@ export type ScopedIssue = {
   // scanned via the per-unit Rack View flow — used to give a mismatch/
   // damage finding a real unit id instead of just a SKU-level qty.
   unitIds?: string[];
+  // The pallet condition question answered at the top of Rack View's
+  // Reconciliation Form for this location — carried through so a Pallet
+  // Damage finding's Issue Details can show it alongside the per-unit
+  // condition, same as a Pallet Empty finding does.
+  palletConditionGood?: boolean;
+  conditionEvidence?: Evidence;
 };
 
 // Reconciles each location's actually-saved pallet (loc.pallets.find by
@@ -337,6 +343,8 @@ export function scopedIssues(tree: AuditLocationsTree | undefined): ScopedIssue[
       issueRaised: found.issueRaised,
       evidence: found.evidence,
       unitIds: found.unitIds,
+      palletConditionGood: found.palletConditionGood,
+      conditionEvidence: found.conditionEvidence,
     });
   });
   return out;

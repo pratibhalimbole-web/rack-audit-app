@@ -35,7 +35,7 @@ export function MaintenanceTodoCard({ task, showActionTaken }: { task: Maintenan
       style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
     >
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 10 }} numberOfLines={1}>
-        {task.issueType} · {task.sku}
+        {task.issueType === 'Manually Reported' ? task.sku : `${task.issueType} · ${task.sku}`}
       </Text>
       <View style={styles.fields}>
         <Field label="Location" full>

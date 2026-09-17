@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { TodoCard } from '@/components/TodoCard';
 import { MaintenanceTodoCard } from '@/components/MaintenanceTodoCard';
@@ -119,17 +118,6 @@ export function MaintenanceScreen() {
           </ScrollView>
         </View>
       </View>
-      <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
-        <Pressable onPress={() => router.back()} style={[styles.footerBtn, styles.cancelBtn, { borderColor: tokens.border }]}>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => router.back()}
-          style={[styles.footerBtn, { flex: 1.4, backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
-        >
-          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Complete Task</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -145,7 +133,4 @@ const styles = StyleSheet.create({
   columnHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
   countBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   columnBody: { flex: 1 },
-  footerBar: { flexDirection: 'row', gap: 12, padding: 16, borderTopWidth: StyleSheet.hairlineWidth },
-  footerBtn: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center' },
-  cancelBtn: { borderWidth: 1, borderRadius: 12 },
 });

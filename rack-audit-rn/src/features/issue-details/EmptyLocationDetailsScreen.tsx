@@ -60,7 +60,9 @@ export function EmptyLocationDetailsScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <Card>
           <View style={styles.sectionLabelRow}>
-            <Ionicons name="search-outline" size={16} color={tokens.foreground} />
+            <View style={[styles.iconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+              <Ionicons name="search-outline" size={16} color={tokens.accentBlue.strong} />
+            </View>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Issue Details</Text>
           </View>
           <View style={styles.grid}>
@@ -77,7 +79,9 @@ export function EmptyLocationDetailsScreen() {
 
         <Card>
           <View style={styles.sectionLabelRow}>
-            <Ionicons name="barcode-outline" size={16} color={tokens.foreground} />
+            <View style={[styles.iconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+              <Ionicons name="barcode-outline" size={16} color={tokens.accentBlue.strong} />
+            </View>
             <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>Pallet Condition Details</Text>
           </View>
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginTop: 14 }}>Pallet Condition :</Text>
@@ -125,7 +129,9 @@ function EvidenceGroupHead({ icon, label, count }: { icon: keyof typeof Ionicons
   const { tokens } = useTheme();
   return (
     <View style={styles.evidenceHeadRow}>
-      <Ionicons name={icon} size={16} color={tokens.foreground} />
+      <View style={[styles.iconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+        <Ionicons name={icon} size={16} color={tokens.accentBlue.strong} />
+      </View>
       <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{label}</Text>
       <View style={[styles.countBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.sm }]}>
         <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{String(count).padStart(2, '0')}</Text>
@@ -150,6 +156,7 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 16, gap: 14, paddingBottom: 40 },
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   field: { width: '20%', minWidth: 140, marginBottom: 14, paddingRight: 8 },
   typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4 },

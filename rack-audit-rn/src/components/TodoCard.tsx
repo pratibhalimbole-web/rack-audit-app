@@ -40,7 +40,7 @@ export function TodoCard({ audit, rollup, hideStatus }: { audit: Audit; rollup: 
         style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginBottom: 10 }}
         numberOfLines={1}
       >
-        {audit.audit_name}
+        {audit.audit_name} -{audit.audit_id}
       </Text>
       <View style={styles.fields}>
         <View style={styles.row}>

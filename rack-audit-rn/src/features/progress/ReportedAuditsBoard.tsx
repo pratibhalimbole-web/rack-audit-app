@@ -1,41 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
-import { emptyLocations, mine, type EmptyLocation } from '@/lib/auditLogic';
-import { buildFindings, findingRouteId, fmtInspected, type Finding, type FindingType } from '@/lib/findings';
+import { mine } from '@/lib/auditLogic';
+import { buildFindings, findingRouteId, type Finding, type FindingType } from '@/lib/findings';
 import { useLocationsTreeMap } from '@/hooks/useLocationsTree';
 import { useZoneAuditStore } from '@/store/useZoneAuditStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
 
-type WithAudit<T> = T & { auditId: string; auditName: string };
-
-const FINDING_BADGE: Record<FindingType, 'red' | 'amber' | 'accentBlue'> = {
+const FINDING_BADGE: Record<FindingType, 'red' | 'amber' | 'accentBlue' | 'accentPurple'> = {
   'Mismatched SKU': 'amber',
   'Missing SKU': 'accentBlue',
-  Damage: 'red',
+  'Pallet Damage': 'red',
   'Manual Report': 'amber',
+  'Pallet Empty': 'accentPurple',
 };
 
 function badgeColors(tokens: ReturnType<typeof useTheme>['tokens'], type: FindingType) {
   const key = FINDING_BADGE[type];
   if (key === 'accentBlue') return { bg: tokens.accentBlue.soft, fg: tokens.accentBlue.strong };
+  if (key === 'accentPurple') return { bg: tokens.accentPurple.soft, fg: tokens.accentPurple.strong };
   return { bg: tokens.rag[key].soft, fg: tokens.rag[key].strong };
 }
 
-const FINDING_TYPES: FindingType[] = ['Mismatched SKU', 'Missing SKU', 'Damage', 'Manual Report'];
+const FINDING_TYPES: FindingType[] = ['Mismatched SKU', 'Missing SKU', 'Pallet Damage', 'Manual Report', 'Pallet Empty'];
 
 // Ports renderProgressIssuesBoard() (rack-audit-app.html ~4094-4166), redone
 // as a flat, unified "Reconciliation Findings" grid instead of the previous
 // three-section layout — one card per discrepancy (Mismatched SKU, Missing
-// SKU, Damage, or Manual Report), broken down to the individual Inventory
-// Unit ID behind it wherever one was scanned. "Show Empty location" adds a
-// second, differently-shaped card type for locations resolved via "Is the
-// selected location pallet is empty?" — no SKU/unit id to show, so its own
-// card and its own Issue Details layout (Pallet Condition, not Finding
-// Type) — see src/lib/findings.ts and FindingDetailsScreen.
+// SKU, Pallet Damage, Manual Report, or Pallet Empty), broken down to the
+// individual Inventory Unit ID behind it wherever one was scanned. A
+// location resolved via "Is the selected location pallet is empty?" is just
+// another finding type here (Pallet Empty) — same grid, same filters, no
+// separate toggle/view for it — see src/lib/findings.ts.
 export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   const { tokens } = useTheme();
   const { data: audits } = useAudits();
@@ -62,45 +61,48 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
   }, [scopedAudit, zoneScansByAudit]);
 
   const [search, setSearch] = useState('');
-  const [showEmptyLocation, setShowEmptyLocation] = useState(false);
-  const [sortDesc, setSortDesc] = useState(true);
+  // "Oldest On Top" (build order — the order findings were resolved into
+  // the tree) is the default; "Newest On Top" just reverses it. There's no
+  // real per-finding timestamp anywhere in this app yet (see fmtInspected),
+  // so build order is the closest available proxy for reported order.
+  const [newestFirst, setNewestFirst] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterTypes, setFilterTypes] = useState<FindingType[]>([]);
+  const [typeSectionOpen, setTypeSectionOpen] = useState(true);
+  const [eventSectionOpen, setEventSectionOpen] = useState(false);
+  // Both start with every option selected (nothing excluded) — matches the
+  // reference design, where every checkbox is checked by default.
+  const [filterTypes, setFilterTypes] = useState<FindingType[]>(FINDING_TYPES);
+  const [filterEventIds, setFilterEventIds] = useState<string[]>([]);
 
   const allFindings = useMemo(
     () => buildFindings(candidates, treeMap, zoneIssueLines, scopedAudit?.audit_id, scopedAudit?.audit_name),
     [candidates, treeMap, zoneIssueLines, scopedAudit],
   );
-  const emptyFindings = useMemo(
-    (): WithAudit<EmptyLocation>[] => candidates.flatMap((a) => emptyLocations(treeMap[a.audit_id]).map((e) => ({ ...e, auditId: a.audit_id, auditName: a.audit_name }))),
-    [candidates, treeMap],
-  );
 
-  // "Show Empty location" SWITCHES the view, it doesn't add to it — on,
-  // the grid is only resolved-empty locations; off (default), it's only
-  // real findings. The two card shapes are different enough (no SKU/unit
-  // id/Finding Type on an empty card at all) that mixing them in one grid
-  // would read as a formatting error, not two kinds of the same thing.
+  const events = useMemo(() => candidates.map((a) => ({ id: a.audit_id, name: a.audit_name })), [candidates]);
+  // Stays in sync as new audits become candidates — an audit is only
+  // excluded once the inspector explicitly unchecks it.
+  useEffect(() => {
+    setFilterEventIds((prev) => (prev.length ? prev : events.map((e) => e.id)));
+  }, [events]);
+
+  // One unified grid for every finding type, Pallet Empty included — no
+  // separate toggle/view for it.
   const findings = useMemo(() => {
-    if (showEmptyLocation) return [];
     const q = search.trim().toLowerCase();
     const filtered = allFindings.filter((f) => {
-      if (filterTypes.length && !filterTypes.includes(f.findingType)) return false;
+      if (!filterTypes.includes(f.findingType)) return false;
+      if (filterEventIds.length && !filterEventIds.includes(f.auditId)) return false;
       return !q || [f.sku, f.skuName, f.unitId, f.rack, f.bay, f.locCode, f.auditName, f.discId].join(' ').toLowerCase().includes(q);
     });
-    return filtered.slice().sort((x, y) => (sortDesc ? y.sku.localeCompare(x.sku) : x.sku.localeCompare(y.sku)));
-  }, [allFindings, search, filterTypes, sortDesc, showEmptyLocation]);
+    return newestFirst ? filtered.slice().reverse() : filtered;
+  }, [allFindings, search, filterTypes, filterEventIds, newestFirst]);
 
-  const emptyCards = useMemo(() => {
-    if (!showEmptyLocation) return [];
-    const q = search.trim().toLowerCase();
-    return emptyFindings.filter((e) => !q || [e.rack, e.bay, e.locCode, e.auditName].join(' ').toLowerCase().includes(q));
-  }, [showEmptyLocation, emptyFindings, search]);
-
-  const total = showEmptyLocation ? emptyCards.length : findings.length;
-  const activeFilterCount = filterTypes.length;
+  const total = findings.length;
+  const activeFilterCount = (FINDING_TYPES.length - filterTypes.length) + (events.length - filterEventIds.length);
   const toggleType = (t: FindingType) => setFilterTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  const toggleEvent = (id: string) => setFilterEventIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   if (isLoading) {
     return (
@@ -129,11 +131,6 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
           />
         </View>
 
-        <Pressable onPress={() => setShowEmptyLocation((v) => !v)} style={styles.emptyToggleRow}>
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Show Empty location</Text>
-          <SmallToggle value={showEmptyLocation} onToggle={() => setShowEmptyLocation((v) => !v)} />
-        </Pressable>
-
         <View style={styles.toolbarIcons}>
           <View>
             <Pressable
@@ -152,18 +149,46 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
             </Pressable>
             {filterOpen ? (
               <View style={[styles.mainPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Finding Type</Text>
-                {FINDING_TYPES.map((t) => {
-                  const checked = filterTypes.includes(t);
-                  return (
-                    <Pressable key={t} onPress={() => toggleType(t)} style={styles.checklistRow}>
-                      <Checkbox checked={checked} />
-                      <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1 }} numberOfLines={1}>
-                        {t}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                <Text style={[styles.selectTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Select</Text>
+                <ScrollView style={styles.filterPanelScroll}>
+                  <Pressable onPress={() => setTypeSectionOpen((o) => !o)} style={styles.accordionHeadRow}>
+                    <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Finding Type</Text>
+                    <Ionicons name={typeSectionOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                  </Pressable>
+                  {typeSectionOpen
+                    ? FINDING_TYPES.map((t) => {
+                        const checked = filterTypes.includes(t);
+                        return (
+                          <Pressable key={t} onPress={() => toggleType(t)} style={styles.checklistRow}>
+                            <Checkbox checked={checked} />
+                            <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1 }} numberOfLines={1}>
+                              {t}
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    : null}
+
+                  <View style={[styles.accordionDivider, { backgroundColor: tokens.border }]} />
+
+                  <Pressable onPress={() => setEventSectionOpen((o) => !o)} style={styles.accordionHeadRow}>
+                    <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Event Name & ID</Text>
+                    <Ionicons name={eventSectionOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                  </Pressable>
+                  {eventSectionOpen
+                    ? events.map((e) => {
+                        const checked = filterEventIds.includes(e.id);
+                        return (
+                          <Pressable key={e.id} onPress={() => toggleEvent(e.id)} style={styles.checklistRow}>
+                            <Checkbox checked={checked} />
+                            <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1 }} numberOfLines={1}>
+                              {e.name} - {e.id}
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    : null}
+                </ScrollView>
               </View>
             ) : null}
           </View>
@@ -180,23 +205,28 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
             </Pressable>
             {sortOpen ? (
               <View style={[styles.sortDropdown, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                <Text style={[styles.panelTitle, { color: tokens.mutedForeground, borderBottomColor: tokens.border }]}>Sort by SKU</Text>
+                <Text style={[styles.panelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Reported Date</Text>
                 {[
-                  { label: 'A to Z', desc: false },
-                  { label: 'Z to A', desc: true },
-                ].map((opt) => (
-                  <Pressable
-                    key={opt.label}
-                    onPress={() => {
-                      setSortDesc(opt.desc);
-                      setSortOpen(false);
-                    }}
-                    style={styles.checklistRow}
-                  >
-                    <Text style={{ color: tokens.popoverForeground, fontSize: tokens.text.sm, flex: 1 }}>{opt.label}</Text>
-                    {sortDesc === opt.desc ? <Ionicons name="checkmark" size={16} color={tokens.primary} /> : null}
-                  </Pressable>
-                ))}
+                  { label: 'Oldest On Top', icon: 'arrow-up' as const, newest: false },
+                  { label: 'Newest On Top', icon: 'arrow-down' as const, newest: true },
+                ].map((opt) => {
+                  const active = newestFirst === opt.newest;
+                  return (
+                    <Pressable
+                      key={opt.label}
+                      onPress={() => {
+                        setNewestFirst(opt.newest);
+                        setSortOpen(false);
+                      }}
+                      style={[styles.checklistRow, active ? { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg } : null]}
+                    >
+                      <Ionicons name={opt.icon} size={15} color={active ? tokens.accentBlue.strong : tokens.mutedForeground} />
+                      <Text style={{ color: active ? tokens.accentBlue.strong : tokens.popoverForeground, fontWeight: active ? tokens.fontWeight.semibold : tokens.fontWeight.normal, fontSize: tokens.text.sm, flex: 1 }}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : null}
           </View>
@@ -223,9 +253,6 @@ export function ReportedAuditsBoard({ auditId }: { auditId?: string } = {}) {
             {findings.map((f, i) => (
               <FindingCard key={`${f.discId}-${f.unitId}-${i}`} finding={f} />
             ))}
-            {emptyCards.map((e, i) => (
-              <EmptyLocationCard key={`empty-${e.auditId}-${e.locCode}-${i}`} entry={e} />
-            ))}
           </View>
         ) : (
           <View style={styles.empty}>
@@ -250,19 +277,6 @@ function Checkbox({ checked }: { checked: boolean }) {
     >
       {checked ? <Ionicons name="checkmark" size={13} color={tokens.primaryForeground} /> : null}
     </View>
-  );
-}
-
-// Plain track+thumb, no label of its own — used next to "Show Empty
-// location" where the adjacent text already is the label.
-function SmallToggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
-  const { tokens } = useTheme();
-  return (
-    <Pressable onPress={onToggle} hitSlop={8}>
-      <View style={[styles.toggleTrack, { backgroundColor: value ? tokens.primary : tokens.slate300 }]}>
-        <View style={[styles.toggleThumb, { left: value ? 16 : 2 }]} />
-      </View>
-    </Pressable>
   );
 }
 
@@ -303,42 +317,10 @@ function FindingCard({ finding }: { finding: Finding }) {
           </View>
         </View>
         <View style={styles.findingRow}>
-          <FindingField label="SKU" value={finding.sku} />
-          <FindingField label="Inventory unit id" value={finding.unitId} />
+          <FindingField label="SKU" value={finding.sku || '-'} />
+          <FindingField label="Inventory unit id" value={finding.findingType === 'Pallet Empty' ? '-' : finding.unitId} />
         </View>
         <FindingField label="Inspected on" value={finding.inspectedOn} />
-      </View>
-    </Pressable>
-  );
-}
-
-// A resolved-empty location has no SKU/unit id/finding type at all, so the
-// card reads location-first instead — same as Rack View's own location
-// breadcrumb — and its own header leads with when it was checked, not a
-// Discrepancy ID.
-function EmptyLocationCard({ entry }: { entry: WithAudit<EmptyLocation> }) {
-  const { tokens } = useTheme();
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/finding/empty/[emptyId]', params: { emptyId: [entry.auditId, entry.locCode, entry.pallet].map(encodeURIComponent).join('~') } } as never)}
-      style={[styles.findingCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
-    >
-      <View style={[styles.findingHead, { backgroundColor: tokens.accentBlue.soft, borderTopLeftRadius: tokens.radius.xl, borderTopRightRadius: tokens.radius.xl }]}>
-        <Ionicons name="calendar-outline" size={16} color={tokens.accentBlue.strong} />
-        <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-          Inspected on : <Text style={{ fontWeight: tokens.fontWeight.bold }}>{fmtInspected()}</Text>
-        </Text>
-      </View>
-      <View style={styles.findingBody}>
-        <View style={styles.findingRow}>
-          <FindingField label="Layout" value={entry.layout} />
-          <FindingField label="Rack" value={entry.rack} />
-        </View>
-        <View style={styles.findingRow}>
-          <FindingField label="Bay" value={entry.bay} />
-          <FindingField label="Pallet" value={entry.pallet} />
-        </View>
-        <FindingField label="Event Name & ID" value={`${entry.auditName}-${entry.auditId}`} />
       </View>
     </Pressable>
   );
@@ -349,16 +331,17 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, zIndex: 30 },
   dismissBackdrop: { zIndex: 15 },
   searchBox: { flexGrow: 1, flexBasis: 220, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
-  emptyToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  toggleTrack: { width: 34, height: 20, borderRadius: 10 },
-  toggleThumb: { position: 'absolute', top: 2, width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
   toolbarIcons: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
   iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   filterCountBadge: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  mainPanel: { position: 'absolute', top: 44, right: 0, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
-  sortDropdown: { position: 'absolute', top: 44, right: 0, width: 170, borderWidth: 1, padding: 10, zIndex: 21 },
+  mainPanel: { position: 'absolute', top: 44, right: 0, width: 230, borderWidth: 1, padding: 12, zIndex: 21 },
+  selectTitle: { fontSize: 13, fontWeight: '700', paddingBottom: 10, marginBottom: 6, borderBottomWidth: 1 },
+  filterPanelScroll: { maxHeight: 300 },
+  accordionHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  accordionDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
+  sortDropdown: { position: 'absolute', top: 44, right: 0, width: 190, borderWidth: 1, padding: 10, zIndex: 21 },
   panelTitle: { fontSize: 12, fontWeight: '700', paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1 },
-  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 2 },
+  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 6 },
   checkbox: { width: 18, height: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 16 },
   totalBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, marginBottom: 14 },

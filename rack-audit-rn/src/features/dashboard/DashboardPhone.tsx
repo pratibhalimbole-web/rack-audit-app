@@ -17,14 +17,13 @@ import { useCurrentOngoing, useMyAudits } from './hooks';
 // layout: ongoing-audit card, task-progress donut, "My Audit Tasks" preview.
 export function DashboardPhone() {
   const { tokens } = useTheme();
-  const inspector = useAuthStore((s) => s.inspector);
   const { data: myTasks = [] } = useMyAudits();
   const ongoing = useCurrentOngoing();
   const { rollup, lastSaved } = useAuditProgress(ongoing?.audit_id);
   const { data: ongoingTree } = useLocationsTree(ongoing?.audit_id);
 
   const others = myTasks
-    .filter((a) => a !== ongoing)
+    .filter((a) => a !== ongoing && uiStatus(a) !== 'Completed')
     .sort((a, b) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime())
     .slice(0, 3);
 
@@ -38,7 +37,6 @@ export function DashboardPhone() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader
         title="Dashboard"
-        sub={inspector ? `${inspector.name.split(' ')[0]} · ${inspector.warehouse}` : undefined}
         avatar
         menuItems={[
           { label: 'Refresh', onPress: () => {} },
