@@ -1336,13 +1336,7 @@ export function RackViewScreen() {
           onPress={() => setPendingModalOpen(true)}
           style={[styles.pendingBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg, marginLeft: 'auto' }]}
         >
-          <Ionicons name="alert-circle-outline" size={16} color={tokens.rag.amber.strong} />
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Unresolved Locations</Text>
-          {warehousePending.length ? (
-            <View style={[styles.pendingCountBadge, { backgroundColor: tokens.rag.amber.strong, borderRadius: tokens.radius.xl }]}>
-              <Text style={{ color: '#fff', fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{warehousePending.length}</Text>
-            </View>
-          ) : null}
         </Pressable>
       </View>
 
@@ -2778,7 +2772,6 @@ const styles = StyleSheet.create({
   radioDotFill: { width: 7, height: 7, borderRadius: 3.5 },
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   pendingBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderWidth: 1 },
-  pendingCountBadge: { minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   pendingModalCard: { width: '100%', maxWidth: 900, maxHeight: '85%', padding: 20 },
   pendingModalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },

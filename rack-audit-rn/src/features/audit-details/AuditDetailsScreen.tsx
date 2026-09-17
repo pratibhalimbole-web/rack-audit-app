@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { Card } from '@/components/Card';
-import { allLocations, flattenBays, fmtDate, lastSaved, nextPending, rollup, uiStatus, type FlatBay, type LocationEntry } from '@/lib/auditLogic';
+import { flattenBays, fmtDate, lastSaved, nextPending, rollup, uiStatus, type FlatBay } from '@/lib/auditLogic';
 import { useDeviceClass } from '@/hooks/useDeviceClass';
 import { useLocationsTree } from '@/hooks/useLocationsTree';
-import { EXPECTED_SKUS, FLOOR_AREAS, INVENTORY_POOL, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
+import { FLOOR_AREAS, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useZoneAuditStore } from '@/store/useZoneAuditStore';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,10 +30,6 @@ export function AuditDetailsScreen() {
   // Opening a different layout always resets the rack accordion inside it.
   const [openLayout, setOpenLayout] = useState<string | null>(null);
   const [openRack, setOpenRack] = useState<string | null>(null);
-  // Third accordion level, only used by the SKU Wise body: SKU -> Zone
-  // (Layout) -> Rack -> location chips, one more level than Location Wise's
-  // Layout -> Rack -> Bay since a single SKU can span several zones.
-  const [openZone, setOpenZone] = useState<string | null>(null);
 
   const audit = audits?.find((a) => a.audit_id === auditId);
   const zoneScansByAudit = useZoneAuditStore((s) => s.scansByAudit);
@@ -49,17 +45,11 @@ export function AuditDetailsScreen() {
   useEffect(() => {
     setOpenLayout(layouts.length ? `layout:${layouts[0].name}` : null);
     setOpenRack(null);
-    setOpenZone(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-seed on a different audit, not every layouts re-render
   }, [auditId]);
 
   const toggleLayout = (key: string) => {
     setOpenLayout((prev) => (prev === key ? null : key));
-    setOpenRack(null);
-    setOpenZone(null);
-  };
-  const toggleZone = (key: string) => {
-    setOpenZone((prev) => (prev === key ? null : key));
     setOpenRack(null);
   };
   const toggleRack = (key: string) => {
@@ -93,7 +83,6 @@ export function AuditDetailsScreen() {
   // priority over this — zoneBody's whole-zone pick-list flow applies there
   // regardless of event_scope_type.
   const isSkuScope = !isZoneScope && audit.event_scope_type === 'SKU Wise';
-  const allEntries = useMemo(() => allLocations(tree), [tree]);
 
   // Same destination on phone and tablet — the Rack View canvas, with its
   // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
@@ -111,18 +100,6 @@ export function AuditDetailsScreen() {
     router.push({
       pathname: '/audit/[auditId]/rack/[rackId]',
       params: { auditId: audit.audit_id, rackId: bay.rack, layout: bay.layout, bay: bay.code, ...(fromChip ? { source: 'bay-chip' } : {}) },
-    } as never);
-  };
-
-  // SKU Wise's location chips are one level more specific than a bay chip
-  // (a bay can hold several expected SKUs at different locations inside
-  // it), so this jumps Rack View straight to the exact location, not just
-  // the bay.
-  const onPressLoc = (entry: LocationEntry) => {
-    if (isSubmitted) return;
-    router.push({
-      pathname: '/audit/[auditId]/rack/[rackId]',
-      params: { auditId: audit.audit_id, rackId: entry.rack, layout: entry.layout, bay: entry.bay, loc: entry.loc.code, source: 'bay-chip' },
     } as never);
   };
 
@@ -266,204 +243,90 @@ export function AuditDetailsScreen() {
     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
   );
 
-  // Grouped by SKU first, then by whichever rack(s) that SKU actually turns
-  // up in within this audit's tree (EXPECTED_SKUS is location-keyed, so a
-  // SKU with expected lines in Rack B-01 AND B-03 shows both) — mirrors the
-  // Layout/Rack accordion's two-level open state (openLayout/openRack),
-  // just keyed by SKU instead of by Layout.
-  const renderLocPill = (entry: LocationEntry) => (
-    <Pressable
-      key={`${entry.layout}|${entry.rack}|${entry.bay}|${entry.loc.code}`}
-      disabled={isSubmitted}
-      onPress={() => onPressLoc(entry)}
-      style={[
-        styles.bayPill,
-        {
-          backgroundColor: entry.loc.status === 'Completed' ? tokens.rag.green.soft : tokens.muted,
-          borderColor: entry.loc.status === 'Completed' ? tokens.rag.green.border : tokens.border,
-        },
-      ]}
-    >
-      <Text
-        style={{ color: entry.loc.status === 'Completed' ? tokens.rag.green.strong : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: 12.5 }}
-      >
-        {entry.bay} · {entry.loc.code}
-      </Text>
-    </Pressable>
+  // SKU Wise's own coverage view is physical-first, same as Location Wise —
+  // a flattened Racks accordion (no per-SKU grouping; the SKU Types/Batch
+  // are already summarized up in the schedule card) when scope_type isn't
+  // Zone, or a flat Zone chip row when it is.
+  const skuTypesSet = new Set(audit.sku_types ?? []);
+  // A zone counts as done once every SKU it's expected to hold (narrowed to
+  // this audit's own sku_types when SKU Wise) has been fully scanned —
+  // shared by both the generic zone chip grid and the SKU Wise variant.
+  const zoneDone = (zoneName: string) => {
+    const zoneId = FLOOR_AREAS.find((f) => f.label === zoneName)?.id;
+    const pickList = (ZONE_EXPECTED_SKUS[zoneName] ?? []).filter((p) => !isSkuScope || !skuTypesSet.size || skuTypesSet.has(p.sku));
+    if (!pickList.length) return false;
+    const scans = (zoneId && zoneScansByAudit[audit.audit_id]?.[zoneId]) || [];
+    return pickList.every((p) => new Set(scans.filter((s) => s.sku === p.sku).map((s) => s.label)).size >= p.expectedCount);
+  };
+  const zoneScopeDoneCount = isZoneScope ? audit.scope_values.filter(zoneDone).length : 0;
+  const zoneScopePendingCount = isZoneScope ? audit.scope_values.length - zoneScopeDoneCount : 0;
+
+  const skuZoneBody = audit.scope_values.length ? (
+    <View style={styles.bayGrid}>
+      {audit.scope_values.map((zoneName) => {
+        const done = zoneDone(zoneName);
+        return (
+          <View
+            key={zoneName}
+            style={[styles.zonePill, { backgroundColor: done ? tokens.rag.green.soft : tokens.muted, borderColor: done ? tokens.rag.green.border : tokens.border }]}
+          >
+            <Text style={{ color: done ? tokens.rag.green.strong : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+              {zoneName}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  ) : (
+    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
   );
 
-  // A SKU Wise audit's scope isn't confined to one physical grain — the
-  // same SKU can be expected inside a rack (EXPECTED_SKUS, location-keyed)
-  // AND on a standalone open-floor zone (ZONE_EXPECTED_SKUS/FLOOR_AREAS,
-  // zone-keyed) at the same time, so each SKU below carries an independent
-  // Rack group and Zone group rather than one or the other.
-  const skuTypes = audit.sku_types ?? [];
-  const skuGroups = isSkuScope
-    ? skuTypes.map((sku) => {
-        const rackEntries = allEntries.filter((e) => (EXPECTED_SKUS[e.loc.code] ?? []).some((l) => l.sku === sku));
-        const name = INVENTORY_POOL.find((i) => i.sku === sku)?.name ?? rackEntries[0]?.loc.code ?? sku;
-        const rackDoneCount = rackEntries.filter((e) => e.loc.status === 'Completed').length;
-        // Layout first, then Rack within it — matches Location Wise's own
-        // Layout -> Rack grouping, just re-rooted under the SKU.
-        const byLayout = new Map<string, { layout: string; entries: LocationEntry[]; racks: Map<string, { rack: string; entries: LocationEntry[] }> }>();
-        rackEntries.forEach((e) => {
-          if (!byLayout.has(e.layout)) byLayout.set(e.layout, { layout: e.layout, entries: [], racks: new Map() });
-          const ly = byLayout.get(e.layout)!;
-          ly.entries.push(e);
-          if (!ly.racks.has(e.rack)) ly.racks.set(e.rack, { rack: e.rack, entries: [] });
-          ly.racks.get(e.rack)!.entries.push(e);
-        });
-        const layoutGroups = Array.from(byLayout.values()).map((ly) => ({
-          layout: ly.layout,
-          entries: ly.entries,
-          racks: Array.from(ly.racks.values()),
-        }));
-
-        const floorZones = FLOOR_AREAS.filter((f) => (ZONE_EXPECTED_SKUS[f.label] ?? []).some((z) => z.sku === sku)).map((f) => {
-          const pick = ZONE_EXPECTED_SKUS[f.label]!.find((z) => z.sku === sku)!;
-          const scans = zoneScansByAudit[audit.audit_id]?.[f.id] ?? [];
-          const found = new Set(scans.filter((s) => s.sku === sku).map((s) => s.label)).size;
-          return { zoneId: f.id, zoneName: f.label, expectedCount: pick.expectedCount, found };
-        });
-        const zoneDoneCount = floorZones.filter((z) => z.found >= z.expectedCount).length;
-
-        const total = rackEntries.length + floorZones.length;
-        const doneCount = rackDoneCount + zoneDoneCount;
-        return { sku, name, total, doneCount, rackEntries, layoutGroups, floorZones };
-      })
-    : [];
-  const skuDoneCount = skuGroups.filter((g) => g.total > 0 && g.doneCount === g.total).length;
-  const skuPendingCount = skuGroups.length - skuDoneCount;
-
-  // A standalone floor zone has no rack/bay under it at all (FloorArea), so
-  // it's one flat pill with its own found/expected count — same shape as
-  // renderZoneGroup's pick-list rows, not a nested accordion like the Rack
-  // side below it.
-  const renderFloorZonePill = (fz: { zoneId: string; zoneName: string; expectedCount: number; found: number }) => {
-    const done = fz.found >= fz.expectedCount;
-    return (
-      <Pressable
-        key={fz.zoneId}
-        disabled={isSubmitted}
-        onPress={() =>
-          router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id, zoneId: fz.zoneId } } as never)
-        }
-        style={[
-          styles.bayPill,
-          { backgroundColor: done ? tokens.rag.green.soft : tokens.muted, borderColor: done ? tokens.rag.green.border : tokens.border },
-        ]}
-      >
-        <Text style={{ color: done ? tokens.rag.green.strong : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: 12.5 }}>
-          {fz.zoneName} · {fz.found}/{fz.expectedCount}
-        </Text>
+  // Flattened across layouts — reads as one "Racks" accordion (Total
+  // Racks: N) instead of grouped under each Layout's own name, since the
+  // SKU/batch scoping already narrowed things down at the top of the
+  // screen.
+  const allRacksFlat = layouts.flatMap((ly) => ly.racks.map((rack) => ({ layout: ly.name, rack })));
+  const racksRootOpen = openLayout === 'sku-racks-root';
+  const skuRackBody = (
+    <View>
+      <Pressable onPress={() => toggleLayout('sku-racks-root')} style={styles.accHeader}>
+        <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+          <Ionicons name="business-outline" size={18} color={tokens.accentBlue.base} />
+        </View>
+        <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Racks</Text>
+        <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+          <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+            Total Racks: {String(allRacksFlat.length).padStart(2, '0')}
+          </Text>
+        </View>
+        <Ionicons name={racksRootOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
       </Pressable>
-    );
-  };
-
-  const renderSkuGroup = (group: (typeof skuGroups)[number]) => {
-    const skuKey = `sku:${group.sku}`;
-    const skuOpen = openLayout === skuKey;
-    return (
-      <View key={group.sku} style={[styles.accSection, { borderBottomColor: tokens.border }]}>
-        <Pressable onPress={() => toggleLayout(skuKey)} style={styles.accHeader}>
-          <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
-            <Ionicons name="pricetag-outline" size={18} color={tokens.accentBlue.base} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{group.sku}</Text>
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }} numberOfLines={1}>
-              {group.name}
-            </Text>
-          </View>
-          <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-            <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-              {String(group.doneCount).padStart(2, '0')}/{String(group.total).padStart(2, '0')}
-            </Text>
-          </View>
-          <Ionicons name={skuOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
-        </Pressable>
-        {skuOpen ? (
-          group.total ? (
-            <View>
-              {group.floorZones.length ? (
-                <View style={styles.accSubSection}>
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold, marginBottom: 6 }}>
-                    ZONE
-                  </Text>
-                  <View style={styles.bayGrid}>{group.floorZones.map(renderFloorZonePill)}</View>
-                </View>
-              ) : null}
-              {group.layoutGroups.length ? (
-                <View style={styles.accSubSection}>
-                  <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold, marginBottom: 6 }}>
-                    RACK
-                  </Text>
-                  {group.layoutGroups.map((lg) => {
-                    const layoutKey = `sku-layout:${group.sku}|${lg.layout}`;
-                    const layoutOpen = openZone === layoutKey;
-                    const doneInLayout = lg.entries.filter((e) => e.loc.status === 'Completed').length;
-                    return (
-                      <View key={layoutKey} style={styles.accSubSection}>
-                        <Pressable onPress={() => toggleZone(layoutKey)} style={styles.accHeader}>
-                          <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
-                            <Ionicons name="grid-outline" size={18} color={tokens.accentBlue.base} />
-                          </View>
-                          <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-                            {lg.layout}
-                          </Text>
-                          <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-                            <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                              {String(doneInLayout).padStart(2, '0')}/{String(lg.entries.length).padStart(2, '0')}
-                            </Text>
-                          </View>
-                          <Ionicons name={layoutOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
-                        </Pressable>
-                        {layoutOpen
-                          ? lg.racks.map((rg) => {
-                              const rackKey = `sku-rack:${group.sku}|${lg.layout}|${rg.rack}`;
-                              const rackOpen = openRack === rackKey;
-                              const doneInRack = rg.entries.filter((e) => e.loc.status === 'Completed').length;
-                              return (
-                                <View key={rackKey} style={[styles.accSubSection, { marginLeft: 14 }]}>
-                                  <Pressable onPress={() => toggleRack(rackKey)} style={styles.accHeader}>
-                                    <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
-                                      <Ionicons name="server-outline" size={18} color={tokens.accentBlue.base} />
-                                    </View>
-                                    <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-                                      Rack {rg.rack}
-                                    </Text>
-                                    <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-                                      <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                                        {String(doneInRack).padStart(2, '0')}/{String(rg.entries.length).padStart(2, '0')}
-                                      </Text>
-                                    </View>
-                                    <Ionicons name={rackOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
-                                  </Pressable>
-                                  {rackOpen ? <View style={styles.bayGrid}>{rg.entries.map(renderLocPill)}</View> : null}
-                                </View>
-                              );
-                            })
-                          : null}
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null}
-            </View>
-          ) : (
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 8 }}>
-              No locations tagged with this SKU in scope.
-            </Text>
-          )
-        ) : null}
-      </View>
-    );
-  };
-
-  const skuBody = skuGroups.length ? (
-    <View>{skuGroups.map(renderSkuGroup)}</View>
-  ) : (
-    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No SKUs in scope yet.</Text>
+      {racksRootOpen
+        ? allRacksFlat.map(({ layout, rack }) => {
+            const rackKey = `sku-rack:${layout}|${rack.code}`;
+            const rackOpen = openRack === rackKey;
+            const bays = flatBays.filter((b) => b.layout === layout && b.rack === rack.code);
+            const doneInRack = bays.filter((b) => b.done).length;
+            return (
+              <View key={rackKey} style={styles.accSubSection}>
+                <Pressable onPress={() => toggleRack(rackKey)} style={styles.accHeader}>
+                  <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                    <Ionicons name="server-outline" size={18} color={tokens.accentBlue.base} />
+                  </View>
+                  <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Rack {rack.code}</Text>
+                  <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                    <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                      Total Bays: {String(doneInRack).padStart(2, '0')}/{String(bays.length).padStart(2, '0')}
+                    </Text>
+                  </View>
+                  <Ionicons name={rackOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
+                </Pressable>
+                {rackOpen ? <View style={styles.bayGrid}>{bays.map(renderBayPill)}</View> : null}
+              </View>
+            );
+          })
+        : null}
+    </View>
   );
 
   const bayBody =
@@ -547,8 +410,8 @@ export function AuditDetailsScreen() {
             </Text>
           </View>
           <View style={styles.inspGrid}>
-            <InspField label="Event Name" value={audit.audit_name} />
-            <InspField label="Event Scope Type" value={audit.event_scope_type ?? 'Location Wise'} />
+            <InspField label="Event Name & ID" value={`${audit.audit_name} - ${audit.audit_id}`} />
+            <InspField label="Event Type" value={audit.event_scope_type ?? 'Location Wise'} />
             <InspField label="Start Date" value={fmtDate(audit.start_date)} />
             <InspField label="End Date" value={fmtDate(audit.end_date)} />
             {(audit.event_scope_type ?? 'Location Wise') === 'Location Wise' ? (
@@ -558,8 +421,12 @@ export function AuditDetailsScreen() {
               </>
             ) : audit.event_scope_type === 'SKU Wise' ? (
               <>
-                <InspField label="SKU Types" value={audit.sku_types?.length ? audit.sku_types.join(', ') : 'All SKUs'} />
-                <InspField label="Batch / Lot" value={audit.batch_lot ?? 'All batches'} />
+                <InspField label="No.of SKU Types" value={truncateList(audit.sku_types)} />
+                <InspField label="No.of batch" value={truncateList(audit.batch_lot?.split(',').map((s) => s.trim()))} />
+                <InspField
+                  label={isZoneScope ? 'Total zone' : 'Total Bay'}
+                  value={String(isZoneScope ? audit.scope_values.length : flatBays.length).padStart(2, '0')}
+                />
               </>
             ) : null}
             <InspField label="Work Scope" value={audit.work_scope?.length ? audit.work_scope.join(', ') : 'Not selected'} />
@@ -573,11 +440,11 @@ export function AuditDetailsScreen() {
                 <Ionicons name="cube-outline" size={16} color={tokens.accentBlue.base} />
               </View>
               <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
-                {isSkuScope ? 'Total SKUs :' : 'Total Bay :'}
+                {isZoneScope ? 'Total Zone :' : 'Total Bay :'}
               </Text>
               <View style={[styles.badge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
                 <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.sm }}>
-                  {isSkuScope ? skuGroups.length : flatBays.length}
+                  {isZoneScope ? audit.scope_values.length : flatBays.length}
                 </Text>
               </View>
             </View>
@@ -585,18 +452,18 @@ export function AuditDetailsScreen() {
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: tokens.rag.green.soft, borderColor: tokens.rag.green.base }]} />
                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>
-                  Completed : {String(isSkuScope ? skuDoneCount : bayDoneCount).padStart(2, '0')}
+                  Completed : {String(isZoneScope ? zoneScopeDoneCount : bayDoneCount).padStart(2, '0')}
                 </Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: tokens.muted, borderColor: tokens.border }]} />
                 <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>
-                  Pending : {String(isSkuScope ? skuPendingCount : bayPendingCount).padStart(2, '0')}
+                  Pending : {String(isZoneScope ? zoneScopePendingCount : bayPendingCount).padStart(2, '0')}
                 </Text>
               </View>
             </View>
           </View>
-          {isZoneScope ? zoneBody : isSkuScope ? skuBody : bayBody}
+          {isZoneScope ? (isSkuScope ? skuZoneBody : zoneBody) : isSkuScope ? skuRackBody : bayBody}
         </Card>
       </ScrollView>
       <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
@@ -607,6 +474,15 @@ export function AuditDetailsScreen() {
       </View>
     </View>
   );
+}
+
+// "SKU-3301, 2+more" — first value plus a count of the rest, rather than
+// the full comma-joined list, which would blow out this field's width for
+// an audit scoped to a dozen+ SKU types/batches.
+function truncateList(values: string[] | undefined): string {
+  if (!values?.length) return '—';
+  if (values.length === 1) return values[0];
+  return `${values[0]}, ${values.length - 1}+more`;
 }
 
 function InspField({ label, value }: { label: string; value: string }) {

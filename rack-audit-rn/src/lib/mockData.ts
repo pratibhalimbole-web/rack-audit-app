@@ -70,12 +70,24 @@ export const AUDITS: Audit[] = [
     event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
-    audit_id: 'AUD-0234', audit_name: 'skus wise check', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
+    audit_id: 'AUD-0234', audit_name: 'Full Warehouse Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
     start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
     event_scope_type: 'SKU Wise',
     sku_types: ['SKU-3301', 'SKU-5088', 'SKU-1180', 'SKU-4410', 'SKU-4411'],
-    batch_lot: 'L-30030,L-30040',
+    batch_lot: 'B-3301,B-3302,B-3303',
+    work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
+  // Same SKU Wise shape as AUD-0234, but Zone-scoped instead of Rack-scoped
+  // — Audit Details shows a flat Zone chip row here instead of the Racks
+  // accordion, matching the two reference variants of that screen.
+  {
+    audit_id: 'AUD-0242', audit_name: 'Full Warehouse Recheck — Zones', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
+    scope_type: 'Zone', scope_values: ['Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E', 'Zone F', 'Zone G', 'Zone H'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
+    event_scope_type: 'SKU Wise',
+    sku_types: ['SKU-3301', 'SKU-5088', 'SKU-1180', 'SKU-4410', 'SKU-4411'],
+    batch_lot: 'B-3301,B-3302,B-3303',
     work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
@@ -258,7 +270,8 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
   // "To Do" demo audit (see Audit Details' SKU accordion), so every chip
   // must read Pending and the footer button must read "Start Audit", not
   // "Resume Audit".
-  'AUD-0234': { layouts: [makeLayout('Layout B', genRacks(['B-01', 'B-02', 'B-03', 'B-04'], 3, 3, 0, 0))] },
+  'AUD-0234': { layouts: [makeLayout('Layout B', genRacks(['1', '2'], 4, 3, 0, 0))] },
+  'AUD-0242': { layouts: [] },
   'AUD-0225': {
     layouts: [
       makeLayout('Layout A', [
