@@ -225,16 +225,31 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
   },
   'AUD-0233': {
     layouts: [
+      // Layout C: 2 racks, Layout E: 3 racks — enough unresolved locations
+      // across enough racks/layouts that Unresolved Locations' own list
+      // actually needs its scroller, not just fits on one screen.
       makeLayout('Layout C', [
         makeRack('B-07', [
-          makeBay('B-07-01', [makeLoc('B-07-01-01', 'Not Started'), makeLoc('B-07-01-02', 'Not Started')]),
-          makeBay('B-07-02', [makeLoc('B-07-02-01', 'Not Started'), makeLoc('B-07-02-02', 'Not Started')]),
+          makeBay('B-07-01', fillBayLevels('B-07-01', [makeLoc('B-07-01-01', 'Not Started'), makeLoc('B-07-01-02', 'Not Started')]).slice(0, 2)),
+          makeBay('B-07-02', fillBayLevels('B-07-02', [makeLoc('B-07-02-01', 'Not Started'), makeLoc('B-07-02-02', 'Not Started')]).slice(0, 2)),
+        ]),
+        makeRack('B-08', [
+          makeBay('B-08-01', fillBayLevels('B-08-01', [makeLoc('B-08-01-01', 'Not Started'), makeLoc('B-08-01-02', 'Not Started')]).slice(0, 2)),
+          makeBay('B-08-02', fillBayLevels('B-08-02', [makeLoc('B-08-02-01', 'Not Started'), makeLoc('B-08-02-02', 'Not Started')]).slice(0, 2)),
         ]),
       ]),
       makeLayout('Layout E', [
         makeRack('E-01', [
-          makeBay('E-01-01', [makeLoc('E-01-01-01', 'Not Started'), makeLoc('E-01-01-02', 'Not Started')]),
-          makeBay('E-01-02', [makeLoc('E-01-02-01', 'Not Started'), makeLoc('E-01-02-02', 'Not Started')]),
+          makeBay('E-01-01', fillBayLevels('E-01-01', [makeLoc('E-01-01-01', 'Not Started'), makeLoc('E-01-01-02', 'Not Started')]).slice(0, 2)),
+          makeBay('E-01-02', fillBayLevels('E-01-02', [makeLoc('E-01-02-01', 'Not Started'), makeLoc('E-01-02-02', 'Not Started')]).slice(0, 2)),
+        ]),
+        makeRack('E-02', [
+          makeBay('E-02-01', fillBayLevels('E-02-01', [makeLoc('E-02-01-01', 'Not Started'), makeLoc('E-02-01-02', 'Not Started')]).slice(0, 2)),
+          makeBay('E-02-02', fillBayLevels('E-02-02', [makeLoc('E-02-02-01', 'Not Started'), makeLoc('E-02-02-02', 'Not Started')]).slice(0, 2)),
+        ]),
+        makeRack('E-03', [
+          makeBay('E-03-01', fillBayLevels('E-03-01', [makeLoc('E-03-01-01', 'Not Started'), makeLoc('E-03-01-02', 'Not Started')]).slice(0, 2)),
+          makeBay('E-03-02', fillBayLevels('E-03-02', [makeLoc('E-03-02-01', 'Not Started'), makeLoc('E-03-02-02', 'Not Started')]).slice(0, 2)),
         ]),
       ]),
     ],

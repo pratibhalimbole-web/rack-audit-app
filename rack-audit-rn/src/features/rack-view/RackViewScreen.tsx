@@ -154,12 +154,13 @@ export function RackViewScreen() {
   // this clears and the fields show the real selection like normal.
   const [freshUnselected, setFreshUnselected] = useState(!!params.fresh);
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
-  const [pendingTab, setPendingTab] = useState<'pending' | 'empty'>('pending');
   // Layout-wise accordion — Unresolved Locations is warehouse-wide (every
-  // layout/rack in this audit's tree), not just the currently-open rack,
-  // so it groups the same way Audit Details' own bay breakdown does: one
-  // collapsible section per layout, keyed by layout name.
-  const [closedPendingLayouts, setClosedPendingLayouts] = useState<Record<string, boolean>>({});
+  // layout/rack in this audit's tree), not just the currently-open rack, so
+  // it groups by layout the same way Audit Details' own bay breakdown
+  // groups by bay. Every layout starts collapsed, and only one is ever open
+  // at a time — opening one closes whichever was already open, rather than
+  // letting them stack.
+  const [openPendingLayout, setOpenPendingLayout] = useState<string | null>(null);
   const [pendingFilterOpen, setPendingFilterOpen] = useState(false);
   const [pendingLayoutFilter, setPendingLayoutFilter] = useState<string[]>([]);
   const [pickerField, setPickerField] = useState<'layout' | 'rack' | 'bay' | 'pallet' | null>(null);
@@ -582,13 +583,6 @@ export function RackViewScreen() {
       if (!line) return true;
       if (line.sku !== expected.sku) return false;
       return line.qty !== expected.qty || line.condition !== 'Good';
-    })
-    .map(({ layout, rack, bay, loc }) => ({ layout, rack, bay, loc }));
-  const warehouseEmpty = warehouseLocs
-    .filter(({ loc }) => {
-      if (audit.target_sku && !matchesTargetSku(loc.code)) return false;
-      const saved = loc.pallets.find((p) => p.saved);
-      return !!saved?.lines.some((l) => l.source === 'empty');
     })
     .map(({ layout, rack, bay, loc }) => ({ layout, rack, bay, loc }));
   const pendingLayoutNames = [...new Set(tree.layouts.map((l) => l.name))];
@@ -1330,9 +1324,9 @@ export function RackViewScreen() {
         >
           <Ionicons name="alert-circle-outline" size={16} color={tokens.rag.amber.strong} />
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Unresolved Locations</Text>
-          {warehousePending.length + warehouseEmpty.length ? (
+          {warehousePending.length ? (
             <View style={[styles.pendingCountBadge, { backgroundColor: tokens.rag.amber.strong, borderRadius: tokens.radius.xl }]}>
-              <Text style={{ color: '#fff', fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{warehousePending.length + warehouseEmpty.length}</Text>
+              <Text style={{ color: '#fff', fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }}>{warehousePending.length}</Text>
             </View>
           ) : null}
         </Pressable>
@@ -2228,61 +2222,14 @@ export function RackViewScreen() {
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.pendingModalHead}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="alert-circle-outline" size={18} color={tokens.rag.amber.strong} />
-                <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
-                  Unresolved Locations
-                </Text>
-              </View>
+              <Text style={{ color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg }}>
+                Unresolved Locations
+              </Text>
               <Pressable onPress={() => setPendingModalOpen(false)} hitSlop={8}>
-                <Ionicons name="close" size={20} color={tokens.foreground} />
+                <Ionicons name="close" size={22} color={tokens.foreground} />
               </Pressable>
             </View>
-
-            <View style={styles.pendingTabRow}>
-              <Pressable
-                onPress={() => setPendingTab('pending')}
-                style={[
-                  styles.pendingTabBtn,
-                  {
-                    backgroundColor: pendingTab === 'pending' ? tokens.primary : tokens.muted,
-                    borderColor: pendingTab === 'pending' ? tokens.primary : tokens.border,
-                    borderRadius: tokens.radius.lg,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: pendingTab === 'pending' ? tokens.primaryForeground : tokens.foreground,
-                    fontWeight: tokens.fontWeight.bold,
-                    fontSize: tokens.text.xs,
-                  }}
-                >
-                  Unresolved ({warehousePending.length})
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setPendingTab('empty')}
-                style={[
-                  styles.pendingTabBtn,
-                  {
-                    backgroundColor: pendingTab === 'empty' ? tokens.primary : tokens.muted,
-                    borderColor: pendingTab === 'empty' ? tokens.primary : tokens.border,
-                    borderRadius: tokens.radius.lg,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: pendingTab === 'empty' ? tokens.primaryForeground : tokens.foreground,
-                    fontWeight: tokens.fontWeight.bold,
-                    fontSize: tokens.text.xs,
-                  }}
-                >
-                  Location Found as Empty ({warehouseEmpty.length})
-                </Text>
-              </Pressable>
-            </View>
+            <View style={[styles.pendingHeadDivider, { backgroundColor: tokens.border }]} />
 
             <View style={styles.pendingScanRow}>
               <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm }}>Location to be scanned</Text>
@@ -2322,7 +2269,7 @@ export function RackViewScreen() {
             {pendingLayoutFilter.length ? (
               <View style={styles.pendingChipRow}>
                 <View style={[styles.pendingChipDot, { backgroundColor: tokens.primary }]} />
-                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginRight: 4 }}>Layout</Text>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, marginRight: 4 }}>Rack Name</Text>
                 {pendingLayoutFilter.map((name) => (
                   <Pressable
                     key={name}
@@ -2335,10 +2282,10 @@ export function RackViewScreen() {
                 ))}
               </View>
             ) : null}
+            <View style={[styles.pendingHeadDivider, { backgroundColor: tokens.border }]} />
 
             {(() => {
-              const sourceList = pendingTab === 'pending' ? warehousePending : warehouseEmpty;
-              const filtered = pendingLayoutFilter.length ? sourceList.filter((i) => pendingLayoutFilter.includes(i.layout)) : sourceList;
+              const filtered = pendingLayoutFilter.length ? warehousePending.filter((i) => pendingLayoutFilter.includes(i.layout)) : warehousePending;
               // Layout → Rack → location pill grid, warehouse-wide — same
               // "default open, mark closed" accordion pattern as Audit
               // Details' own bay breakdown, just one level up (layout
@@ -2351,7 +2298,7 @@ export function RackViewScreen() {
                 <ScrollView style={{ maxHeight: 460 }}>
                   {byLayout.length ? (
                     byLayout.map(({ layout, items }) => {
-                      const open = !closedPendingLayouts[layout];
+                      const open = openPendingLayout === layout;
                       const byRack = [...new Set(items.map((i) => i.rack))].map((rackCode) => ({
                         rack: rackCode,
                         items: items.filter((i) => i.rack === rackCode),
@@ -2359,10 +2306,12 @@ export function RackViewScreen() {
                       return (
                         <View key={layout} style={styles.pendingLayoutSection}>
                           <Pressable
-                            onPress={() => setClosedPendingLayouts((prev) => ({ ...prev, [layout]: !prev[layout] }))}
+                            onPress={() => setOpenPendingLayout((prev) => (prev === layout ? null : layout))}
                             style={styles.pendingLayoutHead}
                           >
-                            <Ionicons name="business-outline" size={18} color={tokens.accentBlue.strong} />
+                            <View style={[styles.pendingIconWrap, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                              <Ionicons name="business-outline" size={18} color={tokens.accentBlue.strong} />
+                            </View>
                             <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{layout}</Text>
                             <View style={[styles.pendingBayBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
                               <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>Total :{items.length}</Text>
@@ -2373,7 +2322,9 @@ export function RackViewScreen() {
                             ? byRack.map(({ rack, items: rackItems }) => (
                                 <View key={rack} style={styles.pendingRackSection}>
                                   <View style={styles.pendingRackHead}>
-                                    <Ionicons name="layers-outline" size={16} color={tokens.accentBlue.strong} />
+                                    <View style={[styles.pendingIconWrapSm, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+                                      <Ionicons name="layers-outline" size={14} color={tokens.accentBlue.strong} />
+                                    </View>
                                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Rack {rack}</Text>
                                     <View style={[styles.pendingBayBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
                                       <Text style={{ color: tokens.accentBlue.strong, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.bold }}>
@@ -2383,11 +2334,11 @@ export function RackViewScreen() {
                                   </View>
                                   <View style={styles.pendingPillGrid}>
                                     {rackItems.map((item) => {
-                                      const { level } = locLevelPosition(
-                                        findRackIn(tree, item.layout, item.rack)?.bays.find((b) => b.code === item.bay),
-                                        item.loc.code,
-                                      );
                                       const palletId = item.loc.pallets[0]?.pallet ?? '—';
+                                      const label =
+                                        item.loc.level != null && item.loc.slot != null
+                                          ? `L${item.loc.level}-P${String(item.loc.slot).padStart(2, '0')}-${palletId}`
+                                          : palletId;
                                       return (
                                         <Pressable
                                           key={item.loc.code}
@@ -2401,7 +2352,7 @@ export function RackViewScreen() {
                                           style={[styles.pendingPill, { backgroundColor: tokens.muted, borderRadius: tokens.radius.xxl }]}
                                         >
                                           <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, fontWeight: tokens.fontWeight.semibold }} numberOfLines={1}>
-                                            Bay {item.bay} · {level != null ? `L-${String(level).padStart(2, '0')}` : '—'} · {palletId}
+                                            {label}
                                           </Text>
                                         </Pressable>
                                       );
@@ -2817,7 +2768,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   pendingModalCard: { width: '100%', maxWidth: 900, maxHeight: '85%', padding: 20 },
   pendingModalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  pendingScanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e2e8f0' },
+  pendingHeadDivider: { height: StyleSheet.hairlineWidth },
+  pendingScanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
   pendingFilterIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   pendingFilterPanel: { position: 'absolute', top: 42, right: 0, width: 200, borderWidth: 1, padding: 10, zIndex: 21 },
   pendingFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
@@ -2827,13 +2779,13 @@ const styles = StyleSheet.create({
   pendingChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5 },
   pendingLayoutSection: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e2e8f0', paddingVertical: 14 },
   pendingLayoutHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pendingIconWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  pendingIconWrapSm: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   pendingBayBadge: { paddingHorizontal: 10, paddingVertical: 4 },
-  pendingRackSection: { marginTop: 14, marginLeft: 26 },
+  pendingRackSection: { marginTop: 14, marginLeft: 10 },
   pendingRackHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   pendingPillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   pendingPill: { paddingHorizontal: 14, paddingVertical: 10 },
-  pendingTabRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  pendingTabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 38, borderWidth: 1, paddingHorizontal: 8 },
 });
 
 const dirToolbarStyles = StyleSheet.create({
