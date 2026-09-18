@@ -1334,7 +1334,7 @@ export function RackViewScreen() {
         <ManualModeToggle value={manualMode} onToggle={handleToggleManualMode} />
         <Pressable
           onPress={() => setPendingModalOpen(true)}
-          style={[styles.pendingBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg, marginLeft: 'auto' }]}
+          style={[styles.pendingBtn, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg, marginLeft: 'auto' }]}
         >
           <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Unresolved Locations</Text>
         </Pressable>

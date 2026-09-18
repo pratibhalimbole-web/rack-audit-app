@@ -83,6 +83,11 @@ export function AuditDetailsScreen() {
   // priority over this — zoneBody's whole-zone pick-list flow applies there
   // regardless of event_scope_type.
   const isSkuScope = !isZoneScope && audit.event_scope_type === 'SKU Wise';
+  // 'Full Warehouse' reads the same flat Racks-accordion/Zone-chip coverage
+  // view as SKU Wise (no per-Layout grouping, no per-SKU breakdown) — it's
+  // just not narrowed to any particular SKU, so the schedule card skips the
+  // SKU Types/Batch fields SKU Wise shows.
+  const isSimpleScope = audit.event_scope_type === 'SKU Wise' || audit.event_scope_type === 'Full Warehouse';
 
   // Same destination on phone and tablet — the Rack View canvas, with its
   // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
@@ -428,6 +433,15 @@ export function AuditDetailsScreen() {
                   value={String(isZoneScope ? audit.scope_values.length : flatBays.length).padStart(2, '0')}
                 />
               </>
+            ) : audit.event_scope_type === 'Full Warehouse' ? (
+              isZoneScope ? (
+                <InspField label="Total Zone" value={String(audit.scope_values.length).padStart(2, '0')} />
+              ) : (
+                <>
+                  <InspField label="Total Racks" value={String(allRacksFlat.length).padStart(2, '0')} />
+                  <InspField label="Total Bay" value={String(flatBays.length).padStart(2, '0')} />
+                </>
+              )
             ) : null}
             <InspField label="Work Scope" value={audit.work_scope?.length ? audit.work_scope.join(', ') : 'Not selected'} />
           </View>
@@ -463,7 +477,7 @@ export function AuditDetailsScreen() {
               </View>
             </View>
           </View>
-          {isZoneScope ? (isSkuScope ? skuZoneBody : zoneBody) : isSkuScope ? skuRackBody : bayBody}
+          {isZoneScope ? (isSimpleScope ? skuZoneBody : zoneBody) : isSimpleScope ? skuRackBody : bayBody}
         </Card>
       </ScrollView>
       <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>

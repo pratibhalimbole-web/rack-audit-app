@@ -70,7 +70,7 @@ export const AUDITS: Audit[] = [
     event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
-    audit_id: 'AUD-0234', audit_name: 'Full Warehouse Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
+    audit_id: 'AUD-0234', audit_name: 'Skuwise Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
     start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
     event_scope_type: 'SKU Wise',
@@ -82,12 +82,29 @@ export const AUDITS: Audit[] = [
   // — Audit Details shows a flat Zone chip row here instead of the Racks
   // accordion, matching the two reference variants of that screen.
   {
-    audit_id: 'AUD-0242', audit_name: 'Full Warehouse Recheck — Zones', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
+    audit_id: 'AUD-0242', audit_name: 'Zone Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Zone', scope_values: ['Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E', 'Zone F', 'Zone G', 'Zone H'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
     start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled', target_sku: 'SKU-3301',
     event_scope_type: 'SKU Wise',
     sku_types: ['SKU-3301', 'SKU-5088', 'SKU-1180', 'SKU-4410', 'SKU-4411'],
     batch_lot: 'B-3301,B-3302,B-3303',
+    work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
+  // 'Full Warehouse' event_scope_type — same flat Racks-accordion /
+  // Zone-chip coverage view as SKU Wise, just with no SKU Types/Batch
+  // fields up top (this scope isn't narrowed to any particular SKU at all).
+  {
+    audit_id: 'AUD-0243', audit_name: 'Full Warehouse Recheck', audit_type: 'Full', count_method: 'Blind (Enforced)',
+    scope_type: 'Layout', scope_values: ['Layout B'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    event_scope_type: 'Full Warehouse',
+    work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
+  {
+    audit_id: 'AUD-0244', audit_name: 'Full Warehouse Recheck', audit_type: 'Full', count_method: 'Blind (Enforced)',
+    scope_type: 'Zone', scope_values: ['Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E', 'Zone F', 'Zone G', 'Zone H'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    event_scope_type: 'Full Warehouse',
     work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
   {
@@ -272,6 +289,8 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
   // "Resume Audit".
   'AUD-0234': { layouts: [makeLayout('Layout B', genRacks(['1', '2'], 4, 3, 0, 0))] },
   'AUD-0242': { layouts: [] },
+  'AUD-0243': { layouts: [makeLayout('Layout B', genRacks(['1', '2'], 4, 3, 0, 0))] },
+  'AUD-0244': { layouts: [] },
   'AUD-0225': {
     layouts: [
       makeLayout('Layout A', [
