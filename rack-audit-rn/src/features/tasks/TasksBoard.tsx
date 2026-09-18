@@ -95,7 +95,7 @@ export function TasksBoard() {
   const maintenanceAuditIds = useMemo(() => audits.map((a) => a.audit_id), [audits]);
   const { map: maintenanceTreeMap } = useLocationsTreeMap(maintenanceAuditIds);
   const maintenanceTasks = useMemo(() => buildMaintenanceTasks(audits, maintenanceTreeMap), [audits, maintenanceTreeMap]);
-  const openMaintenanceTasks = useMemo(() => maintenanceTasks.filter((t) => t.boardStatus !== 'Closed'), [maintenanceTasks]);
+  const openMaintenanceTasks = useMemo(() => maintenanceTasks.filter((t) => t.boardStatus !== 'Completed'), [maintenanceTasks]);
   const searchedMaintenance = useMemo(
     () => openMaintenanceTasks.filter((t) => !q || [t.layout, t.rack, t.bay].join(' ').toLowerCase().includes(q)),
     [openMaintenanceTasks, q],
@@ -310,7 +310,7 @@ export function TasksBoard() {
 
               <View style={[styles.filterMainPanel, { backgroundColor: tokens.popover, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                 <Text style={[styles.filterPanelTitle, { color: tokens.popoverForeground, borderBottomColor: tokens.border }]}>Select</Text>
-                {(['type', 'zoneValue', 'layout', 'rack', 'bay'] as FilterCategory[]).map((cat) => {
+                {(['type', 'zoneValue', 'layout'] as FilterCategory[]).map((cat) => {
                   // Bay stays visible but visibly disabled until a Rack is
                   // picked — an inspector always narrows rack-first, never
                   // jumps straight to "which bay in the whole warehouse".
@@ -402,11 +402,17 @@ const styles = StyleSheet.create({
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 12 },
   filterBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   filterCountBadge: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  filterMainPanel: { position: 'absolute', top: 44, left: 0, width: 220, borderWidth: 1, padding: 12, zIndex: 21 },
+  // Right-anchored (not left) — the filter button sits near the right edge
+  // of the toolbar, so a left-anchored panel (extending further right) was
+  // getting clipped off the edge of the screen.
+  filterMainPanel: { position: 'absolute', top: 44, right: 0, width: 220, borderWidth: 1, padding: 12, zIndex: 21 },
   // Opens to the LEFT of the main "Select" panel, not the right — matches
   // the reference where the category flyout hangs off the main panel's
   // near edge instead of extending further off-screen.
-  filterCategoryPanel: { position: 'absolute', top: 44, left: -412, width: 380, borderWidth: 1, padding: 14, zIndex: 21 },
+  // Opens to the left of the main "Select" panel (right: 220 width + 12 gap)
+  // rather than a big negative left offset — same right-anchored reasoning,
+  // so it stays on-screen instead of being measured from the far side.
+  filterCategoryPanel: { position: 'absolute', top: 44, right: 232, width: 380, borderWidth: 1, padding: 14, zIndex: 21 },
   filterCategoryHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   categoryTotalBadge: { paddingHorizontal: 10, paddingVertical: 4 },
   categorySearchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 10, marginBottom: 8 },

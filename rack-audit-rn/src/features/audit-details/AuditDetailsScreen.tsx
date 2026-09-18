@@ -346,12 +346,14 @@ export function AuditDetailsScreen() {
           {isZoneScope ? skuZoneBody : skuRackBody}
         </Card>
       </ScrollView>
-      <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
-        <Pressable onPress={onPressStart} style={[styles.startBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
-          <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{startLabel}</Text>
-          <Ionicons name="arrow-forward-circle" size={18} color={tokens.primaryForeground} />
-        </Pressable>
-      </View>
+      {!showCompletedState ? (
+        <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
+          <Pressable onPress={onPressStart} style={[styles.startBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+            <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.base }}>{startLabel}</Text>
+            <Ionicons name="arrow-forward-circle" size={18} color={tokens.primaryForeground} />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }

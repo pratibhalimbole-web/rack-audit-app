@@ -88,6 +88,10 @@ export default function PhoneTabsLayout() {
           drill-down destination, not one of the 5 nav tabs — the bottom bar
           offers no benefit here and just eats into the page. */}
       <Tabs.Screen name="audit/[auditId]/index" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      {/* Task Details (a completed audit's own reported-issues grid, reached
+          from a Completed Task card) — same drill-down reasoning as Audit
+          Details right above. */}
+      <Tabs.Screen name="audit/[auditId]/task-details" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="audit/[auditId]/count-sheet" options={{ href: null }} />
       {/* Reconciliation Findings (this task's own breakdown, or the ongoing audit's
           when reached via the bottom tab) already has its own back button —

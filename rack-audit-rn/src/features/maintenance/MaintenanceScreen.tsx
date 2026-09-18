@@ -44,7 +44,7 @@ export function MaintenanceScreen() {
   const { map: progressMap } = useAuditProgressMap(completedAudits.map((a) => a.audit_id));
 
   const tasks = useMemo(() => buildMaintenanceTasks(candidates, treeMap), [candidates, treeMap]);
-  const completedMaintenance = useMemo(() => tasks.filter((t) => t.boardStatus === 'Closed'), [tasks]);
+  const completedMaintenance = useMemo(() => tasks.filter((t) => t.boardStatus === 'Completed'), [tasks]);
 
   const q = search.trim().toLowerCase();
   const filteredAudits = useMemo(
@@ -66,7 +66,7 @@ export function MaintenanceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-      <AppHeader title="Completed Task" sub="Completed audits and closed maintenance follow-ups" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
+      <AppHeader title="Completed Task" showBack menuItems={[{ label: 'Sync Now', onPress: () => {} }]} />
 
       <View style={styles.searchWrap}>
         <View style={[styles.searchBox, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>

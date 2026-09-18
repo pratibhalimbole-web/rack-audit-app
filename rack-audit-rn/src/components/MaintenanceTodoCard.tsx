@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fmtDate } from '@/lib/auditLogic';
-import { maintenanceLocationLabel, type MaintenanceStatusColor, type MaintenanceTask } from '@/lib/maintenance';
+import { maintenanceLocationLabel, type MaintenanceTask } from '@/lib/maintenance';
+import { Pill } from './Pill';
 import { useTheme } from '@/theme/ThemeProvider';
 
-const STATUS_TOKEN: Record<MaintenanceStatusColor, 'red' | 'amber' | 'green'> = { Red: 'red', Amber: 'amber', Green: 'green' };
+const PRIORITY_TOKEN: Record<MaintenanceTask['priority'], 'red' | 'amber' | 'green'> = { High: 'red', Medium: 'amber', Low: 'green' };
 
 // Same encoding Reported Audits' own cards use (ReportedAuditsBoard.tsx's
 // issueLineId) to reach the real Issue Details screen — a MaintenanceTask
@@ -25,7 +26,7 @@ function maintenanceLineId(task: MaintenanceTask): string {
 // the task is still open and nothing's been "taken" yet.
 export function MaintenanceTodoCard({ task, showActionTaken }: { task: MaintenanceTask; showActionTaken?: boolean }) {
   const { tokens } = useTheme();
-  const ragKey = STATUS_TOKEN[task.statusColor];
+  const priorityKey = PRIORITY_TOKEN[task.priority];
 
   return (
     <Pressable
@@ -38,19 +39,10 @@ export function MaintenanceTodoCard({ task, showActionTaken }: { task: Maintenan
         {task.issueType === 'Manually Reported' ? task.sku : `${task.issueType} · ${task.sku}`}
       </Text>
       <View style={styles.fields}>
-        <Field label="Location" full>
-          <Text style={[styles.value, { color: tokens.foreground }]} numberOfLines={1}>
-            {maintenanceLocationLabel(task)}
-          </Text>
-        </Field>
         <View style={styles.row}>
           {!showActionTaken ? (
             <Field label="Status">
-              <View style={[styles.statusPill, { backgroundColor: tokens.rag[ragKey].soft, borderColor: tokens.rag[ragKey].border }]}>
-                <Text style={{ color: tokens.rag[ragKey].strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.bold }} numberOfLines={1}>
-                  {task.boardStatus}
-                </Text>
-              </View>
+              <Pill label={task.boardStatus} tone={task.boardStatus} />
             </Field>
           ) : null}
           <Field label="Task Type" full={showActionTaken}>
@@ -58,31 +50,32 @@ export function MaintenanceTodoCard({ task, showActionTaken }: { task: Maintenan
           </Field>
         </View>
         <View style={styles.row}>
+          <Field label="Assigned Date">
+            <Text style={[styles.value, { color: tokens.foreground }]}>{fmtDate(task.assignedDate)}</Text>
+          </Field>
           <Field label="Due Date">
             <Text style={[styles.value, { color: tokens.foreground }]}>{fmtDate(task.dueDate)}</Text>
           </Field>
-          <Field label="Rack">
-            <Text style={[styles.value, { color: tokens.foreground }]} numberOfLines={1}>
-              {task.rack}
-            </Text>
-          </Field>
         </View>
         <View style={styles.row}>
-          <Field label="Action">
+          <Field label={showActionTaken ? 'Action Taken' : 'Action'}>
             <Text style={[styles.value, { color: tokens.foreground }]} numberOfLines={1}>
               {task.action}
             </Text>
           </Field>
-        </View>
-        {showActionTaken ? (
-          <View style={styles.row}>
-            <Field label="Action Taken">
-              <Text style={[styles.value, { color: tokens.foreground }]} numberOfLines={1}>
-                {task.action}
+          <Field label="Priority">
+            <View style={[styles.priorityPill, { backgroundColor: tokens.rag[priorityKey].soft, borderRadius: tokens.radius.sm }]}>
+              <Text style={{ color: tokens.rag[priorityKey].strong, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }} numberOfLines={1}>
+                {task.priority}
               </Text>
-            </Field>
-          </View>
-        ) : null}
+            </View>
+          </Field>
+        </View>
+        <Field label="Location" full>
+          <Text style={[styles.value, { color: tokens.foreground }]} numberOfLines={1}>
+            {maintenanceLocationLabel(task)}
+          </Text>
+        </Field>
       </View>
     </Pressable>
   );
@@ -105,5 +98,5 @@ const styles = StyleSheet.create({
   field: { width: '48%' },
   fieldFull: { width: '100%' },
   value: { fontSize: 12, fontWeight: '600' },
-  statusPill: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2 },
+  priorityPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3 },
 });

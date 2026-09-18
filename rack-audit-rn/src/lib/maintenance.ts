@@ -1,17 +1,17 @@
 import type { Audit, AuditLocationsTree, Condition, Priority } from './types';
 import { conditionSeverity } from './conditionSeverity';
-import { scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue } from './auditLogic';
+import { scopedIssues, summaryStats, type FlaggedLine, type ScopedIssue, type UiStatus } from './auditLogic';
+import { TODAY } from './mockData';
 
 // Ports the "Pallet" admin web's Inventory Reconciliation module (Rules and
 // Action + Action Board, screens shared as reference) down to a
 // field-inspector's own assigned-task list: Rules and Action is where an
 // admin defines, per discrepancy type, the list of actions a reconciler can
 // pick from; Action Board is where a specific reported issue gets ONE of
-// those actions assigned to it and tracked through a status column
-// (Not Assigned → In Progress/On Hold → Review → Closed). This app has no
-// admin surface, so Maintenance only needs the inspector-facing result: one
-// card per already-reported issue, carrying whichever action + status it
-// was assigned.
+// those actions assigned to it and tracked through a status column. This
+// app has no admin surface, so Maintenance only needs the inspector-facing
+// result: one card per already-reported issue, carrying whichever action +
+// status it was assigned.
 export type MaintenanceIssueType = 'Mismatched SKU' | 'Damaged SKU' | 'Quantity Issue' | 'Manually Reported';
 
 // Mirrors Rules and Action's per-discrepancy-type action list — the pool a
@@ -23,17 +23,13 @@ export const ACTIONS_BY_DISCREPANCY: Record<MaintenanceIssueType, string[]> = {
   'Manually Reported': ['Investigate Manual Report', 'Escalate to Supervisor'],
 };
 
-// Action Board's 5 status columns, collapsed to the 3-color badge Maintenance
-// shows on each card (Not Assigned = Red/not started, In Progress & On Hold
-// = Amber/active, Review & Closed = Green/on track or done).
-const BOARD_STATUSES = [
-  { label: 'Not Assigned', color: 'Red' },
-  { label: 'In Progress', color: 'Amber' },
-  { label: 'On Hold', color: 'Amber' },
-  { label: 'Review', color: 'Green' },
-  { label: 'Closed', color: 'Green' },
-] as const;
-export type MaintenanceStatusColor = (typeof BOARD_STATUSES)[number]['color'];
+// Same status vocabulary an Audit task card uses (In Progress/Completed),
+// so Maintenance's own status badge reads with the exact same Pill
+// component/colors instead of its own separate label set. No "To Do" and
+// no "Overdue" here on purpose — a follow-up only ever exists once an
+// issue's already been reported, so it's already being worked ("In
+// Progress") the moment it's created, right up until it's "Completed".
+const BOARD_STATUSES: UiStatus[] = ['In Progress', 'Completed'];
 
 export type MaintenanceTask = {
   id: string;
@@ -48,8 +44,8 @@ export type MaintenanceTask = {
   locCode: string;
   pallet: string;
   action: string;
-  boardStatus: (typeof BOARD_STATUSES)[number]['label'];
-  statusColor: MaintenanceStatusColor;
+  boardStatus: UiStatus;
+  assignedDate: string;
   dueDate: string;
   priority: Priority;
   condition: Condition;
@@ -98,8 +94,8 @@ function taskFromScoped(s: ScopedIssue, audit: Audit): MaintenanceTask {
     locCode: s.locCode,
     pallet: s.pallet,
     action: pick(ACTIONS_BY_DISCREPANCY[issueType], seed),
-    boardStatus: pick(BOARD_STATUSES, seed).label,
-    statusColor: pick(BOARD_STATUSES, seed).color,
+    boardStatus: pick(BOARD_STATUSES, seed),
+    assignedDate: audit.start_date,
     dueDate: dueDateFrom(audit.end_date, seed),
     priority: priorityFromSeverity(sev),
     condition: s.condition,
@@ -122,8 +118,8 @@ function taskFromManual(f: FlaggedLine, audit: Audit): MaintenanceTask {
     locCode: f.locCode,
     pallet: f.pallet,
     action: pick(ACTIONS_BY_DISCREPANCY['Manually Reported'], seed),
-    boardStatus: pick(BOARD_STATUSES, seed).label,
-    statusColor: pick(BOARD_STATUSES, seed).color,
+    boardStatus: pick(BOARD_STATUSES, seed),
+    assignedDate: audit.start_date,
     dueDate: dueDateFrom(audit.end_date, seed),
     priority: priorityFromSeverity(conditionSeverity(f.condition)),
     condition: f.condition,
@@ -142,6 +138,19 @@ export function buildMaintenanceTasks(audits: Audit[], treeMap: Record<string, A
       .flagged.filter((f) => f.source === 'manual')
       .forEach((f) => out.push(taskFromManual(f, a)));
   });
+  // dueDateFrom spreads around each source audit's own end_date, so which
+  // bucket a task lands in is really just whatever that audit happens to
+  // be scheduled — nothing guarantees the Tasks board's Today/This Week
+  // columns ever actually have a Maintenance card in them. Pin the first
+  // couple of tasks explicitly so both columns always have real content to
+  // demo, same as the reference board.
+  const addDays = (n: number) => {
+    const d = new Date(TODAY);
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  if (out[0]) out[0] = { ...out[0], dueDate: addDays(0) };
+  if (out[1]) out[1] = { ...out[1], dueDate: addDays(3) };
   return out;
 }
 

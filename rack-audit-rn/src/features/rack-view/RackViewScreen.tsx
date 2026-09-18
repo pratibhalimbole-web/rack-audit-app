@@ -1340,15 +1340,6 @@ export function RackViewScreen() {
         </Pressable>
       </View>
 
-      {manualMode ? (
-        <View style={[styles.manualModeBanner, { backgroundColor: tokens.rag.amber.soft, borderBottomColor: tokens.rag.amber.border }]}>
-          <Ionicons name="warning-outline" size={14} color={tokens.rag.amber.strong} />
-          <Text style={{ color: tokens.rag.amber.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs, flex: 1 }}>
-            Manual Mode — every pallet in this rack is selectable, outside this audit's assigned scope too. Pick a location, scan the SKU that's actually there, and report what you found.
-          </Text>
-        </View>
-      ) : null}
-
       <View style={styles.body}>
         {/* Canvas and the Reconciliation Form sit side by side, both full
             height, once a pallet's audit is started — not a small overlay —
@@ -2675,7 +2666,6 @@ const styles = StyleSheet.create({
   manualModeWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 6 },
   switchTrack: { width: 34, height: 20, borderRadius: 10 },
   switchThumb: { position: 'absolute', top: 2, left: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
-  manualModeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
   body: { flex: 1, padding: 16 },
   singleRow: { flex: 1 },
   splitRow: { flex: 1, flexDirection: 'row', gap: 16 },

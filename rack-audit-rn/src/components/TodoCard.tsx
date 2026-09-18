@@ -19,7 +19,9 @@ import { Pill } from './Pill';
 // hideStatus: the Completed Task screen (src/features/maintenance/
 // MaintenanceScreen.tsx) already implies every card here is done, so its
 // own "Task Status" pill is redundant there — only the Tasks board (mixed
-// due-date buckets, where status is the point) shows it.
+// due-date buckets, where status is the point) shows it. Doubles as the
+// signal for where a tap should land: Completed Task's own reported-issues
+// grid (task-details) instead of the regular Audit Details screen.
 export function TodoCard({ audit, rollup, hideStatus }: { audit: Audit; rollup: Rollup; hideStatus?: boolean }) {
   const { tokens } = useTheme();
   const uis = uiStatus(audit);
@@ -35,7 +37,9 @@ export function TodoCard({ audit, rollup, hideStatus }: { audit: Audit; rollup: 
 
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/audit/[auditId]', params: { auditId: audit.audit_id } } as never)}
+      onPress={() =>
+        router.push({ pathname: hideStatus ? '/audit/[auditId]/task-details' : '/audit/[auditId]', params: { auditId: audit.audit_id } } as never)
+      }
       style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}
     >
       <Text
