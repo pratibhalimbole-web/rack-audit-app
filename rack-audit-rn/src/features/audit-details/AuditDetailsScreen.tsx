@@ -38,7 +38,6 @@ export function AuditDetailsScreen() {
   const flatBays = useMemo(() => flattenBays(tree), [tree]);
   const bayDoneCount = flatBays.filter((b) => b.done).length;
   const bayPendingCount = flatBays.length - bayDoneCount;
-  const totalRackCount = layouts.reduce((n, ly) => n + ly.racks.length, 0);
 
   // Auto-opens the first layout when landing on a (new) audit, rather than
   // starting fully collapsed or with every layout open at once.
@@ -83,11 +82,6 @@ export function AuditDetailsScreen() {
   // priority over this — zoneBody's whole-zone pick-list flow applies there
   // regardless of event_scope_type.
   const isSkuScope = !isZoneScope && audit.event_scope_type === 'SKU Wise';
-  // 'Full Warehouse' reads the same flat Racks-accordion/Zone-chip coverage
-  // view as SKU Wise (no per-Layout grouping, no per-SKU breakdown) — it's
-  // just not narrowed to any particular SKU, so the schedule card skips the
-  // SKU Types/Batch fields SKU Wise shows.
-  const isSimpleScope = audit.event_scope_type === 'SKU Wise' || audit.event_scope_type === 'Full Warehouse';
 
   // Same destination on phone and tablet — the Rack View canvas, with its
   // expected-SKU highlighting, exactly as reached via Tasks > Warehouse Map
@@ -169,89 +163,11 @@ export function AuditDetailsScreen() {
     </Pressable>
   );
 
-  // Zone-scoped audits have no rack/bay breakdown, so the bay-chip grid's
-  // job here goes one level down: WMS's per-zone pick list (ZONE_EXPECTED_SKUS)
-  // is "how many DISTINCT pallets of this SKU should turn up here" — same
-  // shape as a bay chip (pending until its own count of work is actually
-  // done). Progress comes from useZoneAuditStore, mirrored live from
-  // ZoneAuditMapScreen's scan session — so these chips reflect real scan
-  // counts whether reached before that screen ever opened or after backing
-  // out of it. Counts unique labels, not raw scan events, so re-scanning the
-  // same physical box (already refused at intake anyway) can't inflate it.
-  const renderZoneGroup = (zoneName: string) => {
-    const zoneId = FLOOR_AREAS.find((f) => f.label === zoneName)?.id;
-    const pickList = ZONE_EXPECTED_SKUS[zoneName] ?? [];
-    const zoneScans = (zoneId && zoneScansByAudit[audit.audit_id]?.[zoneId]) || [];
-    const skuFoundCount = (sku: string) => new Set(zoneScans.filter((s) => s.sku === sku).map((s) => s.label)).size;
-
-    return (
-      <View key={zoneName} style={{ marginBottom: 14 }}>
-        <Pressable
-          disabled={isSubmitted}
-          onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id } } as never)}
-          style={[styles.zonePill, { backgroundColor: tokens.muted, borderColor: tokens.border, marginBottom: pickList.length ? 8 : 0 }]}
-        >
-          <Ionicons name="ellipse-outline" size={16} color={tokens.accentBlue.base} />
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{zoneName}</Text>
-        </Pressable>
-        {pickList.length ? (
-          <View style={{ gap: 8 }}>
-            {pickList.map((entry) => {
-              const found = skuFoundCount(entry.sku);
-              const done = found >= entry.expectedCount;
-              const pct = Math.min(1, entry.expectedCount > 0 ? found / entry.expectedCount : 0);
-              return (
-                <View
-                  key={entry.sku}
-                  style={[styles.skuRow, { backgroundColor: tokens.card, borderColor: done ? tokens.rag.green.border : tokens.border }]}
-                >
-                  <View style={[styles.skuIconWrap, { backgroundColor: done ? tokens.rag.green.soft : tokens.rag.amber.soft }]}>
-                    <Ionicons
-                      name={done ? 'checkmark-circle' : 'time-outline'}
-                      size={18}
-                      color={done ? tokens.rag.green.strong : tokens.rag.amber.strong}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: 12.5 }}>{entry.sku}</Text>
-                      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, fontWeight: tokens.fontWeight.semibold }}>
-                        {found}/{entry.expectedCount}
-                      </Text>
-                    </View>
-                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs, marginTop: 1 }}>{entry.name}</Text>
-                    <View style={[styles.skuProgressTrack, { backgroundColor: tokens.muted }]}>
-                      <View
-                        style={[
-                          styles.skuProgressFill,
-                          { width: `${pct * 100}%`, backgroundColor: done ? tokens.rag.green.strong : tokens.rag.amber.strong },
-                        ]}
-                      />
-                    </View>
-                  </View>
-                  <View style={[styles.skuStatusBadge, { backgroundColor: done ? tokens.rag.green.strong : tokens.rag.amber.soft }]}>
-                    <Text style={{ color: done ? tokens.primaryForeground : tokens.rag.amber.strong, fontSize: 10, fontWeight: tokens.fontWeight.bold }}>
-                      {done ? 'Complete' : 'Pending'}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
-      </View>
-    );
-  };
-  const zoneBody = audit.scope_values.length ? (
-    <View>{audit.scope_values.map(renderZoneGroup)}</View>
-  ) : (
-    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
-  );
-
-  // SKU Wise's own coverage view is physical-first, same as Location Wise —
-  // a flattened Racks accordion (no per-SKU grouping; the SKU Types/Batch
-  // are already summarized up in the schedule card) when scope_type isn't
-  // Zone, or a flat Zone chip row when it is.
+  // Every event type now reads the same physical-first coverage view — a
+  // flattened Racks accordion (no per-Layout grouping) when scope_type
+  // isn't Zone, or a flat Zone chip row when it is. SKU Wise's SKU Types/
+  // Batch are summarized up in the schedule card instead of driving a
+  // separate per-SKU breakdown down here.
   const skuTypesSet = new Set(audit.sku_types ?? []);
   // A zone counts as done once every SKU it's expected to hold (narrowed to
   // this audit's own sku_types when SKU Wise) has been fully scanned —
@@ -286,11 +202,15 @@ export function AuditDetailsScreen() {
     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No zones in scope yet.</Text>
   );
 
-  // Flattened across layouts — reads as one "Racks" accordion (Total
-  // Racks: N) instead of grouped under each Layout's own name, since the
-  // SKU/batch scoping already narrowed things down at the top of the
-  // screen.
+  // Flattened across layouts — reads as one Racks accordion (Total
+  // Racks: N) instead of grouped under each Layout's own name. Location
+  // Wise scoped to a single Layout is the one exception: it keeps that
+  // Layout's own generic "Layout 1" wrapper instead of "Racks", matching
+  // the reference — every other combination (Rack scope, or any non
+  // Location Wise event type) reads "Racks".
   const allRacksFlat = layouts.flatMap((ly) => ly.racks.map((rack) => ({ layout: ly.name, rack })));
+  const racksWrapperLabel =
+    (!audit.event_scope_type || audit.event_scope_type === 'Location Wise') && audit.scope_type === 'Layout' ? 'Layout 1' : 'Racks';
   const racksRootOpen = openLayout === 'sku-racks-root';
   const skuRackBody = (
     <View>
@@ -298,7 +218,7 @@ export function AuditDetailsScreen() {
         <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
           <Ionicons name="business-outline" size={18} color={tokens.accentBlue.base} />
         </View>
-        <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Racks</Text>
+        <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{racksWrapperLabel}</Text>
         <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
           <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
             Total Racks: {String(allRacksFlat.length).padStart(2, '0')}
@@ -334,68 +254,6 @@ export function AuditDetailsScreen() {
     </View>
   );
 
-  const bayBody =
-    totalRackCount > 1 ? (
-      <View>
-        {layouts.map((ly) => {
-          const layoutKey = `layout:${ly.name}`;
-          const layoutOpen = openLayout === layoutKey;
-          return (
-            <View key={ly.name} style={[styles.accSection, { borderBottomColor: tokens.border }]}>
-              <Pressable onPress={() => toggleLayout(layoutKey)} style={styles.accHeader}>
-                <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
-                  <Ionicons name="grid-outline" size={18} color={tokens.accentBlue.base} />
-                </View>
-                <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-                  {ly.name}
-                </Text>
-                <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-                  <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                    Total Racks: {String(ly.racks.length).padStart(2, '0')}
-                  </Text>
-                </View>
-                <Ionicons name={layoutOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
-              </Pressable>
-              {layoutOpen
-                ? ly.racks.map((rack) => {
-                    const rackKey = `rack:${ly.name}|${rack.code}`;
-                    const rackOpen = openRack === rackKey;
-                    const bays = flatBays.filter((b) => b.layout === ly.name && b.rack === rack.code);
-                    return (
-                      <View key={rack.code} style={styles.accSubSection}>
-                        <Pressable onPress={() => toggleRack(rackKey)} style={styles.accHeader}>
-                          <View style={[styles.accIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
-                            <Ionicons name="server-outline" size={18} color={tokens.accentBlue.base} />
-                          </View>
-                          <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-                            Rack {rack.code}
-                          </Text>
-                          <View style={[styles.accBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
-                            <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                              Total Bays: {String(bays.length).padStart(2, '0')}
-                            </Text>
-                          </View>
-                          <Ionicons name={rackOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#667085" />
-                        </Pressable>
-                        {rackOpen ? <View style={styles.bayGrid}>{bays.map(renderBayPill)}</View> : null}
-                      </View>
-                    );
-                  })
-                : null}
-            </View>
-          );
-        })}
-      </View>
-    ) : (
-      <View style={styles.bayGrid}>
-        {flatBays.length ? (
-          flatBays.map(renderBayPill)
-        ) : (
-          <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, paddingVertical: 12 }}>No bays in scope yet.</Text>
-        )}
-      </View>
-    );
-
   return (
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader
@@ -420,10 +278,19 @@ export function AuditDetailsScreen() {
             <InspField label="Start Date" value={fmtDate(audit.start_date)} />
             <InspField label="End Date" value={fmtDate(audit.end_date)} />
             {(audit.event_scope_type ?? 'Location Wise') === 'Location Wise' ? (
-              <>
-                <InspField label="Scope Type" value={audit.scope_type} />
-                <InspField label="Scope Values" value={audit.scope_values.length ? audit.scope_values.join(', ') : 'Not narrowed'} />
-              </>
+              isZoneScope ? (
+                <>
+                  <InspField label="Scope Type" value={audit.scope_type} />
+                  <InspField label="No.of zones" value={String(audit.scope_values.length).padStart(2, '0')} />
+                </>
+              ) : (
+                <>
+                  <InspField label="Scope Type" value={audit.scope_type} />
+                  <InspField label="Scope Values" value={audit.scope_values.length ? audit.scope_values.join(', ') : 'Not narrowed'} />
+                  {audit.scope_type === 'Rack' ? <InspField label="Total Racks" value={String(allRacksFlat.length).padStart(2, '0')} /> : null}
+                  <InspField label="Total Bay" value={String(flatBays.length).padStart(2, '0')} />
+                </>
+              )
             ) : audit.event_scope_type === 'SKU Wise' ? (
               <>
                 <InspField label="No.of SKU Types" value={truncateList(audit.sku_types)} />
@@ -477,7 +344,7 @@ export function AuditDetailsScreen() {
               </View>
             </View>
           </View>
-          {isZoneScope ? (isSimpleScope ? skuZoneBody : zoneBody) : isSimpleScope ? skuRackBody : bayBody}
+          {isZoneScope ? skuZoneBody : skuRackBody}
         </Card>
       </ScrollView>
       <View style={[styles.footerBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
@@ -524,12 +391,6 @@ const styles = StyleSheet.create({
   bayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   bayPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
   zonePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
-  skuRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 10 },
-  skuIconWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  skuProgressTrack: { height: 5, borderRadius: 3, overflow: 'hidden', marginTop: 6 },
-  skuProgressFill: { height: '100%', borderRadius: 3 },
-  skuStatusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  accSection: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 14 },
   accSubSection: { marginTop: 10, marginLeft: 4 },
   accHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   accBadge: { paddingHorizontal: 10, paddingVertical: 4 },
