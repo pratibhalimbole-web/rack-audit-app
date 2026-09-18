@@ -107,6 +107,27 @@ export const AUDITS: Audit[] = [
     event_scope_type: 'Full Warehouse',
     work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
+  // Location Wise's three flat-coverage variants — Layout scope (its own
+  // "Layout 1" wrapper), Rack scope ("Racks" wrapper), Zone scope (flat
+  // Zone chip row, "Scope Type" + "No.of zones" up top).
+  {
+    audit_id: 'AUD-0245', audit_name: 'Layout A', audit_type: 'Full', count_method: 'Blind (Enforced)',
+    scope_type: 'Layout', scope_values: ['Rack A-05', 'Rack A-06'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
+  {
+    audit_id: 'AUD-0246', audit_name: 'Racks Full Count', audit_type: 'Full', count_method: 'Blind (Enforced)',
+    scope_type: 'Rack', scope_values: ['Rack 1', 'Rack 2'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
+  {
+    audit_id: 'AUD-0247', audit_name: 'Zone A Full Count', audit_type: 'Full', count_method: 'Blind (Enforced)',
+    scope_type: 'Zone', scope_values: ['Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E', 'Zone F', 'Zone G', 'Zone H'], team_members: ['Arjun Sharma', 'Rohan Kumar'],
+    start_date: '2026-07-11', end_date: '2026-07-15', status: 'Scheduled',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
   {
     audit_id: 'AUD-0225', audit_name: 'Zone C Damaged Recheck', audit_type: 'Cycle Count', count_method: 'Blind (Enforced)',
     scope_type: 'Rack', scope_values: ['Rack C-04'], team_members: ['Arjun Sharma', 'Sanjay Patil'],
@@ -291,6 +312,9 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
   'AUD-0242': { layouts: [] },
   'AUD-0243': { layouts: [makeLayout('Layout B', genRacks(['1', '2'], 4, 3, 0, 0))] },
   'AUD-0244': { layouts: [] },
+  'AUD-0245': { layouts: [makeLayout('Layout A', genRacks(['1', '2'], 4, 3, 0, 0))] },
+  'AUD-0246': { layouts: [makeLayout('Layout A', genRacks(['1', '2'], 4, 3, 0, 0))] },
+  'AUD-0247': { layouts: [] },
   'AUD-0225': {
     layouts: [
       makeLayout('Layout A', [

@@ -11,9 +11,11 @@ import { Pill } from './Pill';
 // card, distinct from TaskCard (Dashboard's task preview). The card stretches
 // to the full width of its column (same width as that column's
 // Delayed/Today/This Week/This Month header), with fields laid out as two
-// even (50/50) columns per row so their spacing scales with it. Total Bay
-// and Total Location are each one "done/total" ratio field rather than
-// three separate completed/pending/total fields.
+// even (50/50) columns per row so their spacing scales with it. Total Bay is
+// a "done/total" ratio field rather than separate completed/pending/total
+// fields. A multi-layout audit gets its own "No. of Layout" field paired
+// with "No. of Racks", and Total Bay drops to its own row beneath them;
+// a single-layout audit pairs "No. of Racks" with "Total Bay" directly.
 // hideStatus: the Completed Task screen (src/features/maintenance/
 // MaintenanceScreen.tsx) already implies every card here is done, so its
 // own "Task Status" pill is redundant there — only the Tasks board (mixed
@@ -62,20 +64,42 @@ export function TodoCard({ audit, rollup, hideStatus }: { audit: Audit; rollup: 
           </Field>
         </View>
         <View style={styles.row}>
-          {!isZoneScope ? (
-            <Field label="No. of Racks">
-              <NumChip value={rollup.rackTotal} />
+          {isZoneScope ? (
+            <>
+              <Field label="Total Zone">
+                <NumChip value={audit.scope_values.length} />
+              </Field>
+              <Field label="No. of SKUs">
+                <NumChip value={zoneSkuCount} />
+              </Field>
+            </>
+          ) : rollup.layoutTotal > 1 ? (
+            <>
+              <Field label="No. of Layout">
+                <NumChip value={rollup.layoutTotal} />
+              </Field>
+              <Field label="No. of Racks">
+                <NumChip value={rollup.rackTotal} />
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="No. of Racks">
+                <NumChip value={rollup.rackTotal} />
+              </Field>
+              <Field label="Total Bay">
+                <NumChip value={ratio(rollup.bayDone, rollup.bayTotal)} />
+              </Field>
+            </>
+          )}
+        </View>
+        {!isZoneScope && rollup.layoutTotal > 1 ? (
+          <View style={styles.row}>
+            <Field label="Total Bay">
+              <NumChip value={ratio(rollup.bayDone, rollup.bayTotal)} />
             </Field>
-          ) : null}
-          <Field label={isZoneScope ? 'Total Zone' : 'Total Bay'}>
-            {isZoneScope ? <NumChip value={audit.scope_values.length} /> : <NumChip value={ratio(rollup.bayDone, rollup.bayTotal)} />}
-          </Field>
-        </View>
-        <View style={styles.row}>
-          <Field label={isZoneScope ? 'No. of SKUs' : 'Total Location'}>
-            {isZoneScope ? <NumChip value={zoneSkuCount} /> : <NumChip value={ratio(rollup.locDone, rollup.locTotal)} />}
-          </Field>
-        </View>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );

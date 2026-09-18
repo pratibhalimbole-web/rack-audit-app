@@ -310,7 +310,6 @@ export function AuditDetailsScreen() {
                 </>
               )
             ) : null}
-            <InspField label="Work Scope" value={audit.work_scope?.length ? audit.work_scope.join(', ') : 'Not selected'} />
           </View>
         </Card>
 

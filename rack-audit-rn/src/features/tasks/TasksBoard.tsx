@@ -395,7 +395,7 @@ function FilterCheckbox({ checked }: { checked: boolean }) {
   );
 }
 
-const EMPTY_ROLLUP = { rackDone: 0, rackTotal: 0, bayDone: 0, bayTotal: 0, locDone: 0, locTotal: 0 };
+const EMPTY_ROLLUP = { layoutTotal: 0, rackDone: 0, rackTotal: 0, bayDone: 0, bayTotal: 0, locDone: 0, locTotal: 0 };
 
 const styles = StyleSheet.create({
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 12 },

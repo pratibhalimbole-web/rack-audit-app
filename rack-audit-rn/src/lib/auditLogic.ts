@@ -100,7 +100,7 @@ export function flattenBays(tree: AuditLocationsTree | undefined): FlatBay[] {
   return out;
 }
 
-export type Rollup = { rackDone: number; rackTotal: number; bayDone: number; bayTotal: number; locDone: number; locTotal: number };
+export type Rollup = { layoutTotal: number; rackDone: number; rackTotal: number; bayDone: number; bayTotal: number; locDone: number; locTotal: number };
 
 export function rollup(tree: AuditLocationsTree | undefined): Rollup {
   const layouts = tree?.layouts ?? [];
@@ -120,7 +120,7 @@ export function rollup(tree: AuditLocationsTree | undefined): Rollup {
       });
     }),
   );
-  return { rackDone, rackTotal, bayDone, bayTotal, locDone, locTotal: locs.length };
+  return { layoutTotal: layouts.length, rackDone, rackTotal, bayDone, bayTotal, locDone, locTotal: locs.length };
 }
 
 export function lastSaved(tree: AuditLocationsTree | undefined): LocationEntry | null {
