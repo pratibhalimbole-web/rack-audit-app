@@ -13,7 +13,7 @@ import type { SheetOption } from '@/components/BottomSheetPicker';
 import { InlineDropdown, ToolbarField } from '@/components/ToolbarDropdownField';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuditProgressMap } from '@/hooks/useLocationsTree';
-import { expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
+import { expectedUnitIdsForQty, expectedZoneForSku, FLOOR_AREAS, generateWaveformBars, INVENTORY_POOL, ZONE_EXPECTED_SKUS } from '@/lib/mockData';
 import type { Evidence } from '@/lib/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAudits } from '../dashboard/hooks';
@@ -399,19 +399,23 @@ export function ZoneAuditMapScreen() {
   // Same "Missing Inventory Unit IDs" gate as Rack View's Reconciliation
   // Form (missingGroups there) — what this zone's own pick list
   // (ZONE_EXPECTED_SKUS) says should be here that hasn't actually been
-  // scanned yet. A zone's pick list only carries an expectedCount per SKU
-  // (no pre-assigned Inventory Unit IDs the way a rack pallet's
-  // expectedUnitIdsForQty does), so this counts what's still short per
-  // SKU rather than naming specific missing IDs.
+  // scanned yet, named by specific Inventory Unit ID, not just a count.
+  // A zone's pick list only carries an expectedCount per SKU (no
+  // pre-assigned IDs the way a rack pallet's own record does), so the
+  // expected ID set is generated the same deterministic way Rack View's
+  // expectedUnitIdsForQty does (1001, 1002, ...) and diffed against
+  // whatever's actually been scanned for that SKU.
   const missingGroups = selectedZone
     ? (ZONE_EXPECTED_SKUS[selectedZone.label] ?? [])
         .map((exp) => {
-          const foundCount = zoneScans.find((l) => l.sku === exp.sku)?.unitIds.length ?? 0;
-          return { sku: exp.sku, name: exp.name, missingCount: exp.expectedCount - foundCount };
+          const expectedIds = expectedUnitIdsForQty(exp.expectedCount);
+          const scannedIds = new Set(zoneScans.find((l) => l.sku === exp.sku)?.unitIds ?? []);
+          const missingIds = expectedIds.filter((id) => !scannedIds.has(id));
+          return { sku: exp.sku, name: exp.name, missingIds };
         })
-        .filter((g) => g.missingCount > 0)
+        .filter((g) => g.missingIds.length > 0)
     : [];
-  const missingTotal = missingGroups.reduce((sum, g) => sum + g.missingCount, 0);
+  const missingTotal = missingGroups.reduce((sum, g) => sum + g.missingIds.length, 0);
 
   // Kept in sync every render so leaving this screen any way (header back
   // arrow, hardware/gesture back) closes the split view back down to
@@ -894,7 +898,7 @@ export function ZoneAuditMapScreen() {
             <ScrollView style={styles.missingTableScroll}>
               <View style={[styles.missingTableHead, { borderBottomColor: tokens.border }]}>
                 <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>SKU ID & Name</Text>
-                <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Missing</Text>
+                <Text style={{ flex: 1.4, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Inventory Unit IDs</Text>
               </View>
               {missingGroups.map((g) => (
                 <View key={g.sku} style={[styles.missingTableRow, { borderBottomColor: tokens.border }]}>
@@ -902,7 +906,7 @@ export function ZoneAuditMapScreen() {
                     <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{g.sku}</Text>
                     <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{g.name}</Text>
                   </View>
-                  <Text style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm }}>{g.missingCount}</Text>
+                  <Text style={{ flex: 1.4, color: tokens.foreground, fontSize: tokens.text.sm }}>{g.missingIds.join(', ')}</Text>
                 </View>
               ))}
             </ScrollView>
