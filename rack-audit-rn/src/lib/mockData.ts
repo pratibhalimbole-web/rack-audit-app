@@ -472,8 +472,16 @@ export const ZONE_EXPECTED_SKUS: Record<string, ZoneExpectedSku[]> = {
   // needs to show both a Rack group and a Zone group for the same SKU.
   'Zone C': [{ sku: 'SKU-5088', name: 'Corner Protector', expectedCount: 6 }],
   'Staging Area': [{ sku: 'SKU-9011', name: 'Rack Label Kit', expectedCount: 5 }],
-  'Pallet Shipping': [{ sku: 'SKU-1180', name: 'Fastener Pack M10', expectedCount: 7 }],
-  'Shipping Station': [{ sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', expectedCount: 9 }],
+  'Pallet Shipping': [
+    { sku: 'SKU-1180', name: 'Fastener Pack M10', expectedCount: 5 },
+    { sku: 'SKU-4411', name: 'Washer Pack Steel', expectedCount: 4 },
+    { sku: 'SKU-2218', name: 'Pallet Support Pin', expectedCount: 3 },
+  ],
+  'Shipping Station': [
+    { sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', expectedCount: 6 },
+    { sku: 'SKU-4412', name: 'Rubber Gasket Set', expectedCount: 5 },
+    { sku: 'SKU-1042', name: 'Steel Bracket 90', expectedCount: 3 },
+  ],
 };
 
 // Reverse lookup — which zone (if any) a given SKU is supposed to be

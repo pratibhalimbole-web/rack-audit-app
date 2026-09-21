@@ -186,15 +186,18 @@ export function AuditDetailsScreen() {
     <View style={styles.bayGrid}>
       {audit.scope_values.map((zoneName) => {
         const done = zoneDone(zoneName);
+        const zoneId = FLOOR_AREAS.find((f) => f.label === zoneName)?.id;
         return (
-          <View
+          <Pressable
             key={zoneName}
+            disabled={!zoneId}
+            onPress={() => router.push({ pathname: '/audit/[auditId]/zone-map', params: { auditId: audit.audit_id, zoneId } } as never)}
             style={[styles.zonePill, { backgroundColor: done ? tokens.rag.green.soft : tokens.muted, borderColor: done ? tokens.rag.green.border : tokens.border }]}
           >
             <Text style={{ color: done ? tokens.rag.green.strong : tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
               {zoneName}
             </Text>
-          </View>
+          </Pressable>
         );
       })}
     </View>

@@ -80,20 +80,24 @@ export function ZoneAuditMapScreen() {
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
   const [zoneField, setZoneField] = useState(false);
   const [scannedByZone, setScannedByZone] = useState<Record<string, ZoneCountLine[]>>({});
-  // Whichever SKU line's accordion is expanded in the Reconciliation
-  // Form — same activeLineIndex/openUnitIds split as Rack View: the SKU
-  // row itself collapses/expands, and each unit's own Damage/Evidence
-  // section opens independently within it.
-  const [activeLineIndex, setActiveLineIndex] = useState(0);
+  // Same accordion-per-SKU pattern as Rack View's Reconciliation Form —
+  // one card per scanned SKU, tap its header to collapse/expand (keyed by
+  // SKU since a zone only ever carries one line per SKU). A SKU auto-opens
+  // the moment it's first scanned (see applyZoneScan) so the result is
+  // immediately visible without an extra tap.
+  const [openLineKeys, setOpenLineKeys] = useState<Set<string>>(new Set());
+  // Each unit's own Damage/Evidence section opens independently within
+  // its (open) SKU card, tracked here by unit ID.
   const [openUnitIds, setOpenUnitIds] = useState<Set<string>>(new Set());
   // Every box label already scanned in THIS zone this session, keyed by
   // zone id — a real pallet QR is "<sku>::<label>", so two different boxes
   // of the same SKU carry different labels and both count, while a repeat
   // of the same label is refused as a duplicate (see applyZoneScan).
   const [scannedLabelsByZone, setScannedLabelsByZone] = useState<Record<string, Set<string>>>({});
-  // Skus to be scanned at selected zone — collapsible, starts open so the
-  // pick list is the first thing an inspector sees on opening a zone.
-  const [checklistOpen, setChecklistOpen] = useState(true);
+  // Skus to be scanned at selected zone — collapsible, starts collapsed
+  // (reference: the Reconciliation Form opens with it closed, chevron
+  // down, tapped open on demand).
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const setZoneScans = useZoneAuditStore((s) => s.setZoneScans);
   // Mirrors scan lines into the shared store on every change, flattened to
   // one record per physical box (unitId) — same grain Audit Details' zone
@@ -123,13 +127,14 @@ export function ZoneAuditMapScreen() {
     });
   }, [auditId, scannedByZone, setZoneScans]);
   const [scannerOpen, setScannerOpen] = useState(false);
-  // 'all' = the tabbed Scanned Records page (every zone, opened from the
-  // top toolbar); 'zone' = the Reconciliation Form's own list, locked to
-  // whichever zone is currently selected — no tab switching there, since
-  // it's meant to answer "what have I found here", not "everywhere".
-  const [listView, setListView] = useState<'all' | 'zone' | null>(null);
   const [skuScanCount, setSkuScanCount] = useState(0);
   const [duplicateLabel, setDuplicateLabel] = useState<string | null>(null);
+  const [missingModalOpen, setMissingModalOpen] = useState(false);
+  // Same tap-to-open popup as Rack View's Reconciliation Form (its own
+  // pin icon opens Location Details as a modal rather than an
+  // always-visible inline block) — one field here since a zone, unlike a
+  // rack pallet, has no bay/pallet identity of its own.
+  const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
   const [attachmentTarget, setAttachmentTarget] = useState<`unit:${string}` | null>(null);
 
   // Same confirm-before-leaving pattern as Rack View's Reconciliation Form
@@ -258,17 +263,8 @@ export function ZoneAuditMapScreen() {
     (audit.event_scope_type === 'SKU Wise' && (audit.sku_types ?? []).some((sku) => (ZONE_EXPECTED_SKUS[label] ?? []).some((z) => z.sku === sku)));
   const selectedZone = selectedZoneId ? FLOOR_AREAS.find((z) => z.id === selectedZoneId) : null;
   const zoneOptions: SheetOption[] = FLOOR_AREAS.filter((z) => inScope(z.label)).map((z) => ({ value: z.id, label: z.label }));
-  // Combined total across every zone this audit covers (e.g. Zone A +
-  // Staging Area) — every physical box scanned, not just distinct SKU
-  // rows — badges the toolbar's "all zones" list icon and drives the
-  // Scanned Records page's own combined line.
-  const allZonesTotal = zoneOptions.reduce(
-    (sum, opt) => sum + (scannedByZone[opt.value] ?? []).reduce((s, l) => s + l.unitIds.length, 0),
-    0,
-  );
-  const allZonesLabel = zoneOptions.map((opt) => opt.label).join(' + ');
   // Total distinct boxes scanned in one zone (not SKU rows) — used for the
-  // "Scanned SKUS: NN" counter, the zone tab dots, and the list headers.
+  // "Scanned SKUS: NN" counter and the canvas zone cards' own count.
   const zoneUnitCount = (id: string) => (scannedByZone[id] ?? []).reduce((s, l) => s + l.unitIds.length, 0);
 
   const pickZone = (id: string) => {
@@ -276,22 +272,11 @@ export function ZoneAuditMapScreen() {
     if (!zone || !inScope(zone.label)) return;
     setSelectedZoneId(id);
     setSkuPanelOpen(true);
-    setActiveLineIndex(0);
     setOpenUnitIds(new Set());
     setZoneField(false);
   };
 
-  // Switching the list page's zone tab shouldn't reopen the scan panel or
-  // clear an in-progress draft the way picking a zone on the canvas does —
-  // it's just changing which zone's already-saved records are on screen.
-  const pickListZone = (id: string) => {
-    const zone = FLOOR_AREAS.find((z) => z.id === id);
-    if (!zone || !inScope(zone.label)) return;
-    setSelectedZoneId(id);
-  };
-
   const zoneScans = selectedZoneId ? (scannedByZone[selectedZoneId] ?? []) : [];
-  const activeLine = zoneScans[activeLineIndex] ?? null;
 
   // Same scanLines-driven multi-SKU flow as Rack View's Reconciliation Form
   // (applyMultiSkuScan) — a scan only ever proves identity: a new SKU adds
@@ -313,21 +298,17 @@ export function ZoneAuditMapScreen() {
     }
     const pick = INVENTORY_POOL.find((p) => p.sku === skuCode) ?? { sku: skuCode, name: 'Unlisted SKU' };
     setScannedLabelsByZone((prev) => ({ ...prev, [selectedZoneId]: new Set(labelsHere).add(labelPart) }));
+    setOpenLineKeys((prev) => new Set(prev).add(pick.sku));
     setScannedByZone((prev) => {
       const lines = prev[selectedZoneId] ?? [];
       const idx = lines.findIndex((l) => l.sku === pick.sku);
       let nextLines: ZoneCountLine[];
-      let landedIndex: number;
       if (idx !== -1) {
         nextLines = lines.slice();
         nextLines[idx] = { ...nextLines[idx], unitIds: [...nextLines[idx].unitIds, labelPart] };
-        landedIndex = idx;
       } else {
         nextLines = [...lines, { sku: pick.sku, name: pick.name, unitIds: [labelPart], unitDamage: {} }];
-        landedIndex = nextLines.length - 1;
       }
-      setActiveLineIndex(landedIndex);
-      setOpenUnitIds(new Set());
       return { ...prev, [selectedZoneId]: nextLines };
     });
   };
@@ -339,26 +320,37 @@ export function ZoneAuditMapScreen() {
     setScannerOpen(false);
     // Mostly scans one of this zone's own expected SKUs (so the demo
     // mostly comes back Matched) instead of the whole inventory pool.
+    // Same numeric Inventory Unit ID convention as Rack View's own
+    // simulated scan (1001, 1002, ...) — not a "SIM-N" label.
     const zoneSkus = selectedZone ? (ZONE_EXPECTED_SKUS[selectedZone.label] ?? []) : [];
     const pick = zoneSkus.length ? zoneSkus[skuScanCount % zoneSkus.length] : INVENTORY_POOL[skuScanCount % INVENTORY_POOL.length];
-    applyZoneScan(`${pick.sku}::SIM-${skuScanCount}`);
+    const unitId = 1001 + skuScanCount;
+    applyZoneScan(`${pick.sku}::${unitId}`);
     setSkuScanCount((c) => c + 1);
   };
+
+  // Every scanned SKU's card is always open now (no accordion — matches
+  // the reference, which shows every scanned SKU's Inventory Unit IDs at
+  // once), so these resolve which line owns a given unit ID on demand
+  // instead of relying on a single "active" line index.
+  const lineIndexForUnit = (unitId: string) => zoneScans.findIndex((l) => l.unitIds.includes(unitId));
 
   // Per-Inventory-Unit-ID damage — same replacement for the old Activity
   // Phase/Observation flow Rack View's Reconciliation Form uses
   // (toggleUnitDamage). Flagging any one unit auto-opens that unit's own
   // Evidence section; switching it back off collapses it again.
   const toggleUnitDamage = (unitId: string) => {
-    if (!selectedZoneId || !activeLine) return;
-    const current = activeLine.unitDamage[unitId];
+    if (!selectedZoneId) return;
+    const lineIndex = lineIndexForUnit(unitId);
+    if (lineIndex === -1) return;
+    const current = zoneScans[lineIndex].unitDamage[unitId];
     const nextFlagged = !current?.flagged;
     setScannedByZone((prev) => {
       const lines = prev[selectedZoneId] ?? [];
       const nextLines = lines.slice();
-      nextLines[activeLineIndex] = {
-        ...activeLine,
-        unitDamage: { ...activeLine.unitDamage, [unitId]: { flagged: nextFlagged, evidence: current?.evidence ?? EMPTY_EVIDENCE } },
+      nextLines[lineIndex] = {
+        ...lines[lineIndex],
+        unitDamage: { ...lines[lineIndex].unitDamage, [unitId]: { flagged: nextFlagged, evidence: current?.evidence ?? EMPTY_EVIDENCE } },
       };
       return { ...prev, [selectedZoneId]: nextLines };
     });
@@ -380,14 +372,16 @@ export function ZoneAuditMapScreen() {
   };
 
   const updateUnitEvidence = (unitId: string, patch: Partial<Evidence>) => {
-    if (!selectedZoneId || !activeLine) return;
-    const current = activeLine.unitDamage[unitId] ?? { flagged: true, evidence: EMPTY_EVIDENCE };
+    if (!selectedZoneId) return;
+    const lineIndex = lineIndexForUnit(unitId);
+    if (lineIndex === -1) return;
+    const current = zoneScans[lineIndex].unitDamage[unitId] ?? { flagged: true, evidence: EMPTY_EVIDENCE };
     setScannedByZone((prev) => {
       const lines = prev[selectedZoneId] ?? [];
       const nextLines = lines.slice();
-      nextLines[activeLineIndex] = {
-        ...activeLine,
-        unitDamage: { ...activeLine.unitDamage, [unitId]: { ...current, evidence: { ...current.evidence, ...patch } } },
+      nextLines[lineIndex] = {
+        ...lines[lineIndex],
+        unitDamage: { ...lines[lineIndex].unitDamage, [unitId]: { ...current, evidence: { ...current.evidence, ...patch } } },
       };
       return { ...prev, [selectedZoneId]: nextLines };
     });
@@ -402,171 +396,22 @@ export function ZoneAuditMapScreen() {
   const isDuplicateUnit = (unitId: string): boolean =>
     Object.entries(scannedByZone).some(([zid, lines]) => zid !== selectedZoneId && lines.some((l) => l.unitIds.includes(unitId)));
 
-  // A full page, not a modal sheet — a zone can genuinely rack up a long
-  // scan history, and a cramped sheet doesn't give that room to breathe.
-  // Back arrow just returns to the canvas+form, same list state intact.
-  if (listView && selectedZone) {
-    // The scanner doesn't need to know a pick list exists — they just scan
-    // whatever's sitting in the open zone. So the list page leads with
-    // "what did we actually find here", one card per physical box (i.e.
-    // per unique label) rather than rolled up by SKU — 3 boxes of the same
-    // SKU is 3 cards, not one card saying "Found: 3". Match/mismatch is
-    // worked out automatically per SKU from expectedZoneForSku, not
-    // something the user has to know going in. Re-scans are refused at
-    // intake (see handleScanned's "Already Scanned" prompt), so every
-    // label here is a genuinely distinct box.
-    const foundBoxes = zoneScans.flatMap((line) =>
-      line.unitIds.map((unitId) => {
-        const homeZone = expectedZoneForSku(line.sku);
-        const isUnlisted = !INVENTORY_POOL.some((p) => p.sku === line.sku);
-        const group: 'Matched' | 'Mismatched' | 'Unlisted' | 'No Record' =
-          homeZone === selectedZone.label ? 'Matched' : homeZone ? 'Mismatched' : isUnlisted ? 'Unlisted' : 'No Record';
-        const badge =
-          group === 'Matched'
-            ? { label: 'Matched', ragKey: 'green' as const }
-            : group === 'Mismatched'
-              ? { label: 'Mismatch', ragKey: 'red' as const }
-              : group === 'Unlisted'
-                ? { label: 'Unlisted', ragKey: 'amber' as const }
-                : { label: 'No Record', ragKey: 'amber' as const };
-        const tag = group === 'Matched' ? 'Belongs Here' : homeZone ? `Belongs in ${homeZone}` : isUnlisted ? 'Unlisted SKU' : 'No Expectation on Record';
-        const condition = line.unitDamage[unitId]?.flagged ? 'Damaged' : 'Good';
-        return { sku: line.sku, name: line.name, label: unitId, condition, homeZone, group, badge, tag, damageEntered: !!line.unitDamage[unitId] };
-      }),
-    );
-    const skuGroups: { title: string; ragKey: 'green' | 'amber' | 'red'; rows: typeof foundBoxes }[] = [
-      { title: 'Matched SKUs', ragKey: 'green', rows: foundBoxes.filter((s) => s.group === 'Matched') },
-      { title: 'Mismatched SKUs', ragKey: 'red', rows: foundBoxes.filter((s) => s.group === 'Mismatched') },
-      { title: 'Unlisted SKUs', ragKey: 'amber', rows: foundBoxes.filter((s) => s.group === 'Unlisted') },
-      { title: 'No Record SKUs', ragKey: 'amber', rows: foundBoxes.filter((s) => s.group === 'No Record') },
-    ];
-
-    return (
-      <View style={{ flex: 1, backgroundColor: tokens.muted }}>
-        {listView === 'all' ? (
-          <AppHeader
-            title="Scanned Records"
-            sub={`${allZonesTotal} total scan${allZonesTotal === 1 ? '' : 's'} across ${allZonesLabel}`}
-            showBack
-            onBack={() => setListView(null)}
-          />
-        ) : (
-          <AppHeader
-            title={`Scanned in ${selectedZone.label}`}
-            sub={`${zoneUnitCount(selectedZoneId ?? '')} scan${zoneUnitCount(selectedZoneId ?? '') === 1 ? '' : 's'} in this zone`}
-            showBack
-            onBack={() => setListView(null)}
-          />
-        )}
-
-        {listView === 'all' ? (
-          <>
-            {/* One tab per zone this audit actually covers — each zone's
-                scans are kept and shown fully separately, never merged
-                together. Only reachable from the toolbar's list icon —
-                the Reconciliation Form's own list has no tabs, since it's
-                locked to whichever zone is currently selected. */}
-            <View style={[styles.zoneTabRow, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-              {zoneOptions.map((opt) => {
-                const active = opt.value === selectedZoneId;
-                const zoneCount = zoneUnitCount(opt.value);
-                return (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => pickListZone(opt.value)}
-                    style={[styles.zoneTab, active ? { borderBottomColor: tokens.primary } : { borderBottomColor: 'transparent' }]}
-                  >
-                    <Text style={{ color: active ? tokens.primary : tokens.mutedForeground, fontWeight: active ? tokens.fontWeight.bold : tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>
-                      {opt.label}
-                    </Text>
-                    {zoneCount ? (
-                      <View style={[styles.zoneTabDot, { backgroundColor: active ? tokens.primary : tokens.mutedForeground }]}>
-                        <Text style={{ color: tokens.primaryForeground, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{zoneCount}</Text>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* This line is the combined figure across every zone — per-zone
-                detail belongs on the Reconciliation Form (its Scanned List
-                badge is always the selected zone's own count only), so the
-                two screens never show numbers that look like they disagree. */}
-            <View style={[styles.zoneSummaryBanner, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-              <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm }}>
-                Combined:{' '}
-                <Text style={{ fontWeight: tokens.fontWeight.extrabold, color: tokens.primary }}>{allZonesTotal}</Text>
-                {' '}scan{allZonesTotal === 1 ? '' : 's'} across <Text style={{ fontWeight: tokens.fontWeight.bold }}>{allZonesLabel}</Text>
-              </Text>
-            </View>
-          </>
-        ) : null}
-
-        <ScrollView contentContainerStyle={styles.listPageBody}>
-          {foundBoxes.length ? (
-            <View style={{ gap: 20 }}>
-              {skuGroups.map((group) =>
-                group.rows.length ? (
-                  <View key={group.title} style={{ gap: 8 }}>
-                    <View style={styles.groupHeadRow}>
-                      <Text style={[styles.groupLabel, { color: tokens.mutedForeground }]}>{group.title}</Text>
-                      <StatusBadge label={String(group.rows.length)} ragKey={group.ragKey} compact />
-                    </View>
-                    <View style={styles.cardGrid}>
-                      {group.rows.map((s) => (
-                        <View key={`${s.sku}-${s.label}`} style={[styles.miniCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                          <View style={[styles.miniHeadRow, { backgroundColor: '#EEF3FF', borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg }]}>
-                            <View style={styles.miniHeadLeft}>
-                              <Ionicons name={s.group === 'Matched' ? 'checkmark-circle-outline' : s.group === 'Mismatched' ? 'swap-horizontal-outline' : 'help-circle-outline'} size={12} color={tokens.primary} />
-                              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }} numberOfLines={1}>{s.sku}</Text>
-                            </View>
-                            <StatusBadge label={s.badge.label} ragKey={s.badge.ragKey} compact />
-                          </View>
-                          {/* No Record means the catalog has nothing to say about
-                              this SKU beyond its number — so the card doesn't
-                              pretend otherwise with a name line. Damage only
-                              appears if the inspector actually flagged it. */}
-                          {s.group === 'No Record' ? (
-                            s.damageEntered ? (
-                              <View style={styles.miniBody}>
-                                <View style={styles.miniGrid}>
-                                  <MiniField label="Damage" value={s.condition} tone={tokens.rag.amber.strong} />
-                                </View>
-                              </View>
-                            ) : null
-                          ) : (
-                            <View style={styles.miniBody}>
-                              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs, marginBottom: 6 }} numberOfLines={1}>
-                                {s.name}
-                              </Text>
-                              <View style={styles.miniGrid}>
-                                <MiniField label="Box" value={s.label} />
-                                <MiniField label="Condition" value={s.condition} />
-                              </View>
-                              {s.group === 'Mismatched' ? (
-                                <View style={[styles.miniLocationRow, { borderTopColor: tokens.border }]}>
-                                  <MiniField label="Location" value={`Belongs in ${s.homeZone}`} tone={tokens.rag.red.strong} />
-                                </View>
-                              ) : null}
-                            </View>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ) : null
-              )}
-            </View>
-          ) : null}
-
-          {!foundBoxes.length ? (
-            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, textAlign: 'center', paddingVertical: 20 }}>Nothing scanned here yet.</Text>
-          ) : null}
-        </ScrollView>
-      </View>
-    );
-  }
+  // Same "Missing Inventory Unit IDs" gate as Rack View's Reconciliation
+  // Form (missingGroups there) — what this zone's own pick list
+  // (ZONE_EXPECTED_SKUS) says should be here that hasn't actually been
+  // scanned yet. A zone's pick list only carries an expectedCount per SKU
+  // (no pre-assigned Inventory Unit IDs the way a rack pallet's
+  // expectedUnitIdsForQty does), so this counts what's still short per
+  // SKU rather than naming specific missing IDs.
+  const missingGroups = selectedZone
+    ? (ZONE_EXPECTED_SKUS[selectedZone.label] ?? [])
+        .map((exp) => {
+          const foundCount = zoneScans.find((l) => l.sku === exp.sku)?.unitIds.length ?? 0;
+          return { sku: exp.sku, name: exp.name, missingCount: exp.expectedCount - foundCount };
+        })
+        .filter((g) => g.missingCount > 0)
+    : [];
+  const missingTotal = missingGroups.reduce((sum, g) => sum + g.missingCount, 0);
 
   // Kept in sync every render so leaving this screen any way (header back
   // arrow, hardware/gesture back) closes the split view back down to
@@ -577,7 +422,7 @@ export function ZoneAuditMapScreen() {
     <View style={{ flex: 1, backgroundColor: tokens.muted }}>
       <AppHeader title="Zone Scan" sub={`${audit.audit_id} · ${audit.audit_name}`} showBack onBack={confirmBack} />
 
-      <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border, justifyContent: 'space-between' }]}>
+      <View style={[styles.toolbar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <View>
           <ToolbarField label={selectedZone ? selectedZone.label : 'Select Zone'} open={zoneField} onPress={() => setZoneField((v) => !v)} />
           {zoneField ? (
@@ -587,29 +432,6 @@ export function ZoneAuditMapScreen() {
             </>
           ) : null}
         </View>
-
-        {/* Entry point for the tabbed, all-zones Scanned Records page —
-            lives up here next to the zone picker rather than inside the
-            Reconciliation Form, since it's about the whole audit, not
-            just whichever zone the form currently has open. */}
-        <Pressable
-          onPress={() => {
-            if (!selectedZoneId && zoneOptions[0]) setSelectedZoneId(zoneOptions[0].value);
-            setListView('all');
-          }}
-          hitSlop={8}
-          style={[styles.listIconBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}
-        >
-          <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Scanned Records</Text>
-          <View style={{ position: 'relative' }}>
-            <Ionicons name="list-outline" size={16} color={tokens.foreground} />
-            {allZonesTotal ? (
-              <View style={[styles.listCountDot, { backgroundColor: tokens.primary }]}>
-                <Text style={{ color: tokens.primaryForeground, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{allZonesTotal}</Text>
-              </View>
-            ) : null}
-          </View>
-        </Pressable>
       </View>
 
       <View style={styles.body}>
@@ -743,16 +565,15 @@ export function ZoneAuditMapScreen() {
               >
                 <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Reconciliation Form</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Pressable onPress={() => setListView('zone')} hitSlop={8} style={[styles.listIconBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>Scanned List</Text>
-                    <View style={{ position: 'relative' }}>
-                      <Ionicons name="list-outline" size={16} color={tokens.foreground} />
-                      {zoneUnitCount(selectedZoneId ?? '') ? (
-                        <View style={[styles.listCountDot, { backgroundColor: tokens.primary }]}>
-                          <Text style={{ color: tokens.primaryForeground, fontSize: 9, fontWeight: tokens.fontWeight.bold }}>{zoneUnitCount(selectedZoneId ?? '')}</Text>
-                        </View>
-                      ) : null}
-                    </View>
+                  <Pressable
+                    onPress={() => setLocationDetailsOpen(true)}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.headerScanBtn,
+                      { backgroundColor: pressed ? tokens.primary : tokens.card, borderColor: pressed ? tokens.primary : tokens.border, borderRadius: tokens.radius.lg },
+                    ]}
+                  >
+                    {({ pressed }) => <Ionicons name="location-outline" size={16} color={pressed ? tokens.primaryForeground : tokens.foreground} />}
                   </Pressable>
                   {/* The one way to scan — the dashed box further down is
                       just an instructional note pointing at this icon,
@@ -770,58 +591,49 @@ export function ZoneAuditMapScreen() {
                 </View>
               </View>
 
-              {/* Same "Selected Location Details" block as Rack View —
-                  inline Label: Value rows, just one field here since a
-                  zone (unlike a rack pallet) has no bay/pallet identity of
-                  its own. Lives outside the ScrollView, same as Rack View,
-                  so it stays visible whether or not a box is being scanned. */}
-              <Text style={{ color: tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', marginBottom: 8 }}>
-                Selected Location Details
-              </Text>
-              <View style={styles.locDetailsBox}>
-                <DetailRow label="Zone" value={selectedZone.label} tokens={tokens} />
-              </View>
-              <View style={[styles.divider, { backgroundColor: tokens.border }]} />
-
-              {/* Skus to be scanned at selected zone — the zone's own pick
-                  list (ZONE_EXPECTED_SKUS), collapsible, Total badge in the
-                  header. Not present anywhere before this — Rack View's own
-                  Reconciliation Form only uses its expected list internally
-                  for Matched/Mismatched, it never renders it as a
-                  checklist. */}
+              {/* Skus to be scanned at selected zone — every individual
+                  expected unit, numbered flat and wrapped (not grouped by
+                  SKU with a found/expected fraction) — matches the
+                  reference exactly: a SKU with expectedCount 5 shows as 5
+                  separate numbered entries, not one row. Starts collapsed;
+                  Total counts every one of those numbered entries. */}
               <Pressable onPress={() => setChecklistOpen((v) => !v)} style={[styles.checklistCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
                 <View style={styles.checklistHead}>
-                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm, flex: 1 }}>
+                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, flex: 1 }}>
                     Skus to be scanned at selected zone
                   </Text>
-                  <View style={[styles.scanCountBadge, { backgroundColor: tokens.muted, marginTop: 0 }]}>
-                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs }}>
-                      Total: {(ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).length}
+                  <View style={[styles.scanCountBadge, { backgroundColor: tokens.accentBlue.soft, marginTop: 0 }]}>
+                    <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xxs }}>
+                      Total : {(ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).reduce((sum, e) => sum + e.expectedCount, 0)}
                     </Text>
                   </View>
                   <Ionicons name={checklistOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
                 </View>
                 {checklistOpen ? (
-                  <View style={styles.checklistBody}>
-                    {(ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).map((exp) => {
-                      const foundUnits = zoneScans.find((l) => l.sku === exp.sku)?.unitIds.length ?? 0;
-                      const done = foundUnits >= exp.expectedCount;
-                      return (
-                        <View key={exp.sku} style={styles.checklistRow}>
-                          <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={done ? tokens.rag.green.strong : tokens.mutedForeground} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>{exp.sku}</Text>
-                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }} numberOfLines={1}>{exp.name}</Text>
-                          </View>
-                          <Text style={{ color: done ? tokens.rag.green.strong : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                            {foundUnits}/{exp.expectedCount}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                    {!(ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).length ? (
+                  <View style={[styles.checklistBody, { borderTopColor: tokens.border }]}>
+                    {(ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).length ? (
+                      // Per-SKU progress — how many of this zone's expected
+                      // units for each SKU have actually been scanned so far.
+                      <View style={styles.checklistCountList}>
+                        {(ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).map((exp) => {
+                          const foundUnits = zoneScans.find((l) => l.sku === exp.sku)?.unitIds.length ?? 0;
+                          const done = foundUnits >= exp.expectedCount;
+                          return (
+                            <View key={exp.sku} style={styles.checklistCountRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }}>{exp.sku}</Text>
+                                <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }} numberOfLines={1}>{exp.name}</Text>
+                              </View>
+                              <Text style={{ color: done ? tokens.rag.green.strong : tokens.mutedForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                                {foundUnits}/{exp.expectedCount}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : (
                       <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs }}>No SKUs on record for this zone.</Text>
-                    ) : null}
+                    )}
                   </View>
                 ) : null}
               </Pressable>
@@ -855,124 +667,103 @@ export function ZoneAuditMapScreen() {
                 ) : null}
 
                 {zoneScans.length ? (
-                  // Every distinct SKU scanned into this zone so far — a
-                  // true accordion, one open at a time — same pattern as
-                  // Rack View's own Scanned SKUs list.
+                  // Every distinct SKU scanned into this zone so far — same
+                  // accordion-per-SKU pattern as Rack View's Reconciliation
+                  // Form: header shows the SKU/name plus a unit-count
+                  // badge, tap to collapse/expand its Inventory Unit IDs.
                   <View style={styles.scannedListWrap}>
                     {zoneScans.map((line, i) => {
-                      const isActive = i === activeLineIndex;
-                      const lineMatched = (ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).some((e) => e.sku === line.sku);
+                      const lineOpen = openLineKeys.has(line.sku);
                       return (
-                        <View key={`${line.sku}-${i}`}>
-                          <Pressable
-                            onPress={() => {
-                              setActiveLineIndex((prev) => (prev === i ? -1 : i));
-                              setOpenUnitIds(new Set());
-                            }}
-                            style={[
-                              styles.scannedRow,
-                              {
-                                backgroundColor: tokens.card,
-                                borderColor: tokens.border,
-                                borderRadius: isActive ? 0 : tokens.radius.lg,
-                                borderTopLeftRadius: tokens.radius.lg,
-                                borderTopRightRadius: tokens.radius.lg,
-                                borderBottomWidth: isActive ? 0 : 1,
-                              },
-                            ]}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
-                              <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{line.name}</Text>
-                            </View>
-                            <View
-                              style={[
-                                styles.editStatusPill,
-                                { backgroundColor: lineMatched ? tokens.rag.green.soft : tokens.rag.amber.soft, borderColor: lineMatched ? tokens.rag.green.border : tokens.rag.amber.border, borderRadius: tokens.radius.lg },
-                              ]}
-                            >
-                              <Text style={{ color: lineMatched ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                                {lineMatched ? 'Matched' : 'Mismatched'}
-                              </Text>
-                            </View>
-                            <View style={[styles.scanCountBadge, { backgroundColor: tokens.accentBlue.soft, marginTop: 0, minWidth: 0, paddingHorizontal: 10 }]}>
-                              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>
+                      <View key={`${line.sku}-${i}`} style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
+                        <Pressable
+                          onPress={() =>
+                            setOpenLineKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(line.sku)) next.delete(line.sku);
+                              else next.add(line.sku);
+                              return next;
+                            })
+                          }
+                          style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, borderBottomWidth: lineOpen ? 1 : 0 }]}
+                        >
+                          <View>
+                            <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{line.sku}</Text>
+                            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{line.name}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={[styles.scanCountBadge, { backgroundColor: tokens.accentBlue.soft, marginTop: 0 }]}>
+                              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
                                 {String(line.unitIds.length).padStart(2, '0')}
                               </Text>
                             </View>
-                            <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
-                          </Pressable>
-
-                          {isActive ? (
-                            <View style={[styles.accordionBody, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
-                              <View style={[styles.fieldCard, { backgroundColor: tokens.card, borderColor: tokens.border, borderRadius: tokens.radius.xl }]}>
-                                <View style={[styles.fieldCardHead, { backgroundColor: '#F7F8FA', borderBottomColor: tokens.border, borderBottomWidth: 1 }]}>
-                                  <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Inventory Unit IDs</Text>
+                            <Ionicons name={lineOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                          </View>
+                        </Pressable>
+                        {lineOpen ? (
+                        <View style={styles.fieldCardBody}>
+                          {/* One row per physical box scanned onto this SKU (unitIds), not one
+                              section for the whole line. Matched requires both the right SKU
+                              (lineMatched below) AND this exact physical unit ID not already
+                              sitting in a DIFFERENT zone this audit — a duplicate label showing
+                              up elsewhere is itself a mismatch. Damage is tracked per unit too. */}
+                          {line.unitIds.map((unitId, ui) => {
+                            const lineMatched = (ZONE_EXPECTED_SKUS[selectedZone.label] ?? []).some((e) => e.sku === line.sku);
+                            const unitFlagged = !!line.unitDamage[unitId]?.flagged;
+                            const unitOpen = openUnitIds.has(unitId);
+                            const unitEvidence = line.unitDamage[unitId]?.evidence ?? EMPTY_EVIDENCE;
+                            const unitMatched = lineMatched && !isDuplicateUnit(unitId);
+                            return (
+                              <View key={unitId} style={ui > 0 ? [styles.unitDivider, { borderTopColor: tokens.border }] : null}>
+                                <View style={styles.unitRow}>
+                                  <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, flex: 1 }}>
+                                    <Text style={{ fontWeight: tokens.fontWeight.bold }}>{ui + 1}.</Text> Inventory unit ID : <Text style={{ fontWeight: tokens.fontWeight.bold }}>{unitId}</Text>
+                                  </Text>
+                                  <View
+                                    style={[
+                                      styles.editStatusPill,
+                                      { backgroundColor: unitMatched ? tokens.rag.green.soft : tokens.rag.amber.soft, borderColor: unitMatched ? tokens.rag.green.border : tokens.rag.amber.border, borderRadius: tokens.radius.lg },
+                                    ]}
+                                  >
+                                    <Text style={{ color: unitMatched ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
+                                      {unitMatched ? 'Matched' : 'Mismatched'}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.unitDamageWrap}>
+                                    <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Damage:</Text>
+                                    <SimpleToggle value={unitFlagged} onToggle={() => toggleUnitDamage(unitId)} />
+                                    {unitFlagged ? (
+                                      <Pressable onPress={() => toggleUnitOpen(unitId)} hitSlop={8}>
+                                        <Ionicons name={unitOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
+                                      </Pressable>
+                                    ) : (
+                                      <View style={{ width: 16, height: 16 }} />
+                                    )}
+                                  </View>
                                 </View>
-                                <View style={styles.fieldCardBody}>
-                                  {/* One row per physical box scanned onto this SKU (unitIds), not one
-                                      section for the whole line. Matched requires both the right SKU
-                                      (lineMatched) AND this exact physical unit ID not already sitting
-                                      in a DIFFERENT zone this audit — a duplicate label showing up
-                                      elsewhere is itself a mismatch. Damage is tracked per unit too. */}
-                                  {line.unitIds.map((unitId, ui) => {
-                                    const unitFlagged = !!line.unitDamage[unitId]?.flagged;
-                                    const unitOpen = openUnitIds.has(unitId);
-                                    const unitEvidence = line.unitDamage[unitId]?.evidence ?? EMPTY_EVIDENCE;
-                                    const unitMatched = lineMatched && !isDuplicateUnit(unitId);
-                                    return (
-                                      <View key={unitId} style={ui > 0 ? [styles.unitDivider, { borderTopColor: tokens.border }] : null}>
-                                        <View style={styles.unitRow}>
-                                          <Text style={{ color: tokens.foreground, fontSize: tokens.text.sm, flex: 1 }}>
-                                            <Text style={{ fontWeight: tokens.fontWeight.bold }}>{ui + 1}.</Text> Inventory unit ID : <Text style={{ fontWeight: tokens.fontWeight.bold }}>{unitId}</Text>
-                                          </Text>
-                                          <View
-                                            style={[
-                                              styles.editStatusPill,
-                                              { backgroundColor: unitMatched ? tokens.rag.green.soft : tokens.rag.amber.soft, borderColor: unitMatched ? tokens.rag.green.border : tokens.rag.amber.border, borderRadius: tokens.radius.lg },
-                                            ]}
-                                          >
-                                            <Text style={{ color: unitMatched ? tokens.rag.green.strong : tokens.rag.amber.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>
-                                              {unitMatched ? 'Matched' : 'Mismatched'}
-                                            </Text>
-                                          </View>
-                                          <View style={styles.unitDamageWrap}>
-                                            <Text style={{ color: tokens.foreground, fontSize: tokens.text.xs, fontWeight: tokens.fontWeight.semibold }}>Damage:</Text>
-                                            <SimpleToggle value={unitFlagged} onToggle={() => toggleUnitDamage(unitId)} />
-                                            {unitFlagged ? (
-                                              <Pressable onPress={() => toggleUnitOpen(unitId)} hitSlop={8}>
-                                                <Ionicons name={unitOpen ? 'chevron-up' : 'chevron-down'} size={16} color={tokens.mutedForeground} />
-                                              </Pressable>
-                                            ) : (
-                                              <View style={{ width: 16, height: 16 }} />
-                                            )}
-                                          </View>
-                                        </View>
-                                        {unitFlagged && unitOpen ? (
-                                          <EvidenceBlock
-                                            evidence={unitEvidence}
-                                            onOpenNote={() => updateUnitEvidence(unitId, { noteOpen: true })}
-                                            onChangeNote={(note) => updateUnitEvidence(unitId, { note })}
-                                            onRecordAudio={() => updateUnitEvidence(unitId, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
-                                            onToggleAudioPlay={() => {
-                                              if (!unitEvidence.audio) return;
-                                              updateUnitEvidence(unitId, { audio: { ...unitEvidence.audio, playing: !unitEvidence.audio.playing } });
-                                            }}
-                                            onRemoveAudio={() => updateUnitEvidence(unitId, { audio: null })}
-                                            onAddImage={() => setAttachmentTarget(`unit:${unitId}`)}
-                                            onRemoveImage={(idx) => updateUnitEvidence(unitId, { images: unitEvidence.images.filter((_, ii) => ii !== idx) })}
-                                            onAddVideo={() => updateUnitEvidence(unitId, { videos: [...unitEvidence.videos, { durationSec: 20 }] })}
-                                            onRemoveVideo={(idx) => updateUnitEvidence(unitId, { videos: unitEvidence.videos.filter((_, ii) => ii !== idx) })}
-                                          />
-                                        ) : null}
-                                      </View>
-                                    );
-                                  })}
-                                </View>
+                                {unitFlagged && unitOpen ? (
+                                  <EvidenceBlock
+                                    evidence={unitEvidence}
+                                    onOpenNote={() => updateUnitEvidence(unitId, { noteOpen: true })}
+                                    onChangeNote={(note) => updateUnitEvidence(unitId, { note })}
+                                    onRecordAudio={() => updateUnitEvidence(unitId, { audio: { durationSec: 20, playing: false, bars: generateWaveformBars() } })}
+                                    onToggleAudioPlay={() => {
+                                      if (!unitEvidence.audio) return;
+                                      updateUnitEvidence(unitId, { audio: { ...unitEvidence.audio, playing: !unitEvidence.audio.playing } });
+                                    }}
+                                    onRemoveAudio={() => updateUnitEvidence(unitId, { audio: null })}
+                                    onAddImage={() => setAttachmentTarget(`unit:${unitId}`)}
+                                    onRemoveImage={(idx) => updateUnitEvidence(unitId, { images: unitEvidence.images.filter((_, ii) => ii !== idx) })}
+                                    onAddVideo={() => updateUnitEvidence(unitId, { videos: [...unitEvidence.videos, { durationSec: 20 }] })}
+                                    onRemoveVideo={(idx) => updateUnitEvidence(unitId, { videos: unitEvidence.videos.filter((_, ii) => ii !== idx) })}
+                                  />
+                                ) : null}
                               </View>
-                            </View>
-                          ) : null}
+                            );
+                          })}
                         </View>
+                        ) : null}
+                      </View>
                       );
                     })}
                   </View>
@@ -983,7 +774,10 @@ export function ZoneAuditMapScreen() {
                 <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.outlineBtn, { backgroundColor: tokens.muted, borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
                   <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={() => setSkuPanelOpen(false)} style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}>
+                <Pressable
+                  onPress={() => (missingGroups.length ? setMissingModalOpen(true) : setSkuPanelOpen(false))}
+                  style={[styles.primaryBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+                >
                   <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Save & Scan Next</Text>
                 </Pressable>
               </View>
@@ -1007,7 +801,8 @@ export function ZoneAuditMapScreen() {
         onSave={(image) => {
           if (attachmentTarget === null) return;
           const unitId = attachmentTarget.slice('unit:'.length);
-          updateUnitEvidence(unitId, { images: [...(activeLine?.unitDamage[unitId]?.evidence.images ?? []), image] });
+          const line = zoneScans.find((l) => l.unitIds.includes(unitId));
+          updateUnitEvidence(unitId, { images: [...(line?.unitDamage[unitId]?.evidence.images ?? []), image] });
         }}
       />
 
@@ -1044,39 +839,93 @@ export function ZoneAuditMapScreen() {
         </Pressable>
       </Modal>
 
+      {/* Same popup as Rack View's location-pin header icon — one field
+          here since a zone has no bay/pallet identity of its own. */}
+      <Modal visible={locationDetailsOpen} transparent animationType="fade" onRequestClose={() => setLocationDetailsOpen(false)}>
+        <Pressable style={[styles.dupBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setLocationDetailsOpen(false)}>
+          <Pressable style={[styles.locModalCard, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.locModalHead}>
+              <View style={[styles.locModalIconWrap, { backgroundColor: tokens.accentBlue.soft }]}>
+                <Ionicons name="location" size={20} color={tokens.accentBlue.strong} />
+              </View>
+              <Text style={{ flex: 1, color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>Location Details</Text>
+              <Pressable onPress={() => setLocationDetailsOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={20} color={tokens.mutedForeground} />
+              </Pressable>
+            </View>
+            <View style={[styles.locModalHero, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xxs, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                Zone
+              </Text>
+              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.lg, marginTop: 2 }}>
+                {selectedZone ? selectedZone.label : '—'}
+              </Text>
+            </View>
+            <View style={styles.locModalGrid}>
+              <DetailRow label="Audit" value={audit.audit_name} tokens={tokens} />
+              <DetailRow label="Audit ID" value={audit.audit_id} tokens={tokens} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Same "Missing Inventory Unit IDs" gate as Rack View's
+          Reconciliation Form — blocks Save & Scan Next while this zone's
+          own pick list still has SKUs short of their expectedCount, so a
+          gap gets acknowledged instead of silently closing the form. */}
+      <Modal visible={missingModalOpen} transparent animationType="fade" onRequestClose={() => setMissingModalOpen(false)}>
+        <Pressable style={[styles.dupBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setMissingModalOpen(false)}>
+          <Pressable style={[styles.missingModalCard, { backgroundColor: tokens.popover, borderRadius: tokens.radius.xl }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.missingModalHead}>
+              <View style={[styles.dupIconWrap, { backgroundColor: tokens.rag.red.soft }]}>
+                <Ionicons name="shield-outline" size={20} color={tokens.rag.red.strong} />
+              </View>
+              <Text style={{ flex: 1, color: tokens.popoverForeground, fontWeight: tokens.fontWeight.extrabold, fontSize: tokens.text.base }}>
+                Missing Inventory Unit IDs
+              </Text>
+            </View>
+            <View style={[styles.manualInfoDivider, { backgroundColor: tokens.border }]} />
+            <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.sm, lineHeight: 19 }}>
+              The following SKUs still have units short of this zone&apos;s expected count. Clicking Proceed will close this out as-is.
+            </Text>
+            <View style={[styles.missingTotalBadge, { backgroundColor: tokens.accentBlue.soft, borderRadius: tokens.radius.lg }]}>
+              <Text style={{ color: tokens.accentBlue.strong, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Total : {missingTotal}</Text>
+            </View>
+            <ScrollView style={styles.missingTableScroll}>
+              <View style={[styles.missingTableHead, { borderBottomColor: tokens.border }]}>
+                <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>SKU ID & Name</Text>
+                <Text style={{ flex: 1, color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.xs }}>Missing</Text>
+              </View>
+              {missingGroups.map((g) => (
+                <View key={g.sku} style={[styles.missingTableRow, { borderBottomColor: tokens.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>{g.sku}</Text>
+                    <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xs, marginTop: 1 }}>{g.name}</Text>
+                  </View>
+                  <Text style={{ flex: 1, color: tokens.foreground, fontSize: tokens.text.sm }}>{g.missingCount}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={[styles.manualInfoDivider, { backgroundColor: tokens.border, marginBottom: 0 }]} />
+            <View style={[styles.dupActions, { marginTop: 16 }]}>
+              <Pressable onPress={() => setMissingModalOpen(false)} style={[styles.dupBtn, styles.dupOutlineBtn, { borderColor: tokens.border, borderRadius: tokens.radius.lg }]}>
+                <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setMissingModalOpen(false);
+                  setSkuPanelOpen(false);
+                }}
+                style={[styles.dupBtn, { backgroundColor: tokens.primary, borderRadius: tokens.radius.lg }]}
+              >
+                <Text style={{ color: tokens.primaryForeground, fontWeight: tokens.fontWeight.bold, fontSize: tokens.text.sm }}>Proceed</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {confirm.element}
-    </View>
-  );
-}
-
-// Same card language as Reported Audits' issue cards (src/features/
-// progress/ReportedAuditsBoard.tsx) — a banded head with a rounded
-// Green/Amber/Red status chip, not the progress-bar style tried earlier.
-function StatusBadge({ label, ragKey, compact }: { label: string; ragKey: 'green' | 'amber' | 'red'; compact?: boolean }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={[styles.statusBadge, compact && styles.statusBadgeCompact, { backgroundColor: tokens.rag[ragKey].soft, borderRadius: tokens.radius.xl }]}>
-      <Text style={{ color: tokens.rag[ragKey].strong, fontSize: compact ? tokens.text.xxs : tokens.text.xs, fontWeight: tokens.fontWeight.bold }} numberOfLines={1}>{label}</Text>
-    </View>
-  );
-}
-
-function IssueField({ label, value }: { label: string; value: string }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={styles.issueField}>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }}>{label}</Text>
-      <Text style={{ color: tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.sm }}>{value}</Text>
-    </View>
-  );
-}
-
-function MiniField({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={styles.miniField}>
-      <Text style={{ color: tokens.mutedForeground, fontSize: tokens.text.xxs }} numberOfLines={1}>{label}</Text>
-      <Text style={{ color: tone ?? tokens.foreground, fontWeight: tokens.fontWeight.semibold, fontSize: tokens.text.xs }} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -1149,11 +998,22 @@ const styles = StyleSheet.create({
   // bleeds to the edges via negative margins.
   skuPanel: { flex: 1 },
   skuPanelHead: { minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -16, marginTop: -16, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
-  listIconBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 10, borderWidth: 1 },
-  listCountDot: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  locDetailsBox: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginBottom: 16 },
   detailRow: { minWidth: '40%' },
-  divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
+  // Same locModal*/missingModal*/manualInfoDivider/dup* styles as Rack
+  // View's Reconciliation Form (src/features/rack-view/RackViewScreen.tsx)
+  // — kept identical for visual consistency between the two screens.
+  locModalCard: { width: '100%', maxWidth: 440, padding: 26 },
+  locModalHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  locModalIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  locModalHero: { padding: 16, marginBottom: 20 },
+  locModalGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 10 },
+  missingModalCard: { width: '100%', maxWidth: 560, padding: 22, maxHeight: '80%' },
+  missingModalHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  manualInfoDivider: { height: StyleSheet.hairlineWidth, marginVertical: 14 },
+  missingTotalBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, marginTop: 12 },
+  missingTableScroll: { marginTop: 14 },
+  missingTableHead: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, marginBottom: 4 },
+  missingTableRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   fieldCard: { borderWidth: 1, overflow: 'hidden' },
   fieldCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   fieldCardBody: { padding: 14, gap: 10 },
@@ -1161,42 +1021,14 @@ const styles = StyleSheet.create({
   skuPanelFooter: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   outlineBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   primaryBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
-  listPageBody: { padding: 16, gap: 20, paddingBottom: 40 },
-  zoneTabRow: { flexDirection: 'row', borderBottomWidth: 1 },
-  zoneTab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2 },
-  zoneTabDot: { minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  zoneSummaryBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  sheetSectionLabel: { fontSize: 11, fontWeight: '700', color: '#8A94A3', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 },
-  summaryHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 5 },
-  statusBadgeCompact: { paddingHorizontal: 6, paddingVertical: 3 },
-  issueCard: { borderWidth: 1, overflow: 'hidden' },
-  issueHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingHorizontal: 14, paddingVertical: 12 },
-  issueHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  cardBody: { padding: 14 },
-  issueGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  issueField: { gap: 2 },
-  locationRow: { borderTopWidth: 1, paddingTop: 10, marginTop: 10 },
-  // Compact multi-per-row grid — the earlier issueCard was full-width and
-  // single-column stacked, which read as "too big" against a reference
-  // maintenance-app design of small cards packed several to a row.
-  cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  groupHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  groupLabel: { fontSize: 12, fontWeight: '700' },
-  miniCard: { flexGrow: 1, flexBasis: 150, maxWidth: '48%', borderWidth: 1, overflow: 'hidden' },
-  miniHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
-  miniHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  miniBody: { padding: 8 },
-  miniGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  miniField: { gap: 1, flexShrink: 1, minWidth: 60 },
-  miniLocationRow: { borderTopWidth: 1, borderTopColor: 'transparent', paddingTop: 6, marginTop: 6 },
   headerScanBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   // "Skus to be scanned at selected zone" checklist — collapsible pick
   // list, same card language as fieldCard elsewhere in this form.
   checklistCard: { borderWidth: 1, overflow: 'hidden' },
   checklistHead: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 },
-  checklistBody: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB', paddingHorizontal: 12, paddingVertical: 6, gap: 8 },
-  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  checklistBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14 },
+  checklistCountList: { gap: 8 },
+  checklistCountRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // Same scanNoteBox/scanCountRow/scannedListWrap/scannedRow/accordionBody/
   // unitRow/unitDamageWrap/unitDivider/switchTrack/switchThumb as Rack
   // View's Reconciliation Form (src/features/rack-view/RackViewScreen.tsx)
@@ -1204,9 +1036,7 @@ const styles = StyleSheet.create({
   scanNoteBox: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 14 },
   scanNoteIconWrap: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   scanCountRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  scannedListWrap: { gap: 8, marginBottom: 10 },
-  scannedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, padding: 10 },
-  accordionBody: { borderWidth: 1, borderTopWidth: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, padding: 12, gap: 10 },
+  scannedListWrap: { gap: 10, marginBottom: 10 },
   unitRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   unitDamageWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   unitDivider: { marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
