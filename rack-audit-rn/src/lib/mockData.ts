@@ -159,6 +159,15 @@ export const AUDITS: Audit[] = [
     start_date: '2026-07-10', end_date: '2026-07-20', status: 'Scheduled',
     event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
   },
+  // end_date pinned to TODAY so this lands in the Tasks board's "Today"
+  // column (dueBucket: diffDays === 0) without needing the To Do
+  // pinning hack buildMaintenanceTasks() uses for Maintenance cards.
+  {
+    audit_id: 'AUD-0248', audit_name: 'Two Zone Scan', audit_type: 'Spot Check', count_method: 'Blind (Enforced)',
+    scope_type: 'Zone', scope_values: ['Pallet Shipping', 'Shipping Station'], team_members: ['Arjun Sharma'],
+    start_date: '2026-07-05', end_date: '2026-07-08', status: 'Scheduled',
+    event_scope_type: 'Location Wise', work_scope: ['Location Verification', 'SKU Condition', 'SKU Quantity Verification'],
+  },
 ];
 
 // Physical rack shape for the Rack View diagram — independent of how many
@@ -353,6 +362,7 @@ export const LOCATIONS: Record<string, AuditLocationsTree> = {
   // No racks/bays at all — AUD-0241 is Zone-scoped against rack-less
   // FLOOR_AREAS zones, so there's no location tree underneath it.
   'AUD-0241': { layouts: [] },
+  'AUD-0248': { layouts: [] },
 };
 
 // AUD-0231's curated pallet + AUD-0225's real counted history (source lines
@@ -436,6 +446,8 @@ export const FLOOR_AREAS: FloorArea[] = [
   { id: 'zone-b', label: 'Zone B' },
   { id: 'zone-c', label: 'Zone C' },
   { id: 'staging', label: 'Staging Area' },
+  { id: 'pallet-shipping', label: 'Pallet Shipping' },
+  { id: 'shipping-station', label: 'Shipping Station' },
 ];
 
 export type ZoneExpectedSku = { sku: string; name: string; expectedCount: number };
@@ -460,6 +472,8 @@ export const ZONE_EXPECTED_SKUS: Record<string, ZoneExpectedSku[]> = {
   // needs to show both a Rack group and a Zone group for the same SKU.
   'Zone C': [{ sku: 'SKU-5088', name: 'Corner Protector', expectedCount: 6 }],
   'Staging Area': [{ sku: 'SKU-9011', name: 'Rack Label Kit', expectedCount: 5 }],
+  'Pallet Shipping': [{ sku: 'SKU-1180', name: 'Fastener Pack M10', expectedCount: 7 }],
+  'Shipping Station': [{ sku: 'SKU-4410', name: 'Hex Bolt Set 8mm', expectedCount: 9 }],
 };
 
 // Reverse lookup — which zone (if any) a given SKU is supposed to be
